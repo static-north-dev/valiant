@@ -3,11 +3,15 @@ using Valiant;
 using Valiant.DependencyInjection;
 
 var services = new ServiceCollection();
-services.AddValiantValidators();
+services.AddValiantValidations(options =>
+{
+    options.Mode = ValiantValidationMode.Auto;
+    options.Lifetime = ValiantValidatorLifetime.Transient;
+});
 
 using var provider = services.BuildServiceProvider();
 var validator = provider.GetRequiredService<IValidator<CreateUser>>();
-var tagValidator = provider.GetRequiredService<IValidator<CreateTag>>();
+var tagValidator = provider.GetRequiredService<CreateTagValidator>();
 
 var invalid = await validator.ValidateAsync(new CreateUser
 {
@@ -34,7 +38,7 @@ if (!await validator.IsValidAsync(validUser))
 try
 {
     _ = validator.IsValid(validUser);
-    throw new InvalidOperationException("Synchronous IsValid should reject validators with asynchronous rules.");
+    throw new InvalidOperationException("Synchronous IsValid should reject validators with asynchronous validations.");
 }
 catch (InvalidOperationException)
 {
@@ -60,6 +64,11 @@ if (tagValidator.IsValid(new CreateTag { Value = "", DoThis = true }))
     throw new InvalidOperationException("Generated synchronous IsValid accepted an invalid model.");
 }
 
+if (tagValidator.IsValid(new CreateTag { Value = new string('x', 65), DoThis = true }))
+{
+    throw new InvalidOperationException("Generated synchronous IsValid accepted a tag rejected by the reused validator.");
+}
+
 if (!(await tagValidator.ValidateAsync(new CreateTag { Value = "docs", DoThis = true })).IsValid)
 {
     throw new InvalidOperationException("Generated ValidateAsync rejected a valid sync-only model.");
@@ -67,11 +76,22 @@ if (!(await tagValidator.ValidateAsync(new CreateTag { Value = "docs", DoThis = 
 
 Console.WriteLine("Valiant sample passed.");
 
+public enum UserRole
+{
+    Admin,
+    User,
+    Guest
+}
+
 public sealed class CreateUser
 {
     public string? Name { get; init; }
 
     public int Age { get; init; }
+    
+    public UserRole Role { get; init; }
+    
+    public string? RoleString { get; init; }
 }
 
 public sealed class CreateTag
@@ -84,51 +104,54 @@ public sealed class CreateTag
 [ValiantValidator]
 public sealed partial class CreateUserValidator : IValidatorDefinition<CreateUser>
 {
-    public static ValidationContext<CreateUser> Configure(ValidationContext<CreateUser> context)
+    public static void Configure(ValidationContext<CreateUser> context)
     {
-        context.RuleFor(user => user.Name)
-            .NotEmpty()
-            .MaximumLength(64)
-            .Must(static name => name is null || !name.Contains('!'))
-            .WithMessage("Name must not contain exclamation marks.");
+        context.Property(user => user.Name)
+            .Required()
+            .MaxLength(64)
+            .Satisfies(
+                static name => name is null || !name.Contains('!'),
+                code: "NameContainsBang",
+                message: "Name must not contain exclamation marks.");
 
-        context.RuleFor(user => user.Age)
+        context.Property(user => user.Age)
             .GreaterThanOrEqualTo(18)
-            .MustAsync(static (age, _) => new ValueTask<bool>(age != 42))
-            .WithMessage("Age 42 is reserved.");
-
-        return context;
+            .SatisfiesAsync(
+                static (age, _) => new ValueTask<bool>(age != 42),
+                code: "ReservedAge",
+                message: "Age 42 is reserved.");
     }
 }
 
 [ValiantValidator]
-public sealed partial class CreateTagValidator : IValidatorDefinition<CreateTag>
+public sealed partial class CreateTagValueValidator : IValidatorDefinition<CreateTag>
 {
-    private readonly IValidator<CreateUser> _userValidator;
-
-    public CreateTagValidator(IValidator<CreateUser> userValidator)
+    public static void Configure(ValidationContext<CreateTag> context)
     {
-        _userValidator = userValidator;
+        context.Property(tag => tag.Value).MaxLength(64);
     }
+}
 
-    public static ValidationContext<CreateTag> Configure(ValidationContext<CreateTag> context)
+[ValiantValidator]
+public sealed partial class CreateTagValidator(CreateTagValueValidator valueValidator) : IValidatorDefinition<CreateTag>
+{
+    public void Configure(ValidationContext<CreateTag> context)
     {
+        context.UseValidator(valueValidator);
+
         if (!context.Instance.DoThis)
         {
-            context.RuleFor(tag => tag.Value)
-                .Empty()
-                .WithMessage("Value must be empty when DoThis is false.");
+            context.Property(tag => tag.Value)
+                .Empty(message: "Value must be empty when DoThis is false.");
         }
         else
         {
-            context.RuleFor(tag => tag.Value)
-                .NotEmpty()
-                .Must(static value =>
+            context.Property(tag => tag.Value)
+                .Required()
+                .Satisfies(static (_, prop) =>
                 {
-                    return value is null || value.Length <= 64;
+                    return prop is null || prop.Length <= 64;
                 });
         }
-        
-        return context;
     }
 }

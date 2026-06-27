@@ -23,6 +23,8 @@
 
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="buildTransitive/Valiant.props" Pack="true" PackagePath="buildTransitive/Valiant.props" />
+    <PackageReference Include="Microsoft.Net.Compilers.Toolset" Version="5.3.0" PrivateAssets="all" />
     <ProjectReference Include="../Valiant.SourceGeneration/Valiant.SourceGeneration.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" />
   </ItemGroup>
 

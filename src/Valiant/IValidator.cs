@@ -14,10 +14,10 @@ public interface IValidator<in T>
     ValidationResult Validate(T instance);
 
     /// <summary>
-    /// Validates the supplied instance, including asynchronous rules.
+    /// Validates the supplied instance, including asynchronous validations.
     /// </summary>
     /// <param name="instance">The instance to validate.</param>
-    /// <param name="cancellationToken">A cancellation token for asynchronous validation rules.</param>
+    /// <param name="cancellationToken">A cancellation token for asynchronous validations.</param>
     /// <returns>The validation result.</returns>
     global::System.Threading.Tasks.ValueTask<ValidationResult> ValidateAsync(T instance, global::System.Threading.CancellationToken cancellationToken = default);
 
@@ -29,10 +29,10 @@ public interface IValidator<in T>
     bool IsValid(T instance);
 
     /// <summary>
-    /// Determines whether the supplied instance is valid, including asynchronous rules.
+    /// Determines whether the supplied instance is valid, including asynchronous validations.
     /// </summary>
     /// <param name="instance">The instance to validate.</param>
-    /// <param name="cancellationToken">A cancellation token for asynchronous validation rules.</param>
+    /// <param name="cancellationToken">A cancellation token for asynchronous validations.</param>
     /// <returns><c>true</c> when the instance is valid; otherwise, <c>false</c>.</returns>
     global::System.Threading.Tasks.ValueTask<bool> IsValidAsync(T instance, global::System.Threading.CancellationToken cancellationToken = default);
 }

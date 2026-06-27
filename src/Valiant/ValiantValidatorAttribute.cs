@@ -28,9 +28,9 @@ public class ValiantValidatorAttribute : Attribute
     public Type? ModelType { get; }
 
     /// <summary>
-    /// Gets or sets the static rule declaration method name. Defaults to <c>Configure</c>.
+    /// Gets or sets the validation configuration method name. Defaults to <c>Configure</c>.
     /// </summary>
-    public string RulesMethod { get; set; } = "Configure";
+    public string ConfigureMethod { get; set; } = "Configure";
 }
 
 /// <summary>

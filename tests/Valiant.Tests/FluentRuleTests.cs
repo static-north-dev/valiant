@@ -21,12 +21,38 @@ public sealed class FluentRuleTests
     }
 
     [Test]
+    public async Task Required_Fails_For_Empty_String()
+    {
+        var result = new RequiredValidator().Validate(new NullableTextModel { Value = "" });
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("Required");
+    }
+
+    [Test]
+    public async Task Required_Fails_For_Whitespace_String()
+    {
+        var result = new RequiredValidator().Validate(new NullableTextModel { Value = "   " });
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("Required");
+    }
+
+    [Test]
     public async Task NotEmpty_Fails_For_Empty_String()
     {
         var result = new NotEmptyValidator().Validate(new NullableTextModel { Value = "" });
 
         await Assert.That(result.IsValid).IsFalse();
         await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("NotEmpty");
+    }
+
+    [Test]
+    public async Task NotEmpty_Allows_Whitespace_String()
+    {
+        var result = new NotEmptyValidator().Validate(new NullableTextModel { Value = "   " });
+
+        await Assert.That(result.IsValid).IsTrue();
     }
 
     [Test]
@@ -39,30 +65,30 @@ public sealed class FluentRuleTests
     }
 
     [Test]
-    public async Task Length_Fails_When_String_Is_Outside_Range()
+    public async Task LengthBetween_Fails_When_String_Is_Outside_Range()
     {
-        var result = new LengthValidator().Validate(new NullableTextModel { Value = "abcd" });
+        var result = new LengthBetweenValidator().Validate(new NullableTextModel { Value = "abcd" });
 
         await Assert.That(result.IsValid).IsFalse();
-        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("Length");
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("LengthBetween");
     }
 
     [Test]
-    public async Task MinimumLength_Fails_When_String_Is_Too_Short()
+    public async Task MinLength_Fails_When_String_Is_Too_Short()
     {
-        var result = new MinimumLengthValidator().Validate(new NullableTextModel { Value = "a" });
+        var result = new MinLengthValidator().Validate(new NullableTextModel { Value = "a" });
 
         await Assert.That(result.IsValid).IsFalse();
-        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("MinimumLength");
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("MinLength");
     }
 
     [Test]
-    public async Task MaximumLength_Fails_When_String_Is_Too_Long()
+    public async Task MaxLength_Fails_When_String_Is_Too_Long()
     {
-        var result = new MaximumLengthValidator().Validate(new NullableTextModel { Value = "abcd" });
+        var result = new MaxLengthValidator().Validate(new NullableTextModel { Value = "abcd" });
 
         await Assert.That(result.IsValid).IsFalse();
-        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("MaximumLength");
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("MaxLength");
     }
 
     [Test]
@@ -138,53 +164,54 @@ public sealed class FluentRuleTests
     }
 
     [Test]
-    public async Task Must_Fails_When_Predicate_Returns_False()
+    public async Task Satisfies_Fails_When_Predicate_Returns_False()
     {
-        var result = new MustValidator().Validate(new NullableTextModel { Value = "!" });
+        var result = new SatisfiesValidator().Validate(new NullableTextModel { Value = "!" });
 
         await Assert.That(result.IsValid).IsFalse();
-        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("Must");
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("Satisfies");
     }
 
     [Test]
-    public async Task Must_With_Model_And_Property_Fails_When_Predicate_Returns_False()
+    public async Task Satisfies_With_Model_And_Property_Fails_When_Predicate_Returns_False()
     {
-        var result = new MustWithModelValidator().Validate(new CompareModel { Left = 1, Right = 2 });
+        var result = new SatisfiesWithModelValidator().Validate(new CompareModel { Left = 1, Right = 2 });
 
         await Assert.That(result.IsValid).IsFalse();
-        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("Must");
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("Satisfies");
     }
 
     [Test]
-    public async Task MustAsync_Fails_When_Predicate_Returns_False()
+    public async Task SatisfiesAsync_Fails_When_Predicate_Returns_False()
     {
-        var result = await new MustAsyncValidator().ValidateAsync(new NumberModel { Value = 13 });
+        var result = await new SatisfiesAsyncValidator().ValidateAsync(new NumberModel { Value = 13 });
 
         await Assert.That(result.IsValid).IsFalse();
-        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("MustAsync");
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("SatisfiesAsync");
     }
 
     [Test]
-    public async Task MustAsync_With_Model_And_Property_Fails_When_Predicate_Returns_False()
+    public async Task SatisfiesAsync_With_Model_And_Property_Fails_When_Predicate_Returns_False()
     {
-        var result = await new MustAsyncWithModelValidator().ValidateAsync(new CompareModel { Left = 2, Right = 1 });
+        var result = await new SatisfiesAsyncWithModelValidator().ValidateAsync(new CompareModel { Left = 2, Right = 1 });
 
         await Assert.That(result.IsValid).IsFalse();
-        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("MustAsync");
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("SatisfiesAsync");
     }
 
     [Test]
-    public async Task WithMessage_Replaces_Default_Message()
+    public async Task Check_Metadata_Replaces_Default_Code_And_Message()
     {
-        var result = new WithMessageValidator().Validate(new NullableTextModel { Value = "" });
+        var result = new MetadataValidator().Validate(new NullableTextModel { Value = "" });
 
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("ValueRequired");
         await Assert.That(result.Errors[0].ErrorMessage).IsEqualTo("Custom message.");
     }
 
     [Test]
     public async Task IsValid_Returns_True_For_Sync_Only_Valid_Model()
     {
-        var isValid = new NotEmptyValidator().IsValid(new NullableTextModel { Value = "ok" });
+        var isValid = new RequiredValidator().IsValid(new NullableTextModel { Value = "ok" });
 
         await Assert.That(isValid).IsTrue();
     }
@@ -192,7 +219,7 @@ public sealed class FluentRuleTests
     [Test]
     public async Task IsValidAsync_Runs_Sync_And_Async_Rules()
     {
-        var isValid = await new MustAsyncValidator().IsValidAsync(new NumberModel { Value = 12 });
+        var isValid = await new SatisfiesAsyncValidator().IsValidAsync(new NumberModel { Value = 12 });
 
         await Assert.That(isValid).IsTrue();
     }
@@ -200,7 +227,7 @@ public sealed class FluentRuleTests
     [Test]
     public async Task Validate_Throws_For_Validator_With_Async_Rules()
     {
-        var validator = new MustAsyncValidator();
+        var validator = new SatisfiesAsyncValidator();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => Task.FromResult(validator.Validate(new NumberModel { Value = 12 })));
     }
@@ -214,7 +241,7 @@ public sealed class FluentRuleTests
         var ageResult = validator.Validate(new ConditionalModel { ValidateName = false, Name = "", Age = 17 });
         var skippedAgeResult = validator.Validate(new ConditionalModel { ValidateName = true, Name = "ok", Age = 17 });
 
-        await Assert.That(nameResult.Errors[0].ErrorCode).IsEqualTo("NotEmpty");
+        await Assert.That(nameResult.Errors[0].ErrorCode).IsEqualTo("Required");
         await Assert.That(ageResult.Errors[0].ErrorCode).IsEqualTo("GreaterThanOrEqualTo");
         await Assert.That(skippedAgeResult.IsValid).IsTrue();
     }
@@ -228,9 +255,32 @@ public sealed class FluentRuleTests
         var ageResult = validator.Validate(new ConditionalModel { Mode = ConditionalMode.Age, RequireAdult = true, Age = 17 });
         var skippedWhenResult = validator.Validate(new ConditionalModel { Mode = ConditionalMode.Age, RequireAdult = false, Age = 17 });
 
-        await Assert.That(nameResult.Errors[0].ErrorCode).IsEqualTo("NotEmpty");
+        await Assert.That(nameResult.Errors[0].ErrorCode).IsEqualTo("Required");
         await Assert.That(ageResult.Errors[0].ErrorCode).IsEqualTo("GreaterThanOrEqualTo");
         await Assert.That(skippedWhenResult.IsValid).IsTrue();
+    }
+
+    [Test]
+    public async Task UseValidator_Reuses_Whole_Model_Validator()
+    {
+        var validator = new CompositeConditionalValidator(new RequiredNameValidator());
+
+        var result = validator.Validate(new ConditionalModel { Name = "" });
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("Required");
+    }
+
+    [Test]
+    public async Task UseValidator_ValidateAsync_Runs_Async_Reused_Validator()
+    {
+        var validator = new CompositeAsyncConditionalValidator(new AsyncRequiredNameValidator());
+
+        var result = await validator.ValidateAsync(new ConditionalModel { Name = "" });
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("SatisfiesAsync");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Task.FromResult(validator.Validate(new ConditionalModel { Name = "" })));
     }
 }
 
@@ -274,238 +324,273 @@ public sealed class ConditionalModel
 [ValiantValidator]
 public sealed partial class NotNullValidator : IValidatorDefinition<NullableTextModel>
 {
-    public static ValidationContext<NullableTextModel> Configure(ValidationContext<NullableTextModel> context)
+    public static void Configure(ValidationContext<NullableTextModel> context)
     {
-        context.RuleFor(x => x.Value).NotNull();
-        return context;
+        context.Property(x => x.Value).NotNull();
     }
 }
 
 [ValiantValidator]
 public sealed partial class NullValidator : IValidatorDefinition<NullableTextModel>
 {
-    public static ValidationContext<NullableTextModel> Configure(ValidationContext<NullableTextModel> context)
+    public static void Configure(ValidationContext<NullableTextModel> context)
     {
-        context.RuleFor(x => x.Value).Null();
-        return context;
+        context.Property(x => x.Value).Null();
+    }
+}
+
+[ValiantValidator]
+public sealed partial class RequiredValidator : IValidatorDefinition<NullableTextModel>
+{
+    public static void Configure(ValidationContext<NullableTextModel> context)
+    {
+        context.Property(x => x.Value).Required();
     }
 }
 
 [ValiantValidator]
 public sealed partial class NotEmptyValidator : IValidatorDefinition<NullableTextModel>
 {
-    public static ValidationContext<NullableTextModel> Configure(ValidationContext<NullableTextModel> context)
+    public static void Configure(ValidationContext<NullableTextModel> context)
     {
-        context.RuleFor(x => x.Value).NotEmpty();
-        return context;
+        context.Property(x => x.Value).NotEmpty();
     }
 }
 
 [ValiantValidator]
 public sealed partial class EmptyValidator : IValidatorDefinition<NullableTextModel>
 {
-    public static ValidationContext<NullableTextModel> Configure(ValidationContext<NullableTextModel> context)
+    public static void Configure(ValidationContext<NullableTextModel> context)
     {
-        context.RuleFor(x => x.Value).Empty();
-        return context;
+        context.Property(x => x.Value).Empty();
     }
 }
 
 [ValiantValidator]
-public sealed partial class LengthValidator : IValidatorDefinition<NullableTextModel>
+public sealed partial class LengthBetweenValidator : IValidatorDefinition<NullableTextModel>
 {
-    public static ValidationContext<NullableTextModel> Configure(ValidationContext<NullableTextModel> context)
+    public static void Configure(ValidationContext<NullableTextModel> context)
     {
-        context.RuleFor(x => x.Value).Length(2, 3);
-        return context;
+        context.Property(x => x.Value).LengthBetween(2, 3);
     }
 }
 
 [ValiantValidator]
-public sealed partial class MinimumLengthValidator : IValidatorDefinition<NullableTextModel>
+public sealed partial class MinLengthValidator : IValidatorDefinition<NullableTextModel>
 {
-    public static ValidationContext<NullableTextModel> Configure(ValidationContext<NullableTextModel> context)
+    public static void Configure(ValidationContext<NullableTextModel> context)
     {
-        context.RuleFor(x => x.Value).MinimumLength(2);
-        return context;
+        context.Property(x => x.Value).MinLength(2);
     }
 }
 
 [ValiantValidator]
-public sealed partial class MaximumLengthValidator : IValidatorDefinition<NullableTextModel>
+public sealed partial class MaxLengthValidator : IValidatorDefinition<NullableTextModel>
 {
-    public static ValidationContext<NullableTextModel> Configure(ValidationContext<NullableTextModel> context)
+    public static void Configure(ValidationContext<NullableTextModel> context)
     {
-        context.RuleFor(x => x.Value).MaximumLength(3);
-        return context;
+        context.Property(x => x.Value).MaxLength(3);
     }
 }
 
 [ValiantValidator]
 public sealed partial class GreaterThanValidator : IValidatorDefinition<NumberModel>
 {
-    public static ValidationContext<NumberModel> Configure(ValidationContext<NumberModel> context)
+    public static void Configure(ValidationContext<NumberModel> context)
     {
-        context.RuleFor(x => x.Value).GreaterThan(10);
-        return context;
+        context.Property(x => x.Value).GreaterThan(10);
     }
 }
 
 [ValiantValidator]
 public sealed partial class GreaterThanOrEqualToValidator : IValidatorDefinition<NumberModel>
 {
-    public static ValidationContext<NumberModel> Configure(ValidationContext<NumberModel> context)
+    public static void Configure(ValidationContext<NumberModel> context)
     {
-        context.RuleFor(x => x.Value).GreaterThanOrEqualTo(10);
-        return context;
+        context.Property(x => x.Value).GreaterThanOrEqualTo(10);
     }
 }
 
 [ValiantValidator]
 public sealed partial class LessThanValidator : IValidatorDefinition<NumberModel>
 {
-    public static ValidationContext<NumberModel> Configure(ValidationContext<NumberModel> context)
+    public static void Configure(ValidationContext<NumberModel> context)
     {
-        context.RuleFor(x => x.Value).LessThan(10);
-        return context;
+        context.Property(x => x.Value).LessThan(10);
     }
 }
 
 [ValiantValidator]
 public sealed partial class LessThanOrEqualToValidator : IValidatorDefinition<NumberModel>
 {
-    public static ValidationContext<NumberModel> Configure(ValidationContext<NumberModel> context)
+    public static void Configure(ValidationContext<NumberModel> context)
     {
-        context.RuleFor(x => x.Value).LessThanOrEqualTo(10);
-        return context;
+        context.Property(x => x.Value).LessThanOrEqualTo(10);
     }
 }
 
 [ValiantValidator]
 public sealed partial class EqualValidator : IValidatorDefinition<NumberModel>
 {
-    public static ValidationContext<NumberModel> Configure(ValidationContext<NumberModel> context)
+    public static void Configure(ValidationContext<NumberModel> context)
     {
-        context.RuleFor(x => x.Value).Equal(10);
-        return context;
+        context.Property(x => x.Value).Equal(10);
     }
 }
 
 [ValiantValidator]
 public sealed partial class NotEqualValidator : IValidatorDefinition<NumberModel>
 {
-    public static ValidationContext<NumberModel> Configure(ValidationContext<NumberModel> context)
+    public static void Configure(ValidationContext<NumberModel> context)
     {
-        context.RuleFor(x => x.Value).NotEqual(10);
-        return context;
+        context.Property(x => x.Value).NotEqual(10);
     }
 }
 
 [ValiantValidator]
 public sealed partial class InclusiveBetweenValidator : IValidatorDefinition<NumberModel>
 {
-    public static ValidationContext<NumberModel> Configure(ValidationContext<NumberModel> context)
+    public static void Configure(ValidationContext<NumberModel> context)
     {
-        context.RuleFor(x => x.Value).InclusiveBetween(5, 10);
-        return context;
+        context.Property(x => x.Value).InclusiveBetween(5, 10);
     }
 }
 
 [ValiantValidator]
 public sealed partial class ExclusiveBetweenValidator : IValidatorDefinition<NumberModel>
 {
-    public static ValidationContext<NumberModel> Configure(ValidationContext<NumberModel> context)
+    public static void Configure(ValidationContext<NumberModel> context)
     {
-        context.RuleFor(x => x.Value).ExclusiveBetween(5, 10);
-        return context;
+        context.Property(x => x.Value).ExclusiveBetween(5, 10);
     }
 }
 
 [ValiantValidator]
-public sealed partial class MustValidator : IValidatorDefinition<NullableTextModel>
+public sealed partial class SatisfiesValidator : IValidatorDefinition<NullableTextModel>
 {
-    public static ValidationContext<NullableTextModel> Configure(ValidationContext<NullableTextModel> context)
+    public static void Configure(ValidationContext<NullableTextModel> context)
     {
-        context.RuleFor(x => x.Value).Must(static value => value is null || value != "!");
-        return context;
+        context.Property(x => x.Value).Satisfies(static value => value is null || value != "!");
     }
 }
 
 [ValiantValidator]
-public sealed partial class MustWithModelValidator : IValidatorDefinition<CompareModel>
+public sealed partial class SatisfiesWithModelValidator : IValidatorDefinition<CompareModel>
 {
-    public static ValidationContext<CompareModel> Configure(ValidationContext<CompareModel> context)
+    public static void Configure(ValidationContext<CompareModel> context)
     {
-        context.RuleFor(x => x.Left).Must(static (model, left) => left == model.Right);
-        return context;
+        context.Property(x => x.Left).Satisfies(static (model, left) => left == model.Right);
     }
 }
 
 [ValiantValidator]
-public sealed partial class MustAsyncValidator : IValidatorDefinition<NumberModel>
+public sealed partial class SatisfiesAsyncValidator : IValidatorDefinition<NumberModel>
 {
-    public static ValidationContext<NumberModel> Configure(ValidationContext<NumberModel> context)
+    public static void Configure(ValidationContext<NumberModel> context)
     {
-        context.RuleFor(x => x.Value).MustAsync(static (value, _) => new ValueTask<bool>(value != 13));
-        return context;
+        context.Property(x => x.Value).SatisfiesAsync(static (value, _) => new ValueTask<bool>(value != 13));
     }
 }
 
 [ValiantValidator]
-public sealed partial class MustAsyncWithModelValidator : IValidatorDefinition<CompareModel>
+public sealed partial class SatisfiesAsyncWithModelValidator : IValidatorDefinition<CompareModel>
 {
-    public static ValidationContext<CompareModel> Configure(ValidationContext<CompareModel> context)
+    public static void Configure(ValidationContext<CompareModel> context)
     {
-        context.RuleFor(x => x.Left).MustAsync(static (model, left, _) => new ValueTask<bool>(left == model.Right));
-        return context;
+        context.Property(x => x.Left).SatisfiesAsync(static (model, left, _) => new ValueTask<bool>(left == model.Right));
     }
 }
 
 [ValiantValidator]
-public sealed partial class WithMessageValidator : IValidatorDefinition<NullableTextModel>
+public sealed partial class MetadataValidator : IValidatorDefinition<NullableTextModel>
 {
-    public static ValidationContext<NullableTextModel> Configure(ValidationContext<NullableTextModel> context)
+    public static void Configure(ValidationContext<NullableTextModel> context)
     {
-        context.RuleFor(x => x.Value).NotEmpty().WithMessage("Custom message.");
-        return context;
+        context.Property(x => x.Value).Required(code: "ValueRequired", message: "Custom message.");
     }
 }
 
 [ValiantValidator]
 public sealed partial class IfElseConditionalValidator : IValidatorDefinition<ConditionalModel>
 {
-    public static ValidationContext<ConditionalModel> Configure(ValidationContext<ConditionalModel> context)
+    public static void Configure(ValidationContext<ConditionalModel> context)
     {
         if (context.Instance.ValidateName)
         {
-            context.RuleFor(x => x.Name).NotEmpty();
+            context.Property(x => x.Name).Required();
         }
         else
         {
-            context.RuleFor(x => x.Age).GreaterThanOrEqualTo(18);
+            context.Property(x => x.Age).GreaterThanOrEqualTo(18);
         }
-
-        return context;
     }
 }
 
 [ValiantValidator]
 public sealed partial class SwitchConditionalValidator : IValidatorDefinition<ConditionalModel>
 {
-    public static ValidationContext<ConditionalModel> Configure(ValidationContext<ConditionalModel> context)
+    public static void Configure(ValidationContext<ConditionalModel> context)
     {
         switch (context.Instance.Mode)
         {
             case ConditionalMode.Name:
-                context.RuleFor(x => x.Name).NotEmpty();
+                context.Property(x => x.Name).Required();
                 break;
             case ConditionalMode.Age when context.Instance.RequireAdult:
-                context.RuleFor(x => x.Age).GreaterThanOrEqualTo(18);
+                context.Property(x => x.Age).GreaterThanOrEqualTo(18);
                 break;
             default:
                 break;
         }
+    }
+}
 
-        return context;
+[ValiantValidator]
+public sealed partial class RequiredNameValidator : IValidatorDefinition<ConditionalModel>
+{
+    public static void Configure(ValidationContext<ConditionalModel> context)
+    {
+        context.Property(x => x.Name).Required();
+    }
+}
+
+[ValiantValidator]
+public sealed partial class CompositeConditionalValidator : IValidatorDefinition<ConditionalModel>
+{
+    private readonly RequiredNameValidator _requiredNameValidator;
+
+    public CompositeConditionalValidator(RequiredNameValidator requiredNameValidator)
+    {
+        _requiredNameValidator = requiredNameValidator;
+    }
+
+    public void Configure(ValidationContext<ConditionalModel> context)
+    {
+        context.UseValidator(_requiredNameValidator);
+    }
+}
+
+[ValiantValidator]
+public sealed partial class AsyncRequiredNameValidator : IValidatorDefinition<ConditionalModel>
+{
+    public static void Configure(ValidationContext<ConditionalModel> context)
+    {
+        context.Property(x => x.Name).SatisfiesAsync(static (name, _) => new ValueTask<bool>(!string.IsNullOrWhiteSpace(name)));
+    }
+}
+
+[ValiantValidator]
+public sealed partial class CompositeAsyncConditionalValidator : IValidatorDefinition<ConditionalModel>
+{
+    private readonly AsyncRequiredNameValidator _asyncRequiredNameValidator;
+
+    public CompositeAsyncConditionalValidator(AsyncRequiredNameValidator asyncRequiredNameValidator)
+    {
+        _asyncRequiredNameValidator = asyncRequiredNameValidator;
+    }
+
+    public void Configure(ValidationContext<ConditionalModel> context)
+    {
+        context.UseValidator(_asyncRequiredNameValidator);
     }
 }

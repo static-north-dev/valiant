@@ -17,10 +17,9 @@ public sealed class SourceGenerationTests
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
             {
-                public static ValidationContext<Person> Configure(ValidationContext<Person> context)
+                public static void Configure(ValidationContext<Person> context)
                 {
-                    context.RuleFor(x => x.Name).NotEmpty();
-                    return context;
+                    context.Property(x => x.Name).Required();
                 }
             }
 
@@ -44,10 +43,9 @@ public sealed class SourceGenerationTests
             [ValiantValidator<Person>]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
             {
-                public static ValidationContext<Person> Configure(ValidationContext<Person> context)
+                public static void Configure(ValidationContext<Person> context)
                 {
-                    context.RuleFor(x => x.Name).NotEmpty();
-                    return context;
+                    context.Property(x => x.Name).Required();
                 }
             }
 
@@ -71,10 +69,9 @@ public sealed class SourceGenerationTests
             [ValiantValidator(typeof(Person))]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
             {
-                public static ValidationContext<Person> Configure(ValidationContext<Person> context)
+                public static void Configure(ValidationContext<Person> context)
                 {
-                    context.RuleFor(x => x.Name).NotEmpty();
-                    return context;
+                    context.Property(x => x.Name).Required();
                 }
             }
 
@@ -98,10 +95,9 @@ public sealed class SourceGenerationTests
             [ValiantValidator]
             public sealed class PersonValidator : IValidatorDefinition<Person>
             {
-                public static ValidationContext<Person> Configure(ValidationContext<Person> context)
+                public static void Configure(ValidationContext<Person> context)
                 {
-                    context.RuleFor(x => x.Name).NotEmpty();
-                    return context;
+                    context.Property(x => x.Name).Required();
                 }
             }
 
@@ -124,10 +120,9 @@ public sealed class SourceGenerationTests
             [ValiantValidator]
             public sealed partial class PersonValidator
             {
-                public static ValidationContext<Person> Configure(ValidationContext<Person> context)
+                public static void Configure(ValidationContext<Person> context)
                 {
-                    context.RuleFor(x => x.Name).NotEmpty();
-                    return context;
+                    context.Property(x => x.Name).Required();
                 }
             }
 
@@ -150,10 +145,9 @@ public sealed class SourceGenerationTests
             [ValiantValidator(typeof(OtherPerson))]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
             {
-                public static ValidationContext<Person> Configure(ValidationContext<Person> context)
+                public static void Configure(ValidationContext<Person> context)
                 {
-                    context.RuleFor(x => x.Name).NotEmpty();
-                    return context;
+                    context.Property(x => x.Name).Required();
                 }
             }
 
@@ -202,10 +196,9 @@ public sealed class SourceGenerationTests
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
             {
-                static ValidationContext<Person> Configure(ValidationContext<Person> context)
+                static void Configure(ValidationContext<Person> context)
                 {
-                    context.RuleFor(x => x.Name).NotEmpty();
-                    return context;
+                    context.Property(x => x.Name).Required();
                 }
             }
 
@@ -228,10 +221,9 @@ public sealed class SourceGenerationTests
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
             {
-                public static ValidationContext<Person> Configure(ValidationContext<Person> context)
+                public static void Configure(ValidationContext<Person> context)
                 {
                     _ = context;
-                    return context;
                 }
             }
 
@@ -254,18 +246,16 @@ public sealed class SourceGenerationTests
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
             {
-                public static ValidationContext<Person> Configure(ValidationContext<Person> context)
+                public static void Configure(ValidationContext<Person> context)
                 {
                     if (context.Instance.RequiresName)
                     {
-                        context.RuleFor(x => x.Name).NotEmpty();
+                        context.Property(x => x.Name).Required();
                     }
                     else
                     {
-                        context.RuleFor(x => x.Age).GreaterThanOrEqualTo(18);
+                        context.Property(x => x.Age).GreaterThanOrEqualTo(18);
                     }
-
-                    return context;
                 }
             }
 
@@ -296,22 +286,20 @@ public sealed class SourceGenerationTests
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
             {
-                public static ValidationContext<Person> Configure(ValidationContext<Person> context)
+                public static void Configure(ValidationContext<Person> context)
                 {
                     switch (context.Instance.Kind)
                     {
                         case PersonKind.Child:
-                            context.RuleFor(x => x.Age).LessThan(18);
+                            context.Property(x => x.Age).LessThan(18);
                             break;
                         case PersonKind.Adult when context.Instance.RequiresName:
-                            context.RuleFor(x => x.Name).NotEmpty();
+                            context.Property(x => x.Name).Required();
                             break;
                         default:
-                            context.RuleFor(x => x.Age).GreaterThanOrEqualTo(0);
+                            context.Property(x => x.Age).GreaterThanOrEqualTo(0);
                             break;
                     }
-
-                    return context;
                 }
             }
 
@@ -338,6 +326,145 @@ public sealed class SourceGenerationTests
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated.Contains("switch (instance.Kind)", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("case PersonKind.Adult when instance.RequiresName:", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task Check_Metadata_Generates_Code_And_Message_On_Check()
+    {
+        var result = RunGenerator(
+            """
+            using Valiant;
+
+            [ValiantValidator]
+            public sealed partial class PersonValidator : IValidatorDefinition<Person>
+            {
+                public static void Configure(ValidationContext<Person> context)
+                {
+                    context.Property(x => x.Name).Required(code: "NameRequired", message: "Name is required.");
+                }
+            }
+
+            public sealed class Person
+            {
+                public string? Name { get; init; }
+            }
+            """);
+
+        var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
+
+        await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(generated.Contains("\"NameRequired\" ?? \"Required\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("\"Name is required.\" ?? \"'Name' is required.\"", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task UseValidator_Generates_Root_Validator_Dependency()
+    {
+        var result = RunGenerator(
+            """
+            using Valiant;
+
+            [ValiantValidator]
+            public sealed partial class RequiredNameValidator : IValidatorDefinition<Person>
+            {
+                public static void Configure(ValidationContext<Person> context)
+                {
+                    context.Property(x => x.Name).Required();
+                }
+            }
+
+            [ValiantValidator]
+            public sealed partial class PersonValidator : IValidatorDefinition<Person>
+            {
+                private readonly RequiredNameValidator _requiredNameValidator;
+
+                public PersonValidator(RequiredNameValidator requiredNameValidator)
+                {
+                    _requiredNameValidator = requiredNameValidator;
+                }
+
+                public void Configure(ValidationContext<Person> context)
+                {
+                    context.UseValidator(_requiredNameValidator);
+                    context.Property(x => x.Age).GreaterThanOrEqualTo(18);
+                }
+            }
+
+            public sealed class Person
+            {
+                public string? Name { get; init; }
+
+                public int Age { get; init; }
+            }
+            """);
+
+        var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
+
+        await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(generated.Contains("var reusedResult0 = _requiredNameValidator.Validate(instance);", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("var reusedResult0 = await _requiredNameValidator.ValidateAsync(instance, cancellationToken).ConfigureAwait(false);", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task DependencyInjection_Extension_Uses_Configured_Validator_Lifetime()
+    {
+        var result = RunGenerator(
+            """
+            using Valiant;
+
+            [ValiantValidator]
+            public sealed partial class PersonValidator : IValidatorDefinition<Person>
+            {
+                public static void Configure(ValidationContext<Person> context)
+                {
+                    context.Property(x => x.Name).Required();
+                }
+            }
+
+            public sealed class Person
+            {
+                public string? Name { get; init; }
+            }
+
+            namespace Microsoft.Extensions.DependencyInjection
+            {
+                public interface IServiceCollection
+                {
+                }
+
+                public sealed class ServiceDescriptor
+                {
+                    public static ServiceDescriptor Singleton(System.Type serviceType, object implementationInstance) => new();
+
+                    public static ServiceDescriptor Singleton(System.Type serviceType, System.Type implementationType) => new();
+
+                    public static ServiceDescriptor Scoped(System.Type serviceType, System.Type implementationType) => new();
+
+                    public static ServiceDescriptor Transient(System.Type serviceType, System.Type implementationType) => new();
+                }
+
+                namespace Extensions
+                {
+                    public static class ServiceCollectionDescriptorExtensions
+                    {
+                        public static void TryAdd(IServiceCollection services, ServiceDescriptor descriptor)
+                        {
+                        }
+
+                        public static void TryAddEnumerable(IServiceCollection services, ServiceDescriptor descriptor)
+                        {
+                        }
+                    }
+                }
+            }
+            """);
+
+        var generated = result.GeneratedSources.Single(static x => x.HintName == "Valiant.DependencyInjection.g.cs").SourceText.ToString();
+
+        await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(generated.Contains("CreateValidatorDescriptor(typeof(global::PersonValidator), typeof(global::PersonValidator), valiantValidationOptions.Lifetime)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("case global::Valiant.ValiantValidatorLifetime.Scoped:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("return global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Transient(serviceType, implementationType);", StringComparison.Ordinal)).IsTrue();
     }
 
     private static SourceGenerationResult RunGenerator(string source)
