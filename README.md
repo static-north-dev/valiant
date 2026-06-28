@@ -90,6 +90,38 @@ public sealed partial class CreateUserValidator : IValidatorDefinition<CreateUse
 }
 ```
 
+Validators can also be reused for a property value. This is useful for nested objects such as addresses. The child validator is a normal Valiant validator, so it is discovered and registered in DI the same way as every other validator:
+
+```csharp
+[ValiantValidator]
+public sealed partial class AddressValidator : IValidatorDefinition<Address>
+{
+    public static void Configure(ValidationContext<Address> context)
+    {
+        context.Property(address => address.Line1).Required();
+        context.Property(address => address.Zip).Required();
+    }
+}
+
+[ValiantValidator]
+public sealed partial class CreateUserValidator : IValidatorDefinition<CreateUser>
+{
+    private readonly AddressValidator _addressValidator;
+
+    public CreateUserValidator(AddressValidator addressValidator)
+    {
+        _addressValidator = addressValidator;
+    }
+
+    public void Configure(ValidationContext<CreateUser> context)
+    {
+        context.Property(user => user.Address).UseValidator(_addressValidator);
+    }
+}
+```
+
+Property validators skip null property values. Add `Required()` before `UseValidator(...)` when the property itself must be present. Child failures are reported under the parent path, for example `Address.Line1`.
+
 The generator emits an `IValidator<CreateUser>` implementation with direct property reads and native branch checks. When `Microsoft.Extensions.DependencyInjection` is available in the consumer project, it also emits:
 
 ```csharp
@@ -97,6 +129,7 @@ services.AddValiantValidations(options =>
 {
     options.Mode = ValiantValidationMode.Auto;
     options.Lifetime = ValiantValidatorLifetime.Singleton;
+    options.FailureBehavior = ValiantFailureBehavior.ValidateAll;
 });
 ```
 
@@ -106,6 +139,7 @@ That generated extension registers validators without reflection scanning and co
 - `Debuggable` always executes the user-authored `Configure` method, so normal breakpoints work.
 - `Fast` always uses the source-generated direct validation code.
 - `Lifetime` controls DI registration for generated validators: `Singleton`, `Scoped`, or `Transient`.
+- `FailureBehavior` controls whether validators collect every failure or stop after the first one.
 
 The attribute is the generator discovery hook; `IValidatorDefinition<T>` supplies the model type, and the generator validates the `Configure` declaration shape.
 
@@ -128,9 +162,23 @@ bool isValid = await validator.IsValidAsync(model);
 - `Required()`
 - `NotEmpty()`
 - `Empty()`
+- `DefinedEnum()`
+- `EnumName<TEnum>()`
+- `EnumValue<TEnum>()`
 - `LengthBetween(min, max)`
 - `MinLength(min)`
 - `MaxLength(max)`
+- `Count(count)`
+- `CountBetween(min, max)`
+- `MinCount(min)`
+- `MaxCount(max)`
+- `Contains(item)`
+- `Excludes(item)`
+- `All(predicate)`
+- `Any(predicate)`
+- `None(predicate)`
+- `HasKey(key)`
+- `HasValue(value)`
 - `GreaterThan(value)`
 - `GreaterThanOrEqualTo(value)`
 - `LessThan(value)`
@@ -142,12 +190,35 @@ bool isValid = await validator.IsValidAsync(model);
 - `Satisfies(predicate)`
 - `SatisfiesAsync(predicate)`
 
+Type-specific checks are exposed only where they make sense. For example, `NotNull()` and `Null()` are available on reference and nullable value properties, string length checks are available on string properties, `DefinedEnum()` is available on enum properties, collection count, membership, and predicate checks are available on collection properties, and dictionary key/value checks are available on dictionary properties.
+
 Each validator call accepts optional `code` and `message` arguments for that exact check:
 
 ```csharp
 context.Property(user => user.Name)
     .Required(code: "NameRequired", message: "Name is required.")
     .MaxLength(64, code: "NameTooLong", message: "Name must be 64 characters or fewer.");
+```
+
+Failure behavior can be configured globally, per validator, or for one property chain. The narrower setting wins:
+
+```csharp
+services.AddValiantValidations(options =>
+{
+    options.FailureBehavior = ValiantFailureBehavior.FailFast;
+});
+
+public static void Configure(ValidationContext<CreateUser> context)
+{
+    context.ValidateAll();
+
+    context.Property(user => user.Name)
+        .FailFast()
+        .Required()
+        .MaxLength(64);
+
+    context.Property(user => user.Email).Required();
+}
 ```
 
 For strings, the presence checks are intentionally distinct:
@@ -158,9 +229,118 @@ For strings, the presence checks are intentionally distinct:
 | `NotEmpty()` | fail | fail | pass |
 | `Required()` | fail | fail | fail |
 
+Enum checks cover the common enum shapes:
+
+```csharp
+context.Property(order => order.Status).DefinedEnum();
+context.Property(order => order.StatusName).EnumName<OrderStatus>();
+context.Property(order => order.StatusValue).EnumValue<OrderStatus>();
+```
+
+Native loops are supported in `Configure`, including `foreach`, `for`, `while`, and `do`/`while`:
+
+```csharp
+foreach (var item in context.Instance.Items)
+{
+    if (item.RequiresName)
+    {
+        context.Property(order => order.Name).Required();
+    }
+}
+```
+
+Collection and dictionary checks cover exact/ranged counts, membership, predicates, and dictionary keys/values:
+
+```csharp
+context.Property(order => order.Items)
+    .NotEmpty()
+    .Count(3)
+    .CountBetween(1, 25)
+    .Contains(requiredItem)
+    .All(item => item.Quantity > 0)
+    .None(item => item.IsDeleted);
+
+context.Property(order => order.Metadata)
+    .HasKey("source")
+    .HasValue("api");
+```
+
+Collections can also validate each item with an item `ValidationContext<TItem>`. The generated fast validator emits a real loop and reports indexed property paths such as `Items[0].Sku`:
+
+```csharp
+context.Property(order => order.Items).ForEach(item =>
+{
+    item.Property(x => x.Sku).Required();
+});
+
+context.Property(order => order.Items).ForEach((item, items) =>
+{
+    if (items.Count > 0)
+    {
+        item.Property(x => x.Sku).Required();
+    }
+});
+```
+
+Native C# loops can validate a specific collection item by creating an item context with the item, the owning collection selector, and the current index:
+
+```csharp
+var index = 0;
+foreach (var item in context.Instance.Items)
+{
+    context.Item(item, order => order.Items, index)
+        .Property(x => x.Sku)
+        .Required();
+
+    index++;
+}
+```
+
+## ASP.NET Core integration
+
+`Valiant.AspNetCore` contains ASP.NET-specific helpers so the core package can stay free of ASP.NET references.
+
+Minimal APIs can validate endpoint models with an endpoint filter:
+
+```csharp
+using Valiant.AspNetCore;
+
+app.MapPost("/users", (CreateUser user) => Results.Ok())
+    .WithValiantValidation<CreateUser>();
+```
+
+`WithValiantValidation<T>()` validates endpoint arguments assignable to `T`. `WithValiantValidation()` validates all endpoint arguments that have registered `IValidator<T>` services.
+
+MVC can add Valiant validators to the normal model validation pipeline:
+
+```csharp
+builder.Services
+    .AddControllers()
+    .AddValiantValidation();
+```
+
+or:
+
+```csharp
+builder.Services.AddValiantMvcValidation();
+```
+
+With `[ApiController]`, MVC turns model-state validation failures into the usual validation problem response.
+
+Validation results can also be converted directly to problem-details shapes:
+
+```csharp
+ValidationResult result = validator.Validate(model);
+
+IDictionary<string, string[]> errors = result.ToValidationProblemDictionary();
+HttpValidationProblemDetails httpProblem = result.ToHttpValidationProblemDetails();
+ValidationProblemDetails mvcProblem = result.ToMvcValidationProblemDetails();
+```
+
 ## Repository layout
 
 - `src/Valiant` contains runtime contracts and the NuGet package metadata.
+- `src/Valiant.AspNetCore` contains Minimal API, MVC, and problem details integrations.
 - `src/Valiant.SourceGeneration` contains the incremental source generator packaged as a NuGet analyzer.
 - `samples/Valiant.Sample` exercises generated validation and generated DI registration.
 

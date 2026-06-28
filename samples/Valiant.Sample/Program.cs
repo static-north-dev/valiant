@@ -16,7 +16,8 @@ var tagValidator = provider.GetRequiredService<CreateTagValidator>();
 var invalid = await validator.ValidateAsync(new CreateUser
 {
     Name = "",
-    Age = 42
+    Age = 42,
+    Tags = ["sample"]
 });
 
 if (invalid.IsValid || invalid.Errors.Count != 2)
@@ -27,7 +28,8 @@ if (invalid.IsValid || invalid.Errors.Count != 2)
 var validUser = new CreateUser
 {
     Name = "Ada",
-    Age = 37
+    Age = 37,
+    Tags = ["sample"]
 };
 
 if (!await validator.IsValidAsync(validUser))
@@ -92,6 +94,12 @@ public sealed class CreateUser
     public UserRole Role { get; init; }
     
     public string? RoleString { get; init; }
+    
+    public List<string>? Tags { get; init; }
+    
+    public IEnumerable<string>? TagCollection { get; init; }
+    
+    public Dictionary<string, string>? TagDictionary { get; init; }
 }
 
 public sealed class CreateTag
@@ -106,6 +114,21 @@ public sealed partial class CreateUserValidator : IValidatorDefinition<CreateUse
 {
     public static void Configure(ValidationContext<CreateUser> context)
     {
+        context.Property(p => p.Role)
+            .DefinedEnum();
+
+        context.Property(p => p.RoleString)
+            .EnumName<UserRole>();
+
+        // foreach (var v in context.Instance.TagCollection)
+        // {
+        //     context.Item(context.Instance.TagCollection, v)
+        //         .Required();
+        // }
+
+        context.Property(p => p.Tags)
+            .NotEmpty();
+        
         context.Property(user => user.Name)
             .Required()
             .MaxLength(64)

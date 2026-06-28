@@ -8,32 +8,110 @@ public struct PropertyValidation<T, TProperty>
     private readonly ValidationContext<T> _context;
     private readonly Func<T, TProperty> _property;
     private readonly string _propertyName;
+    private readonly ValiantFailureBehavior? _failureBehavior;
+    private readonly PropertyValidationState _state;
 
     internal PropertyValidation(ValidationContext<T> context, Func<T, TProperty> property, string propertyName)
+        : this(context, property, propertyName, null, new PropertyValidationState())
+    {
+    }
+
+    private PropertyValidation(
+        ValidationContext<T> context,
+        Func<T, TProperty> property,
+        string propertyName,
+        ValiantFailureBehavior? failureBehavior,
+        PropertyValidationState state)
     {
         _context = context;
         _property = property;
         _propertyName = propertyName;
+        _failureBehavior = failureBehavior;
+        _state = state;
     }
 
     /// <summary>
-    /// Requires the property value to be non-null.
+    /// Stops this property chain after the first failed check.
     /// </summary>
-    /// <param name="code">Optional error code used when this check fails.</param>
-    /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> NotNull(string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> FailFast()
     {
-        return Check("NotNull", IsNull(Value), "'" + _propertyName + "' must not be null.", code, message);
+        return new PropertyValidation<T, TProperty>(_context, _property, _propertyName, ValiantFailureBehavior.FailFast, _state);
     }
 
     /// <summary>
-    /// Requires the property value to be null.
+    /// Runs every check in this property chain even when an earlier check failed.
     /// </summary>
-    /// <param name="code">Optional error code used when this check fails.</param>
-    /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> Null(string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> ValidateAll()
     {
-        return Check("Null", !IsNull(Value), "'" + _propertyName + "' must be null.", code, message);
+        return new PropertyValidation<T, TProperty>(_context, _property, _propertyName, ValiantFailureBehavior.ValidateAll, _state);
+    }
+
+    /// <summary>
+    /// Reuses a validator for the property value. Null property values are skipped; use <see cref="Required" /> when the property must be present.
+    /// </summary>
+    /// <param name="validator">The validator for the property value.</param>
+    /// <returns>The current property validation builder.</returns>
+    public PropertyValidation<T, TProperty> UseValidator<TValidatedProperty>(IValidator<TValidatedProperty> validator)
+    {
+        _ = validator ?? throw new ArgumentNullException(nameof(validator));
+        if (ShouldSkip)
+        {
+            return this;
+        }
+
+        var context = _context;
+        var property = _property;
+        var propertyName = _propertyName;
+        var state = _state;
+        var failureBehavior = EffectiveFailureBehavior;
+
+        context.AddDeferredValidation(
+            () =>
+            {
+                if (context.ShouldStopValidation ||
+                    (state.HasFailure && failureBehavior == ValiantFailureBehavior.FailFast))
+                {
+                    return;
+                }
+
+                var rawValue = property(context.Instance);
+                if (rawValue is null)
+                {
+                    return;
+                }
+
+                if (rawValue is not TValidatedProperty value)
+                {
+                    throw new InvalidOperationException("The supplied property validator cannot validate property '" + propertyName + "'.");
+                }
+
+                var result = validator.Validate(value);
+                AddValidatorFailures(context, propertyName, result, state);
+            },
+            async cancellationToken =>
+            {
+                if (context.ShouldStopValidation ||
+                    (state.HasFailure && failureBehavior == ValiantFailureBehavior.FailFast))
+                {
+                    return;
+                }
+
+                var rawValue = property(context.Instance);
+                if (rawValue is null)
+                {
+                    return;
+                }
+
+                if (rawValue is not TValidatedProperty value)
+                {
+                    throw new InvalidOperationException("The supplied property validator cannot validate property '" + propertyName + "'.");
+                }
+
+                var result = await validator.ValidateAsync(value, cancellationToken).ConfigureAwait(false);
+                AddValidatorFailures(context, propertyName, result, state);
+            });
+
+        return this;
     }
 
     /// <summary>
@@ -43,6 +121,11 @@ public struct PropertyValidation<T, TProperty>
     /// <param name="message">Optional error message used when this check fails.</param>
     public PropertyValidation<T, TProperty> Required(string? code = null, string? message = null)
     {
+        if (ShouldSkip)
+        {
+            return this;
+        }
+
         var value = Value;
         var failed = value is string text
             ? string.IsNullOrWhiteSpace(text)
@@ -52,117 +135,72 @@ public struct PropertyValidation<T, TProperty>
     }
 
     /// <summary>
-    /// Requires a non-empty value. For strings, null and empty values fail; whitespace-only values pass. For other values, null or default values fail.
+    /// Requires a non-empty value. For strings and collections, null and empty values fail; whitespace-only strings pass. For other values, null or default values fail.
     /// </summary>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
     public PropertyValidation<T, TProperty> NotEmpty(string? code = null, string? message = null)
     {
-        var value = Value;
-        var failed = value switch
+        if (ShouldSkip)
         {
-            null => true,
-            string text => text.Length == 0,
-            _ => EqualityComparer<TProperty>.Default.Equals(value, default!)
-        };
+            return this;
+        }
 
-        return Check("NotEmpty", failed, "'" + _propertyName + "' must not be empty.", code, message);
+        return Check("NotEmpty", ValidationChecks.IsEmpty(Value), "'" + _propertyName + "' must not be empty.", code, message);
     }
 
     /// <summary>
-    /// Requires an empty value. For strings, null and empty values pass; whitespace-only values fail.
+    /// Requires an empty value. For strings and collections, null and empty values pass; whitespace-only strings fail.
     /// </summary>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
     public PropertyValidation<T, TProperty> Empty(string? code = null, string? message = null)
     {
-        var value = Value;
-        var failed = value is string text
-            ? !string.IsNullOrEmpty(text)
-            : !EqualityComparer<TProperty>.Default.Equals(value, default!);
+        if (ShouldSkip)
+        {
+            return this;
+        }
 
-        return Check("Empty", failed, "'" + _propertyName + "' must be empty.", code, message);
+        return Check("Empty", !ValidationChecks.IsEmpty(Value), "'" + _propertyName + "' must be empty.", code, message);
     }
 
     /// <summary>
-    /// Requires a string value to have a length between <paramref name="min" /> and <paramref name="max" />, inclusive. Null values pass.
+    /// Requires a string value to match a defined enum member name of <typeparamref name="TEnum" />. Null values pass.
     /// </summary>
-    /// <param name="min">The minimum allowed string length.</param>
-    /// <param name="max">The maximum allowed string length.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> LengthBetween(int min, int max, string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> EnumName<TEnum>(string? code = null, string? message = null)
+        where TEnum : struct, global::System.Enum
     {
-        var length = (Value as string)?.Length;
-        return Check("LengthBetween", length is not null && (length < min || length > max), "'" + _propertyName + "' must be between " + min + " and " + max + " characters.", code, message);
+        if (ShouldSkip)
+        {
+            return this;
+        }
+
+        var failed = Value switch
+        {
+            null => false,
+            string text => !ValidationChecks.IsEnumName<TEnum>(text),
+            _ => true
+        };
+
+        return Check("EnumName", failed, "'" + _propertyName + "' must be a valid enum name.", code, message);
     }
 
     /// <summary>
-    /// Requires a string value to have at least <paramref name="min" /> characters. Null values pass.
+    /// Requires an integer value to map to a defined enum member value of <typeparamref name="TEnum" />. Null values pass.
     /// </summary>
-    /// <param name="min">The minimum allowed string length.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> MinLength(int min, string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> EnumValue<TEnum>(string? code = null, string? message = null)
+        where TEnum : struct, global::System.Enum
     {
-        var length = (Value as string)?.Length;
-        return Check("MinLength", length is not null && length < min, "'" + _propertyName + "' must be at least " + min + " characters.", code, message);
-    }
+        if (ShouldSkip)
+        {
+            return this;
+        }
 
-    /// <summary>
-    /// Requires a string value to have no more than <paramref name="max" /> characters. Null values pass.
-    /// </summary>
-    /// <param name="max">The maximum allowed string length.</param>
-    /// <param name="code">Optional error code used when this check fails.</param>
-    /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> MaxLength(int max, string? code = null, string? message = null)
-    {
-        var length = (Value as string)?.Length;
-        return Check("MaxLength", length is not null && length > max, "'" + _propertyName + "' must be at most " + max + " characters.", code, message);
-    }
-
-    /// <summary>
-    /// Requires the property value to be greater than <paramref name="value" />.
-    /// </summary>
-    /// <param name="value">The exclusive lower bound.</param>
-    /// <param name="code">Optional error code used when this check fails.</param>
-    /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> GreaterThan(TProperty value, string? code = null, string? message = null)
-    {
-        return Check("GreaterThan", Comparer<TProperty>.Default.Compare(Value, value) <= 0, "'" + _propertyName + "' must be greater than " + value + ".", code, message);
-    }
-
-    /// <summary>
-    /// Requires the property value to be greater than or equal to <paramref name="value" />.
-    /// </summary>
-    /// <param name="value">The inclusive lower bound.</param>
-    /// <param name="code">Optional error code used when this check fails.</param>
-    /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> GreaterThanOrEqualTo(TProperty value, string? code = null, string? message = null)
-    {
-        return Check("GreaterThanOrEqualTo", Comparer<TProperty>.Default.Compare(Value, value) < 0, "'" + _propertyName + "' must be greater than or equal to " + value + ".", code, message);
-    }
-
-    /// <summary>
-    /// Requires the property value to be less than <paramref name="value" />.
-    /// </summary>
-    /// <param name="value">The exclusive upper bound.</param>
-    /// <param name="code">Optional error code used when this check fails.</param>
-    /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> LessThan(TProperty value, string? code = null, string? message = null)
-    {
-        return Check("LessThan", Comparer<TProperty>.Default.Compare(Value, value) >= 0, "'" + _propertyName + "' must be less than " + value + ".", code, message);
-    }
-
-    /// <summary>
-    /// Requires the property value to be less than or equal to <paramref name="value" />.
-    /// </summary>
-    /// <param name="value">The inclusive upper bound.</param>
-    /// <param name="code">Optional error code used when this check fails.</param>
-    /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> LessThanOrEqualTo(TProperty value, string? code = null, string? message = null)
-    {
-        return Check("LessThanOrEqualTo", Comparer<TProperty>.Default.Compare(Value, value) > 0, "'" + _propertyName + "' must be less than or equal to " + value + ".", code, message);
+        return Check("EnumValue", !ValidationChecks.IsEnumValue<TEnum, TProperty>(Value), "'" + _propertyName + "' must be a valid enum value.", code, message);
     }
 
     /// <summary>
@@ -173,6 +211,11 @@ public struct PropertyValidation<T, TProperty>
     /// <param name="message">Optional error message used when this check fails.</param>
     public PropertyValidation<T, TProperty> Equal(TProperty value, string? code = null, string? message = null)
     {
+        if (ShouldSkip)
+        {
+            return this;
+        }
+
         return Check("Equal", !EqualityComparer<TProperty>.Default.Equals(Value, value), "'" + _propertyName + "' must be equal to " + value + ".", code, message);
     }
 
@@ -184,35 +227,12 @@ public struct PropertyValidation<T, TProperty>
     /// <param name="message">Optional error message used when this check fails.</param>
     public PropertyValidation<T, TProperty> NotEqual(TProperty value, string? code = null, string? message = null)
     {
+        if (ShouldSkip)
+        {
+            return this;
+        }
+
         return Check("NotEqual", EqualityComparer<TProperty>.Default.Equals(Value, value), "'" + _propertyName + "' must not be equal to " + value + ".", code, message);
-    }
-
-    /// <summary>
-    /// Requires the property value to be between <paramref name="from" /> and <paramref name="to" />, inclusive.
-    /// </summary>
-    /// <param name="from">The inclusive lower bound.</param>
-    /// <param name="to">The inclusive upper bound.</param>
-    /// <param name="code">Optional error code used when this check fails.</param>
-    /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> InclusiveBetween(TProperty from, TProperty to, string? code = null, string? message = null)
-    {
-        var comparer = Comparer<TProperty>.Default;
-        var value = Value;
-        return Check("InclusiveBetween", comparer.Compare(value, from) < 0 || comparer.Compare(value, to) > 0, "'" + _propertyName + "' must be between " + from + " and " + to + ".", code, message);
-    }
-
-    /// <summary>
-    /// Requires the property value to be between <paramref name="from" /> and <paramref name="to" />, exclusive.
-    /// </summary>
-    /// <param name="from">The exclusive lower bound.</param>
-    /// <param name="to">The exclusive upper bound.</param>
-    /// <param name="code">Optional error code used when this check fails.</param>
-    /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> ExclusiveBetween(TProperty from, TProperty to, string? code = null, string? message = null)
-    {
-        var comparer = Comparer<TProperty>.Default;
-        var value = Value;
-        return Check("ExclusiveBetween", comparer.Compare(value, from) <= 0 || comparer.Compare(value, to) >= 0, "'" + _propertyName + "' must be between " + from + " and " + to + ", exclusive.", code, message);
     }
 
     /// <summary>
@@ -224,6 +244,11 @@ public struct PropertyValidation<T, TProperty>
     public PropertyValidation<T, TProperty> Satisfies(Func<TProperty, bool> predicate, string? code = null, string? message = null)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
+        if (ShouldSkip)
+        {
+            return this;
+        }
+
         return Check("Satisfies", !predicate(Value), "'" + _propertyName + "' did not satisfy the custom validation predicate.", code, message);
     }
 
@@ -236,6 +261,11 @@ public struct PropertyValidation<T, TProperty>
     public PropertyValidation<T, TProperty> Satisfies(Func<T, TProperty, bool> predicate, string? code = null, string? message = null)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
+        if (ShouldSkip)
+        {
+            return this;
+        }
+
         return Check("Satisfies", !predicate(_context.Instance, Value), "'" + _propertyName + "' did not satisfy the custom validation predicate.", code, message);
     }
 
@@ -248,6 +278,11 @@ public struct PropertyValidation<T, TProperty>
     public PropertyValidation<T, TProperty> SatisfiesAsync(Func<TProperty, global::System.Threading.CancellationToken, global::System.Threading.Tasks.ValueTask<bool>> predicate, string? code = null, string? message = null)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
+        if (ShouldSkip)
+        {
+            return this;
+        }
+
         var context = _context;
         var property = _property;
         return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", cancellationToken => predicate(property(context.Instance), cancellationToken), code, message);
@@ -262,6 +297,11 @@ public struct PropertyValidation<T, TProperty>
     public PropertyValidation<T, TProperty> SatisfiesAsync(Func<T, TProperty, global::System.Threading.CancellationToken, global::System.Threading.Tasks.ValueTask<bool>> predicate, string? code = null, string? message = null)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
+        if (ShouldSkip)
+        {
+            return this;
+        }
+
         var context = _context;
         var property = _property;
         return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", cancellationToken => predicate(context.Instance, property(context.Instance), cancellationToken), code, message);
@@ -276,6 +316,11 @@ public struct PropertyValidation<T, TProperty>
     public PropertyValidation<T, TProperty> SatisfiesAsync(Func<TProperty, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<bool>> predicate, string? code = null, string? message = null)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
+        if (ShouldSkip)
+        {
+            return this;
+        }
+
         var context = _context;
         var property = _property;
         return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", async cancellationToken => await predicate(property(context.Instance), cancellationToken).ConfigureAwait(false), code, message);
@@ -290,18 +335,36 @@ public struct PropertyValidation<T, TProperty>
     public PropertyValidation<T, TProperty> SatisfiesAsync(Func<T, TProperty, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<bool>> predicate, string? code = null, string? message = null)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
+        if (ShouldSkip)
+        {
+            return this;
+        }
+
         var context = _context;
         var property = _property;
         return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", async cancellationToken => await predicate(context.Instance, property(context.Instance), cancellationToken).ConfigureAwait(false), code, message);
     }
 
-    private TProperty Value => _property(_context.Instance);
+    internal TProperty Value => _property(_context.Instance);
 
-    private PropertyValidation<T, TProperty> Check(string defaultCode, bool failed, string defaultMessage, string? code, string? message)
+    internal ValidationContext<T> Context => _context;
+
+    internal string PropertyName => _propertyName;
+
+    internal bool ShouldSkip => _context.ShouldStopValidation ||
+        (_state.HasFailure && EffectiveFailureBehavior == ValiantFailureBehavior.FailFast);
+
+    internal PropertyValidation<T, TProperty> Check(string defaultCode, bool failed, string defaultMessage, string? code, string? message)
     {
+        if (ShouldSkip)
+        {
+            return this;
+        }
+
         if (failed)
         {
             _context.AddFailure(_propertyName, code ?? defaultCode, message ?? defaultMessage);
+            _state.HasFailure = true;
         }
 
         return this;
@@ -316,21 +379,66 @@ public struct PropertyValidation<T, TProperty>
     {
         var context = _context;
         var propertyName = _propertyName;
+        var state = _state;
         var errorCode = code ?? defaultCode;
         var errorMessage = message ?? defaultMessage;
+        var failureBehavior = EffectiveFailureBehavior;
         context.AddAsyncValidation(async cancellationToken =>
         {
+            if (context.ShouldStopValidation ||
+                (state.HasFailure && failureBehavior == ValiantFailureBehavior.FailFast))
+            {
+                return;
+            }
+
             if (!await predicate(cancellationToken).ConfigureAwait(false))
             {
                 context.AddFailure(propertyName, errorCode, errorMessage);
+                state.HasFailure = true;
             }
         });
 
         return this;
     }
 
-    private static bool IsNull(TProperty value)
+    private ValiantFailureBehavior EffectiveFailureBehavior => _failureBehavior ?? _context.FailureBehavior;
+
+    private static void AddValidatorFailures(
+        ValidationContext<T> context,
+        string propertyName,
+        ValidationResult result,
+        PropertyValidationState state)
     {
-        return value is null;
+        if (result.IsValid)
+        {
+            return;
+        }
+
+        state.HasFailure = true;
+        foreach (var failure in result.Errors)
+        {
+            context.AddFailure(CombinePropertyPath(propertyName, failure.PropertyName), failure.ErrorCode, failure.ErrorMessage);
+            if (context.ShouldStopValidation)
+            {
+                break;
+            }
+        }
+    }
+
+    private static string CombinePropertyPath(string propertyName, string childPropertyName)
+    {
+        if (string.IsNullOrEmpty(childPropertyName))
+        {
+            return propertyName;
+        }
+
+        return childPropertyName.StartsWith("[", StringComparison.Ordinal)
+            ? propertyName + childPropertyName
+            : propertyName + "." + childPropertyName;
+    }
+
+    private sealed class PropertyValidationState
+    {
+        public bool HasFailure { get; set; }
     }
 }

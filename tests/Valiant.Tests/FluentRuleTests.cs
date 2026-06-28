@@ -282,6 +282,291 @@ public sealed class FluentRuleTests
         await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("SatisfiesAsync");
         await Assert.ThrowsAsync<InvalidOperationException>(() => Task.FromResult(validator.Validate(new ConditionalModel { Name = "" })));
     }
+
+    [Test]
+    public async Task DefinedEnum_Fails_For_Undefined_Enum_Value()
+    {
+        var validator = new DefinedEnumValidator(FastOptions());
+
+        var result = validator.Validate(new EnumValidationModel { State = (SampleState)99 });
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("DefinedEnum");
+    }
+
+    [Test]
+    public async Task EnumName_Fails_For_Unknown_String_Name()
+    {
+        var validator = new EnumNameValidator(FastOptions());
+
+        var result = validator.Validate(new EnumValidationModel { StateName = "Missing" });
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("EnumName");
+    }
+
+    [Test]
+    public async Task EnumValue_Fails_For_Unknown_Integer_Value()
+    {
+        var validator = new EnumValueValidator(FastOptions());
+
+        var result = validator.Validate(new EnumValidationModel { StateValue = 99 });
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("EnumValue");
+    }
+
+    [Test]
+    public async Task NotEmpty_Fails_For_Empty_Collection()
+    {
+        var validator = new NotEmptyCollectionValidator(FastOptions());
+
+        var result = validator.Validate(new CollectionModel { Values = [] });
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("NotEmpty");
+    }
+
+    [Test]
+    public async Task Collection_Count_Checks_Fail_When_Count_Is_Outside_Limits()
+    {
+        var countValidator = new CountCollectionValidator(FastOptions());
+        var betweenValidator = new CountBetweenCollectionValidator(FastOptions());
+        var minValidator = new MinCountCollectionValidator(FastOptions());
+        var maxValidator = new MaxCountCollectionValidator(FastOptions());
+
+        var countResult = countValidator.Validate(new CollectionModel { Values = [1, 2] });
+        var betweenResult = betweenValidator.Validate(new CollectionModel { Values = [1, 2, 3, 4] });
+        var minResult = minValidator.Validate(new CollectionModel { Values = [1] });
+        var maxResult = maxValidator.Validate(new CollectionModel { Values = [1, 2, 3, 4] });
+
+        await Assert.That(countResult.Errors[0].ErrorCode).IsEqualTo("Count");
+        await Assert.That(betweenResult.Errors[0].ErrorCode).IsEqualTo("CountBetween");
+        await Assert.That(minResult.Errors[0].ErrorCode).IsEqualTo("MinCount");
+        await Assert.That(maxResult.Errors[0].ErrorCode).IsEqualTo("MaxCount");
+    }
+
+    [Test]
+    public async Task Collection_Item_Checks_Fail_When_Item_Presence_Does_Not_Match()
+    {
+        var containsValidator = new ContainsCollectionValidator(FastOptions());
+        var excludesValidator = new ExcludesCollectionValidator(FastOptions());
+
+        var containsResult = containsValidator.Validate(new CollectionModel { Values = [1, 2] });
+        var excludesResult = excludesValidator.Validate(new CollectionModel { Values = [1, 2, 99] });
+
+        await Assert.That(containsResult.Errors[0].ErrorCode).IsEqualTo("Contains");
+        await Assert.That(excludesResult.Errors[0].ErrorCode).IsEqualTo("Excludes");
+    }
+
+    [Test]
+    public async Task Dictionary_Checks_Fail_When_Key_Or_Value_Is_Missing()
+    {
+        var keyValidator = new HasKeyDictionaryValidator(FastOptions());
+        var valueValidator = new HasValueDictionaryValidator(FastOptions());
+
+        var keyResult = keyValidator.Validate(new DictionaryModel { Values = new Dictionary<string, int> { ["other"] = 7 } });
+        var valueResult = valueValidator.Validate(new DictionaryModel { Values = new Dictionary<string, int> { ["id"] = 1 } });
+
+        await Assert.That(keyResult.Errors[0].ErrorCode).IsEqualTo("HasKey");
+        await Assert.That(valueResult.Errors[0].ErrorCode).IsEqualTo("HasValue");
+    }
+
+    [Test]
+    public async Task Collection_Predicate_Checks_Fail_When_Predicate_Does_Not_Match()
+    {
+        var allValidator = new AllCollectionValidator(FastOptions());
+        var anyValidator = new AnyCollectionValidator(FastOptions());
+        var noneValidator = new NoneCollectionValidator(FastOptions());
+
+        var allResult = allValidator.Validate(new CollectionModel { Values = [1, -1] });
+        var anyResult = anyValidator.Validate(new CollectionModel { Values = [1, 2] });
+        var noneResult = noneValidator.Validate(new CollectionModel { Values = [1, -1] });
+
+        await Assert.That(allResult.Errors[0].ErrorCode).IsEqualTo("All");
+        await Assert.That(anyResult.Errors[0].ErrorCode).IsEqualTo("Any");
+        await Assert.That(noneResult.Errors[0].ErrorCode).IsEqualTo("None");
+    }
+
+    [Test]
+    public async Task Collection_ForEach_Validates_Each_Item_With_Property_Path()
+    {
+        var validator = new ChildCollectionValidator(FastOptions());
+
+        var result = validator.Validate(new ParentModel
+        {
+            Children =
+            [
+                new ChildModel { Name = "ok" },
+                new ChildModel { Name = "" }
+            ]
+        });
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Errors[0].PropertyName).IsEqualTo("Children[1].Name");
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("Required");
+    }
+
+    [Test]
+    public async Task Collection_ForEach_Can_Use_Full_Collection_Parameter()
+    {
+        var validator = new ChildCollectionWithCollectionParameterValidator(FastOptions());
+
+        var result = validator.Validate(new ParentModel
+        {
+            Children = [new ChildModel { Name = "" }]
+        });
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Errors[0].PropertyName).IsEqualTo("Children[0].Name");
+        await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("ChildName");
+    }
+
+    [Test]
+    public async Task Native_Foreach_Can_Validate_Specific_Item()
+    {
+        var model = new ParentModel
+        {
+            Children =
+            [
+                new ChildModel { Name = "ok" },
+                new ChildModel { Name = "" }
+            ]
+        };
+
+        var fastResult = new NativeForeachItemValidator(FastOptions()).Validate(model);
+        var debugResult = new NativeForeachItemValidator(new ValiantValidationOptions { Mode = ValiantValidationMode.Debuggable }).Validate(model);
+
+        await Assert.That(fastResult.IsValid).IsFalse();
+        await Assert.That(debugResult.IsValid).IsFalse();
+        await Assert.That(fastResult.Errors[0].PropertyName).IsEqualTo("Children[1].Name");
+        await Assert.That(debugResult.Errors[0].PropertyName).IsEqualTo("Children[1].Name");
+        await Assert.That(fastResult.Errors[0].ErrorCode).IsEqualTo("NativeChildName");
+        await Assert.That(debugResult.Errors[0].ErrorCode).IsEqualTo("NativeChildName");
+    }
+
+    [Test]
+    public async Task Global_FailFast_Stops_After_First_Failure()
+    {
+        var fastValidator = new GlobalFailureBehaviorValidator(new ValiantValidationOptions
+        {
+            Mode = ValiantValidationMode.Fast,
+            FailureBehavior = ValiantFailureBehavior.FailFast
+        });
+        var debugValidator = new GlobalFailureBehaviorValidator(new ValiantValidationOptions
+        {
+            Mode = ValiantValidationMode.Debuggable,
+            FailureBehavior = ValiantFailureBehavior.FailFast
+        });
+
+        var fastResult = fastValidator.Validate(new FailureBehaviorModel());
+        var debugResult = debugValidator.Validate(new FailureBehaviorModel());
+
+        await Assert.That(fastResult.Errors).Count().IsEqualTo(1);
+        await Assert.That(debugResult.Errors).Count().IsEqualTo(1);
+        await Assert.That(fastResult.Errors[0].PropertyName).IsEqualTo("Name");
+        await Assert.That(debugResult.Errors[0].PropertyName).IsEqualTo("Name");
+    }
+
+    [Test]
+    public async Task Validator_FailFast_Overrides_Global_ValidateAll()
+    {
+        var fastValidator = new ValidatorFailFastBehaviorValidator(FastOptions());
+        var debugValidator = new ValidatorFailFastBehaviorValidator(new ValiantValidationOptions { Mode = ValiantValidationMode.Debuggable });
+
+        var fastResult = fastValidator.Validate(new FailureBehaviorModel());
+        var debugResult = debugValidator.Validate(new FailureBehaviorModel());
+
+        await Assert.That(fastResult.Errors).Count().IsEqualTo(1);
+        await Assert.That(debugResult.Errors).Count().IsEqualTo(1);
+        await Assert.That(fastResult.Errors[0].PropertyName).IsEqualTo("Name");
+        await Assert.That(debugResult.Errors[0].PropertyName).IsEqualTo("Name");
+    }
+
+    [Test]
+    public async Task Validator_ValidateAll_Overrides_Global_FailFast()
+    {
+        var fastValidator = new ValidatorValidateAllBehaviorValidator(new ValiantValidationOptions
+        {
+            Mode = ValiantValidationMode.Fast,
+            FailureBehavior = ValiantFailureBehavior.FailFast
+        });
+        var debugValidator = new ValidatorValidateAllBehaviorValidator(new ValiantValidationOptions
+        {
+            Mode = ValiantValidationMode.Debuggable,
+            FailureBehavior = ValiantFailureBehavior.FailFast
+        });
+
+        var fastResult = fastValidator.Validate(new FailureBehaviorModel());
+        var debugResult = debugValidator.Validate(new FailureBehaviorModel());
+
+        await Assert.That(fastResult.Errors).Count().IsEqualTo(2);
+        await Assert.That(debugResult.Errors).Count().IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task Property_Chain_FailFast_Stops_Only_That_Property_Chain()
+    {
+        var fastResult = new PropertyChainFailFastBehaviorValidator(FastOptions()).Validate(new FailureBehaviorModel());
+        var debugResult = new PropertyChainFailFastBehaviorValidator(new ValiantValidationOptions { Mode = ValiantValidationMode.Debuggable }).Validate(new FailureBehaviorModel());
+
+        await Assert.That(fastResult.Errors.Select(static error => error.ErrorCode)).IsEquivalentTo(["Required", "Required"]);
+        await Assert.That(debugResult.Errors.Select(static error => error.ErrorCode)).IsEquivalentTo(["Required", "Required"]);
+    }
+
+    [Test]
+    public async Task Property_UseValidator_Reuses_Property_Validator_With_Prefixed_Failures()
+    {
+        var addressValidator = new AddressValidator(FastOptions());
+        var fastResult = new CustomerValidator(addressValidator, FastOptions()).Validate(new CustomerModel
+        {
+            Address = new AddressModel { Line1 = "", Zip = "" }
+        });
+        var debugResult = new CustomerValidator(
+            addressValidator,
+            new ValiantValidationOptions { Mode = ValiantValidationMode.Debuggable }).Validate(new CustomerModel
+            {
+                Address = new AddressModel { Line1 = "", Zip = "" }
+            });
+
+        await Assert.That(fastResult.Errors.Select(static error => error.PropertyName)).IsEquivalentTo(["Address.Line1", "Address.Zip"]);
+        await Assert.That(debugResult.Errors.Select(static error => error.PropertyName)).IsEquivalentTo(["Address.Line1", "Address.Zip"]);
+    }
+
+    [Test]
+    public async Task Property_UseValidator_Skips_Null_Property_Value()
+    {
+        var validator = new CustomerValidator(new AddressValidator(FastOptions()), FastOptions());
+
+        var result = validator.Validate(new CustomerModel());
+
+        await Assert.That(result.IsValid).IsTrue();
+    }
+
+    [Test]
+    public async Task Configure_Loops_Run_In_Fast_Mode()
+    {
+        var validator = new LoopValidator(FastOptions());
+
+        var result = validator.Validate(new LoopModel
+        {
+            Values = [-1],
+            Name = "",
+            RunWhile = true,
+            RunDo = true
+        });
+
+        var codes = result.Errors.Select(static error => error.ErrorCode).ToArray();
+        await Assert.That(codes).Contains("ForeachName");
+        await Assert.That(codes).Contains("ForName");
+        await Assert.That(codes).Contains("WhileName");
+        await Assert.That(codes).Contains("DoName");
+    }
+
+    private static ValiantValidationOptions FastOptions()
+    {
+        return new ValiantValidationOptions { Mode = ValiantValidationMode.Fast };
+    }
 }
 
 public sealed class NullableTextModel
@@ -308,6 +593,13 @@ public enum ConditionalMode
     Age
 }
 
+public enum SampleState
+{
+    None = 0,
+    Started = 1,
+    Done = 2
+}
+
 public sealed class ConditionalModel
 {
     public bool ValidateName { get; init; }
@@ -319,6 +611,65 @@ public sealed class ConditionalModel
     public string? Name { get; init; }
 
     public int Age { get; init; }
+}
+
+public sealed class EnumValidationModel
+{
+    public SampleState State { get; init; }
+
+    public string? StateName { get; init; }
+
+    public int StateValue { get; init; }
+}
+
+public sealed class CollectionModel
+{
+    public List<int> Values { get; init; } = [];
+}
+
+public sealed class DictionaryModel
+{
+    public Dictionary<string, int>? Values { get; init; }
+}
+
+public sealed class ParentModel
+{
+    public List<ChildModel> Children { get; init; } = [];
+}
+
+public sealed class ChildModel
+{
+    public string? Name { get; init; }
+}
+
+public sealed class FailureBehaviorModel
+{
+    public string? Name { get; init; }
+
+    public string? Description { get; init; }
+}
+
+public sealed class LoopModel
+{
+    public List<int> Values { get; init; } = [];
+
+    public string? Name { get; init; }
+
+    public bool RunWhile { get; init; }
+
+    public bool RunDo { get; init; }
+}
+
+public sealed class CustomerModel
+{
+    public AddressModel? Address { get; init; }
+}
+
+public sealed class AddressModel
+{
+    public string? Line1 { get; init; }
+
+    public string? Zip { get; init; }
 }
 
 [ValiantValidator]
@@ -592,5 +943,300 @@ public sealed partial class CompositeAsyncConditionalValidator : IValidatorDefin
     public void Configure(ValidationContext<ConditionalModel> context)
     {
         context.UseValidator(_asyncRequiredNameValidator);
+    }
+}
+
+[ValiantValidator]
+public sealed partial class DefinedEnumValidator : IValidatorDefinition<EnumValidationModel>
+{
+    public static void Configure(ValidationContext<EnumValidationModel> context)
+    {
+        context.Property(x => x.State).DefinedEnum();
+    }
+}
+
+[ValiantValidator]
+public sealed partial class EnumNameValidator : IValidatorDefinition<EnumValidationModel>
+{
+    public static void Configure(ValidationContext<EnumValidationModel> context)
+    {
+        context.Property(x => x.StateName).EnumName<SampleState>();
+    }
+}
+
+[ValiantValidator]
+public sealed partial class EnumValueValidator : IValidatorDefinition<EnumValidationModel>
+{
+    public static void Configure(ValidationContext<EnumValidationModel> context)
+    {
+        context.Property(x => x.StateValue).EnumValue<SampleState>();
+    }
+}
+
+[ValiantValidator]
+public sealed partial class NotEmptyCollectionValidator : IValidatorDefinition<CollectionModel>
+{
+    public static void Configure(ValidationContext<CollectionModel> context)
+    {
+        context.Property(x => x.Values).NotEmpty();
+    }
+}
+
+[ValiantValidator]
+public sealed partial class CountCollectionValidator : IValidatorDefinition<CollectionModel>
+{
+    public static void Configure(ValidationContext<CollectionModel> context)
+    {
+        context.Property(x => x.Values).Count(3);
+    }
+}
+
+[ValiantValidator]
+public sealed partial class CountBetweenCollectionValidator : IValidatorDefinition<CollectionModel>
+{
+    public static void Configure(ValidationContext<CollectionModel> context)
+    {
+        context.Property(x => x.Values).CountBetween(2, 3);
+    }
+}
+
+[ValiantValidator]
+public sealed partial class MinCountCollectionValidator : IValidatorDefinition<CollectionModel>
+{
+    public static void Configure(ValidationContext<CollectionModel> context)
+    {
+        context.Property(x => x.Values).MinCount(2);
+    }
+}
+
+[ValiantValidator]
+public sealed partial class MaxCountCollectionValidator : IValidatorDefinition<CollectionModel>
+{
+    public static void Configure(ValidationContext<CollectionModel> context)
+    {
+        context.Property(x => x.Values).MaxCount(3);
+    }
+}
+
+[ValiantValidator]
+public sealed partial class ContainsCollectionValidator : IValidatorDefinition<CollectionModel>
+{
+    public static void Configure(ValidationContext<CollectionModel> context)
+    {
+        context.Property(x => x.Values).Contains(3);
+    }
+}
+
+[ValiantValidator]
+public sealed partial class ExcludesCollectionValidator : IValidatorDefinition<CollectionModel>
+{
+    public static void Configure(ValidationContext<CollectionModel> context)
+    {
+        context.Property(x => x.Values).Excludes(99);
+    }
+}
+
+[ValiantValidator]
+public sealed partial class AllCollectionValidator : IValidatorDefinition<CollectionModel>
+{
+    public static void Configure(ValidationContext<CollectionModel> context)
+    {
+        context.Property(x => x.Values).All(value => value > 0);
+    }
+}
+
+[ValiantValidator]
+public sealed partial class AnyCollectionValidator : IValidatorDefinition<CollectionModel>
+{
+    public static void Configure(ValidationContext<CollectionModel> context)
+    {
+        context.Property(x => x.Values).Any(value => value == 42);
+    }
+}
+
+[ValiantValidator]
+public sealed partial class NoneCollectionValidator : IValidatorDefinition<CollectionModel>
+{
+    public static void Configure(ValidationContext<CollectionModel> context)
+    {
+        context.Property(x => x.Values).None(value => value < 0);
+    }
+}
+
+[ValiantValidator]
+public sealed partial class ChildCollectionValidator : IValidatorDefinition<ParentModel>
+{
+    public static void Configure(ValidationContext<ParentModel> context)
+    {
+        context.Property(x => x.Children).ForEach(child =>
+        {
+            child.Property(x => x.Name).Required();
+        });
+    }
+}
+
+[ValiantValidator]
+public sealed partial class ChildCollectionWithCollectionParameterValidator : IValidatorDefinition<ParentModel>
+{
+    public static void Configure(ValidationContext<ParentModel> context)
+    {
+        context.Property(x => x.Children).ForEach((child, children) =>
+        {
+            if (children.Count > 0)
+            {
+                child.Property(x => x.Name).Required(code: "ChildName");
+            }
+        });
+    }
+}
+
+[ValiantValidator]
+public sealed partial class GlobalFailureBehaviorValidator : IValidatorDefinition<FailureBehaviorModel>
+{
+    public static void Configure(ValidationContext<FailureBehaviorModel> context)
+    {
+        context.Property(x => x.Name).Required();
+        context.Property(x => x.Description).Required();
+    }
+}
+
+[ValiantValidator]
+public sealed partial class ValidatorFailFastBehaviorValidator : IValidatorDefinition<FailureBehaviorModel>
+{
+    public static void Configure(ValidationContext<FailureBehaviorModel> context)
+    {
+        context.FailFast();
+        context.Property(x => x.Name).Required();
+        context.Property(x => x.Description).Required();
+    }
+}
+
+[ValiantValidator]
+public sealed partial class ValidatorValidateAllBehaviorValidator : IValidatorDefinition<FailureBehaviorModel>
+{
+    public static void Configure(ValidationContext<FailureBehaviorModel> context)
+    {
+        context.ValidateAll();
+        context.Property(x => x.Name).Required();
+        context.Property(x => x.Description).Required();
+    }
+}
+
+[ValiantValidator]
+public sealed partial class PropertyChainFailFastBehaviorValidator : IValidatorDefinition<FailureBehaviorModel>
+{
+    public static void Configure(ValidationContext<FailureBehaviorModel> context)
+    {
+        context.Property(x => x.Name)
+            .FailFast()
+            .Required()
+            .Satisfies(static value => value!.Length > 0);
+
+        context.Property(x => x.Description).Required();
+    }
+}
+
+[ValiantValidator]
+public sealed partial class AddressValidator : IValidatorDefinition<AddressModel>
+{
+    public static void Configure(ValidationContext<AddressModel> context)
+    {
+        context.Property(x => x.Line1).Required();
+        context.Property(x => x.Zip).Required();
+    }
+}
+
+[ValiantValidator]
+public sealed partial class CustomerValidator : IValidatorDefinition<CustomerModel>
+{
+    private readonly AddressValidator _addressValidator;
+
+    public CustomerValidator(AddressValidator addressValidator)
+    {
+        _addressValidator = addressValidator;
+    }
+
+    public void Configure(ValidationContext<CustomerModel> context)
+    {
+        context.Property(x => x.Address).UseValidator(_addressValidator);
+    }
+}
+
+[ValiantValidator]
+public sealed partial class NativeForeachItemValidator : IValidatorDefinition<ParentModel>
+{
+    public static void Configure(ValidationContext<ParentModel> context)
+    {
+        var index = 0;
+        foreach (var child in context.Instance.Children)
+        {
+            context.Item(child, x => x.Children, index)
+                .Property(x => x.Name)
+                .Required(code: "NativeChildName");
+            index++;
+        }
+    }
+}
+
+[ValiantValidator]
+public sealed partial class HasKeyDictionaryValidator : IValidatorDefinition<DictionaryModel>
+{
+    public static void Configure(ValidationContext<DictionaryModel> context)
+    {
+        context.Property(x => x.Values).HasKey("id");
+    }
+}
+
+[ValiantValidator]
+public sealed partial class HasValueDictionaryValidator : IValidatorDefinition<DictionaryModel>
+{
+    public static void Configure(ValidationContext<DictionaryModel> context)
+    {
+        context.Property(x => x.Values).HasValue(7);
+    }
+}
+
+[ValiantValidator]
+public sealed partial class LoopValidator : IValidatorDefinition<LoopModel>
+{
+    public static void Configure(ValidationContext<LoopModel> context)
+    {
+        foreach (var value in context.Instance.Values)
+        {
+            if (value < 0)
+            {
+                context.Property(x => x.Name).Required(code: "ForeachName");
+            }
+        }
+
+        for (var index = 0; index < context.Instance.Values.Count; index++)
+        {
+            if (context.Instance.Values[index] == 0)
+            {
+                continue;
+            }
+
+            if (context.Instance.Values[index] < 0)
+            {
+                context.Property(x => x.Name).Required(code: "ForName");
+            }
+        }
+
+        while (context.Instance.RunWhile)
+        {
+            context.Property(x => x.Name).Required(code: "WhileName");
+            break;
+        }
+
+        do
+        {
+            if (context.Instance.RunDo)
+            {
+                context.Property(x => x.Name).Required(code: "DoName");
+            }
+
+            break;
+        }
+        while (context.Instance.RunDo);
     }
 }

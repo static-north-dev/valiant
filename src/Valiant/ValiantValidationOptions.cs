@@ -11,6 +11,11 @@ public sealed class ValiantValidationOptions
     public ValiantValidationMode Mode { get; set; } = ValiantValidationMode.Auto;
 
     /// <summary>
+    /// Gets or sets whether validators collect all failures or stop after the first failure.
+    /// </summary>
+    public ValiantFailureBehavior FailureBehavior { get; set; } = ValiantFailureBehavior.ValidateAll;
+
+    /// <summary>
     /// Gets or sets the dependency injection lifetime for generated validators.
     /// </summary>
     public ValiantValidatorLifetime Lifetime { get; set; } = ValiantValidatorLifetime.Singleton;
