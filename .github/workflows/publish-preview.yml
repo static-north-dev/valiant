@@ -62,7 +62,7 @@ jobs:
         uses: NuGet/login@v1
         id: nuget-login
         with:
-          user: artyomp
+          user: ${{ vars.NUGET_USER }}
 
       - name: Publish to NuGet
         run: |
