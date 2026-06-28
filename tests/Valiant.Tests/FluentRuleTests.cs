@@ -3,6 +3,28 @@ namespace Valiant.Tests;
 public sealed class FluentRuleTests
 {
     [Test]
+    public async Task ValidationResult_Snapshots_Failures()
+    {
+        var failures = new List<ValidationFailure>
+        {
+            new("Name", "Required", "Name is required.")
+        };
+
+        var result = new ValidationResult(failures);
+        failures.Add(new ValidationFailure("Name", "Warning", "Name warning.", ValiantSeverity.Warning));
+
+        await Assert.That(result.Failures).Count().IsEqualTo(1);
+        await Assert.That(result.Errors).Count().IsEqualTo(1);
+        await Assert.That(result.Warnings).IsEmpty();
+    }
+
+    [Test]
+    public async Task ValidationOptions_Default_Lifetime_Is_Scoped()
+    {
+        await Assert.That(new ValiantValidationOptions().Lifetime).IsEqualTo(ValiantValidatorLifetime.Scoped);
+    }
+
+    [Test]
     public async Task NotNull_Fails_For_Null()
     {
         var result = new NotNullValidator().Validate(new NullableTextModel());

@@ -86,6 +86,7 @@ public sealed partial class ValiantGenerator
             property.PropertyAccess,
             scope.CurrentInstanceExpression,
             property.PropertyType,
+            property.MetadataPropertyType,
             property.IsString,
             property.IsInteger,
             failureBehaviorExpression,
@@ -269,6 +270,7 @@ public sealed partial class ValiantGenerator
             itemProperty.PropertyAccess,
             itemExpression,
             itemProperty.PropertyType,
+            itemProperty.MetadataPropertyType,
             itemProperty.IsString,
             itemProperty.IsInteger,
             failureBehaviorExpression,
@@ -1093,6 +1095,7 @@ public sealed partial class ValiantGenerator
             string.Join(".", displaySegments),
             string.Join(".", accessSegments),
             type.ToDisplayString(TypeDisplayFormat),
+            type.ToDisplayString(MetadataTypeDisplayFormat),
             type.SpecialType == SpecialType.System_String,
             IsIntegerType(type));
         return true;

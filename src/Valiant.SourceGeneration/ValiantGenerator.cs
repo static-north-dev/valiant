@@ -16,6 +16,11 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
             SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions |
             SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
+    private static readonly SymbolDisplayFormat MetadataTypeDisplayFormat =
+        SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
+            SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions &
+            ~SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
     private static readonly DiagnosticDescriptor ValidatorMustBePartial = new(
         "VLT001",
         "Validator must be partial",
@@ -218,6 +223,7 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
                 validatorSymbol,
                 null,
                 GetConfigureMethodName(attribute),
+                CollectUsings(classSyntax),
                 ImmutableArray<ValidationNode>.Empty,
                 diagnostics.ToImmutable());
         }
@@ -246,6 +252,7 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
                 validatorSymbol,
                 modelType,
                 configureMethodName,
+                CollectUsings(classSyntax),
                 ImmutableArray<ValidationNode>.Empty,
                 diagnostics.ToImmutable());
         }
@@ -295,6 +302,7 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
             validatorSymbol,
             modelType,
             configureMethodName,
+            CollectUsings(classSyntax),
             nodes.ToImmutable(),
             diagnostics.ToImmutable());
     }

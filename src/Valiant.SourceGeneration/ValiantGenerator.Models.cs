@@ -11,6 +11,7 @@ public sealed partial class ValiantGenerator
         INamedTypeSymbol validatorSymbol,
         ITypeSymbol? modelType,
         string configureMethodName,
+        ImmutableArray<string> usings,
         ImmutableArray<ValidationNode> nodes,
         ImmutableArray<DiagnosticInfo> diagnostics)
     {
@@ -19,6 +20,8 @@ public sealed partial class ValiantGenerator
         public ITypeSymbol? ModelType { get; } = modelType;
 
         public string ConfigureMethodName { get; } = configureMethodName;
+
+        public ImmutableArray<string> Usings { get; } = usings;
 
         public ImmutableArray<ValidationNode> Nodes { get; } = nodes;
 
@@ -178,6 +181,7 @@ public sealed partial class ValiantGenerator
         string propertyAccess,
         string instanceExpression,
         string propertyType,
+        string metadataPropertyType,
         bool isString,
         bool isInteger,
         string? failureBehaviorExpression,
@@ -194,6 +198,8 @@ public sealed partial class ValiantGenerator
         public string InstanceExpression { get; } = instanceExpression;
 
         public string PropertyType { get; } = propertyType;
+
+        public string MetadataPropertyType { get; } = metadataPropertyType;
 
         public bool IsString { get; } = isString;
 
@@ -245,6 +251,7 @@ public sealed partial class ValiantGenerator
         string propertyName,
         string propertyAccess,
         string propertyType,
+        string metadataPropertyType,
         bool isString,
         bool isInteger)
     {
@@ -253,6 +260,8 @@ public sealed partial class ValiantGenerator
         public string PropertyAccess { get; } = propertyAccess;
 
         public string PropertyType { get; } = propertyType;
+
+        public string MetadataPropertyType { get; } = metadataPropertyType;
 
         public bool IsString { get; } = isString;
 

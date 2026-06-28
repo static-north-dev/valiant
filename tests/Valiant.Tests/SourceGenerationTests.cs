@@ -367,6 +367,51 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
+    public async Task Generated_Validator_Preserves_User_Usings_For_Rewritten_Expressions()
+    {
+        var diagnostics = RunCompilation(
+            """
+            namespace Models
+            {
+                public enum PersonKind
+                {
+                    Child,
+                    Adult
+                }
+
+                public sealed class Person
+                {
+                    public PersonKind Kind { get; init; }
+
+                    public string? Name { get; init; }
+                }
+            }
+
+            namespace Validators
+            {
+                using Models;
+                using Valiant;
+
+                [ValiantValidator]
+                public sealed partial class PersonValidator : IValidatorDefinition<Person>
+                {
+                    public static void Configure(ValidationContext<Person> context)
+                    {
+                        switch (context.Instance.Kind)
+                        {
+                            case PersonKind.Adult:
+                                context.Property(x => x.Name).Required(severity: ValiantSeverity.Warning);
+                                break;
+                        }
+                    }
+                }
+            }
+            """);
+
+        await Assert.That(diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
     public async Task Loops_Generate_Runtime_Loops()
     {
         var result = RunGenerator(
@@ -567,6 +612,50 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
+    public async Task Validation_Metadata_Provider_Generates_Static_Rules_And_Conditional_Flags()
+    {
+        var result = RunGenerator(
+            """
+            using Valiant;
+
+            [ValiantValidator]
+            public sealed partial class PersonValidator : IValidatorDefinition<Person>
+            {
+                public static void Configure(ValidationContext<Person> context)
+                {
+                    context.Property(x => x.Name).Required(
+                        code: "NameRequired",
+                        message: "Name is required.",
+                        severity: ValiantSeverity.Warning);
+
+                    if (context.Instance.RequiresAge)
+                    {
+                        context.Property(x => x.Age).GreaterThanOrEqualTo(18);
+                    }
+                }
+            }
+
+            public sealed class Person
+            {
+                public bool RequiresAge { get; init; }
+
+                public string? Name { get; init; }
+
+                public int Age { get; init; }
+            }
+            """);
+
+        var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
+
+        await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(generated.Contains("internal sealed class __ValiantPersonValidatorMetadataProvider", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("new global::Valiant.ValiantPropertyValidationMetadata(\"Name\", typeof(string), false", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("new global::Valiant.ValiantValidationCheckMetadata(\"Required\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("\"NameRequired\", \"Name is required.\", \"Warning\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("new global::Valiant.ValiantPropertyValidationMetadata(\"Age\", typeof(int), true", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
     public async Task UseValidator_Generates_Root_Validator_Dependency()
     {
         var result = RunGenerator(
@@ -668,6 +757,8 @@ public sealed class SourceGenerationTests
 
                     public static ServiceDescriptor Singleton(System.Type serviceType, System.Type implementationType) => new();
 
+                    public static ServiceDescriptor Singleton<TService, TImplementation>() => new();
+
                     public static ServiceDescriptor Scoped(System.Type serviceType, System.Type implementationType) => new();
 
                     public static ServiceDescriptor Transient(System.Type serviceType, System.Type implementationType) => new();
@@ -732,6 +823,8 @@ public sealed class SourceGenerationTests
                     public static ServiceDescriptor Singleton(System.Type serviceType, object implementationInstance) => new();
 
                     public static ServiceDescriptor Singleton(System.Type serviceType, System.Type implementationType) => new();
+
+                    public static ServiceDescriptor Singleton<TService, TImplementation>() => new();
 
                     public static ServiceDescriptor Scoped(System.Type serviceType, System.Type implementationType) => new();
 

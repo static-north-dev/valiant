@@ -128,7 +128,7 @@ The generator emits an `IValidator<CreateUser>` implementation with direct prope
 services.AddValiantValidations(options =>
 {
     options.Mode = ValiantValidationMode.Auto;
-    options.Lifetime = ValiantValidatorLifetime.Singleton;
+    options.Lifetime = ValiantValidatorLifetime.Scoped;
     options.FailureBehavior = ValiantFailureBehavior.ValidateAll;
 });
 ```
@@ -324,6 +324,18 @@ app.MapPost("/users", (CreateUser user) => Results.Ok())
 `WithValiantValidation<T>()` validates endpoint arguments assignable to `T`. `WithValiantValidation()` validates all endpoint arguments that have registered `IValidator<T>` services.
 Both extensions add ASP.NET Core `ProducesValidationProblem(400)` endpoint metadata, so the built-in .NET OpenAPI generator can document validation problem responses without Swashbuckle or NSwag-specific hooks.
 
+`Valiant.AspNetCore.OpenApi` adds native .NET OpenAPI schema reflection for generated validation metadata:
+
+```csharp
+using Valiant.AspNetCore.OpenApi;
+
+builder.Services.AddOpenApi();
+builder.Services.AddValiantValidations();
+builder.Services.AddValiantOpenApi();
+```
+
+The schema transformer maps unconditional static rules to standard OpenAPI schema constraints, such as `required`, `minLength`, `maxLength`, `minimum`, `maximum`, `minItems`, and `maxItems`. It also adds an `x-valiant-rules` extension per property so codes, messages, severities, and conditional rules remain visible in `openapi.json`.
+
 MVC can add Valiant validators to the normal model validation pipeline:
 
 ```csharp
@@ -362,14 +374,17 @@ The source generator reports compiler diagnostics for invalid validator declarat
 
 - `src/Valiant` contains runtime contracts and the NuGet package metadata.
 - `src/Valiant.AspNetCore` contains Minimal API, MVC, and problem details integrations.
+- `src/Valiant.AspNetCore.OpenApi` contains native ASP.NET Core OpenAPI schema integration.
 - `src/Valiant.SourceGeneration` contains the incremental source generator packaged as a NuGet analyzer.
-- `samples/Valiant.Sample` exercises generated validation and generated DI registration.
+- `samples/Valiant.Sample` exercises core validation features, generated fast validators, validator reuse, collections, dictionaries, native branches/loops, severities, result helpers, metadata, and generated DI registration.
+- `samples/Valiant.AspNetCore.Sample` exercises ASP.NET Core registration, Minimal API endpoint validation, MVC integration, problem-details helpers, and native OpenAPI validation rule reflection.
 
 ## Local verification
 
 ```bash
 dotnet build Valiant.sln
-dotnet run --project samples/Valiant.Sample/Valiant.Sample.csproj
+dotnet samples/Valiant.Sample/bin/Debug/net10.0/Valiant.Sample.dll
+dotnet samples/Valiant.AspNetCore.Sample/bin/Debug/net10.0/Valiant.AspNetCore.Sample.dll
 dotnet test --project tests/Valiant.Tests/Valiant.Tests.csproj
 dotnet pack src/Valiant/Valiant.csproj -c Release
 ```

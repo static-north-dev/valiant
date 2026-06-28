@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Valiant/Valiant.csproj" />
     <ProjectReference Include="../../src/Valiant.AspNetCore/Valiant.AspNetCore.csproj" />
+    <ProjectReference Include="../../src/Valiant.AspNetCore.OpenApi/Valiant.AspNetCore.OpenApi.csproj" />
     <ProjectReference Include="../../src/Valiant.SourceGeneration/Valiant.SourceGeneration.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../src/Valiant.SourceGeneration/Valiant.SourceGeneration.csproj" PrivateAssets="all" />
   </ItemGroup>

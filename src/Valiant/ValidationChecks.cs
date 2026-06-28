@@ -129,7 +129,7 @@ public static class ValidationChecks
     }
 
     /// <summary>
-    /// Determines whether a value has a count. Strings, collections, and enumerable values are supported.
+    /// Determines whether a value has a count. Strings and counted collections are supported.
     /// </summary>
     /// <param name="value">The value to inspect.</param>
     /// <param name="count">The discovered count when the method returns <c>true</c>.</param>
@@ -146,14 +146,6 @@ public static class ValidationChecks
                 return true;
             case global::System.Collections.ICollection collection:
                 count = collection.Count;
-                return true;
-            case global::System.Collections.IEnumerable enumerable:
-                count = 0;
-                foreach (var _ in enumerable)
-                {
-                    count++;
-                }
-
                 return true;
             default:
                 count = 0;

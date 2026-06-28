@@ -18,5 +18,5 @@ public sealed class ValiantValidationOptions
     /// <summary>
     /// Gets or sets the dependency injection lifetime for generated validators.
     /// </summary>
-    public ValiantValidatorLifetime Lifetime { get; set; } = ValiantValidatorLifetime.Singleton;
+    public ValiantValidatorLifetime Lifetime { get; set; } = ValiantValidatorLifetime.Scoped;
 }

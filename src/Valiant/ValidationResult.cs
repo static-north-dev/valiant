@@ -15,10 +15,43 @@ public sealed class ValidationResult
     /// </summary>
     public ValidationResult(IReadOnlyList<ValidationFailure> errors)
     {
-        Failures = errors ?? throw new ArgumentNullException(nameof(errors));
-        Errors = FilterBySeverity(Failures, ValiantSeverity.Error);
-        Warnings = FilterBySeverity(Failures, ValiantSeverity.Warning);
-        Infos = FilterBySeverity(Failures, ValiantSeverity.Info);
+        _ = errors ?? throw new ArgumentNullException(nameof(errors));
+        if (errors.Count == 0)
+        {
+            Failures = [];
+            Errors = [];
+            Warnings = [];
+            Infos = [];
+            return;
+        }
+
+        var failures = new ValidationFailure[errors.Count];
+        List<ValidationFailure>? validationErrors = null;
+        List<ValidationFailure>? warnings = null;
+        List<ValidationFailure>? infos = null;
+
+        for (var index = 0; index < errors.Count; index++)
+        {
+            var failure = errors[index];
+            failures[index] = failure;
+            switch (failure.Severity)
+            {
+                case ValiantSeverity.Warning:
+                    (warnings ??= []).Add(failure);
+                    break;
+                case ValiantSeverity.Info:
+                    (infos ??= []).Add(failure);
+                    break;
+                default:
+                    (validationErrors ??= []).Add(failure);
+                    break;
+            }
+        }
+
+        Failures = failures;
+        Errors = ToReadOnlyArray(validationErrors);
+        Warnings = ToReadOnlyArray(warnings);
+        Infos = ToReadOnlyArray(infos);
     }
 
     /// <summary>
@@ -60,16 +93,8 @@ public sealed class ValidationResult
         return this;
     }
 
-    private static IReadOnlyList<ValidationFailure> FilterBySeverity(
-        IReadOnlyList<ValidationFailure> failures,
-        ValiantSeverity severity)
+    private static IReadOnlyList<ValidationFailure> ToReadOnlyArray(List<ValidationFailure>? failures)
     {
-        if (failures.Count == 0)
-        {
-            return [];
-        }
-
-        var filtered = failures.Where(failure => failure.Severity == severity).ToArray();
-        return filtered;
+        return failures is null ? [] : failures.ToArray();
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Reflection;
 
 namespace Valiant.AspNetCore;
@@ -11,21 +12,27 @@ internal static class ValiantValidatorExecutor
     private static readonly MethodInfo ValidateAsyncCoreMethod = typeof(ValiantValidatorExecutor)
         .GetMethod(nameof(ValidateAsyncCore), BindingFlags.NonPublic | BindingFlags.Static)!;
 
+    private static readonly ConcurrentDictionary<Type, Type> ValidatorEnumerableTypes = new();
+    private static readonly ConcurrentDictionary<Type, Func<object, object, ValidationResult>> ValidateDelegates = new();
+    private static readonly ConcurrentDictionary<Type, Func<object, object, CancellationToken, ValueTask<ValidationResult>>> ValidateAsyncDelegates = new();
+
     public static IEnumerable<object> GetValidators(IServiceProvider services, Type modelType)
     {
         _ = services ?? throw new ArgumentNullException(nameof(services));
         _ = modelType ?? throw new ArgumentNullException(nameof(modelType));
 
-        var validatorType = typeof(IValidator<>).MakeGenericType(modelType);
-        var enumerableType = typeof(IEnumerable<>).MakeGenericType(validatorType);
+        var enumerableType = ValidatorEnumerableTypes.GetOrAdd(modelType, static type =>
+            typeof(IEnumerable<>).MakeGenericType(typeof(IValidator<>).MakeGenericType(type)));
         return ((IEnumerable?)services.GetService(enumerableType))?.Cast<object>() ?? [];
     }
 
     public static ValidationResult Validate(Type modelType, object validator, object model)
     {
-        return (ValidationResult)ValidateCoreMethod
-            .MakeGenericMethod(modelType)
-            .Invoke(null, [validator, model])!;
+        _ = modelType ?? throw new ArgumentNullException(nameof(modelType));
+        _ = validator ?? throw new ArgumentNullException(nameof(validator));
+        _ = model ?? throw new ArgumentNullException(nameof(model));
+
+        return ValidateDelegates.GetOrAdd(modelType, CreateValidateDelegate)(validator, model);
     }
 
     public static ValueTask<ValidationResult> ValidateAsync(
@@ -34,21 +41,37 @@ internal static class ValiantValidatorExecutor
         object model,
         CancellationToken cancellationToken)
     {
-        return (ValueTask<ValidationResult>)ValidateAsyncCoreMethod
-            .MakeGenericMethod(modelType)
-            .Invoke(null, [validator, model, cancellationToken])!;
+        _ = modelType ?? throw new ArgumentNullException(nameof(modelType));
+        _ = validator ?? throw new ArgumentNullException(nameof(validator));
+        _ = model ?? throw new ArgumentNullException(nameof(model));
+
+        return ValidateAsyncDelegates.GetOrAdd(modelType, CreateValidateAsyncDelegate)(validator, model, cancellationToken);
     }
 
-    private static ValidationResult ValidateCore<T>(IValidator<T> validator, object model)
+    private static Func<object, object, ValidationResult> CreateValidateDelegate(Type modelType)
     {
-        return validator.Validate((T)model);
+        return (Func<object, object, ValidationResult>)ValidateCoreMethod
+            .MakeGenericMethod(modelType)
+            .CreateDelegate(typeof(Func<object, object, ValidationResult>));
+    }
+
+    private static Func<object, object, CancellationToken, ValueTask<ValidationResult>> CreateValidateAsyncDelegate(Type modelType)
+    {
+        return (Func<object, object, CancellationToken, ValueTask<ValidationResult>>)ValidateAsyncCoreMethod
+            .MakeGenericMethod(modelType)
+            .CreateDelegate(typeof(Func<object, object, CancellationToken, ValueTask<ValidationResult>>));
+    }
+
+    private static ValidationResult ValidateCore<T>(object validator, object model)
+    {
+        return ((IValidator<T>)validator).Validate((T)model);
     }
 
     private static ValueTask<ValidationResult> ValidateAsyncCore<T>(
-        IValidator<T> validator,
+        object validator,
         object model,
         CancellationToken cancellationToken)
     {
-        return validator.ValidateAsync((T)model, cancellationToken);
+        return ((IValidator<T>)validator).ValidateAsync((T)model, cancellationToken);
     }
 }

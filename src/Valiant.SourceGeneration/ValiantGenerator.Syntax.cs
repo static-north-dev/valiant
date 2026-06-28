@@ -150,6 +150,42 @@ public sealed partial class ValiantGenerator
         return "Configure";
     }
 
+    private static ImmutableArray<string> CollectUsings(ClassDeclarationSyntax classSyntax)
+    {
+        var builder = ImmutableArray.CreateBuilder<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        if (classSyntax.SyntaxTree.GetCompilationUnitRoot() is CompilationUnitSyntax compilationUnit)
+        {
+            AddUsings(compilationUnit.Usings, builder, seen);
+        }
+
+        for (SyntaxNode? current = classSyntax.Parent; current is not null; current = current.Parent)
+        {
+            if (current is BaseNamespaceDeclarationSyntax namespaceDeclaration)
+            {
+                AddUsings(namespaceDeclaration.Usings, builder, seen);
+            }
+        }
+
+        return builder.ToImmutable();
+    }
+
+    private static void AddUsings(
+        SyntaxList<UsingDirectiveSyntax> usings,
+        ImmutableArray<string>.Builder builder,
+        HashSet<string> seen)
+    {
+        foreach (var usingDirective in usings)
+        {
+            var usingText = usingDirective.NormalizeWhitespace().ToFullString();
+            if (seen.Add(usingText))
+            {
+                builder.Add(usingText);
+            }
+        }
+    }
+
     private static string GetTypeModifier(INamedTypeSymbol symbol)
     {
         var builder = new StringBuilder();
