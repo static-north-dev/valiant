@@ -856,6 +856,55 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
+    public async Task DependencyInjection_Extension_Is_Generated_When_No_Validators_Are_Discovered()
+    {
+        var result = RunGenerator(
+            """
+            namespace Microsoft.Extensions.DependencyInjection
+            {
+                public interface IServiceCollection
+                {
+                }
+
+                public sealed class ServiceDescriptor
+                {
+                    public static ServiceDescriptor Singleton(System.Type serviceType, object implementationInstance) => new();
+
+                    public static ServiceDescriptor Singleton(System.Type serviceType, System.Type implementationType) => new();
+
+                    public static ServiceDescriptor Singleton<TService, TImplementation>() => new();
+
+                    public static ServiceDescriptor Scoped(System.Type serviceType, System.Type implementationType) => new();
+
+                    public static ServiceDescriptor Transient(System.Type serviceType, System.Type implementationType) => new();
+                }
+
+                namespace Extensions
+                {
+                    public static class ServiceCollectionDescriptorExtensions
+                    {
+                        public static void TryAdd(IServiceCollection services, ServiceDescriptor descriptor)
+                        {
+                        }
+
+                        public static void TryAddEnumerable(IServiceCollection services, ServiceDescriptor descriptor)
+                        {
+                        }
+                    }
+                }
+            }
+            """);
+
+        var generated = result.GeneratedSources.Single(static x => x.HintName == "Valiant.Validation.DependencyInjection.g.cs").SourceText.ToString();
+
+        await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(generated.Contains("AddValiantValidators", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("AddValiantValidations", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("ValiantValidationOptions", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("CreateValidatorDescriptor(typeof(", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
     public async Task Type_Specific_Checks_Are_Not_Available_On_Wrong_Property_Types()
     {
         var diagnostics = RunCompilation(

@@ -12,30 +12,28 @@ public sealed partial class ValiantGenerator
 {
     private static void Execute(SourceProductionContext context, Compilation compilation, ImmutableArray<ValidatorModel> validators)
     {
-        if (validators.IsDefaultOrEmpty)
-        {
-            return;
-        }
-
         var validValidators = ImmutableArray.CreateBuilder<ValidatorModel>();
-        foreach (var validator in validators)
+        if (!validators.IsDefaultOrEmpty)
         {
-            foreach (var diagnostic in validator.Diagnostics)
+            foreach (var validator in validators)
             {
-                context.ReportDiagnostic(diagnostic.Create());
-            }
+                foreach (var diagnostic in validator.Diagnostics)
+                {
+                    context.ReportDiagnostic(diagnostic.Create());
+                }
 
-            if (validator.Diagnostics.Any(static diagnostic => diagnostic.Descriptor.DefaultSeverity == DiagnosticSeverity.Error) ||
-                validator.ModelType is null)
-            {
-                continue;
-            }
+                if (validator.Diagnostics.Any(static diagnostic => diagnostic.Descriptor.DefaultSeverity == DiagnosticSeverity.Error) ||
+                    validator.ModelType is null)
+                {
+                    continue;
+                }
 
-            validValidators.Add(validator);
-            context.AddSource(GetHintName(validator.ValidatorSymbol, "Validator"), SourceText.From(GenerateValidator(validator), Encoding.UTF8));
+                validValidators.Add(validator);
+                context.AddSource(GetHintName(validator.ValidatorSymbol, "Validator"), SourceText.From(GenerateValidator(validator), Encoding.UTF8));
+            }
         }
 
-        if (validValidators.Count > 0 && HasDependencyInjection(compilation))
+        if (HasDependencyInjection(compilation))
         {
             context.AddSource("Valiant.Validation.DependencyInjection.g.cs", SourceText.From(GenerateDependencyInjection(validValidators.ToImmutable()), Encoding.UTF8));
         }
