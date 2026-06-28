@@ -7,7 +7,7 @@ The goal is to keep the developer API small while generating direct validation c
 ## Current shape
 
 ```csharp
-using Valiant;
+using Valiant.Validation;
 
 [ValiantValidator]
 public sealed partial class CreateUserValidator : IValidatorDefinition<CreateUser>
@@ -310,12 +310,12 @@ foreach (var item in context.Instance.Items)
 
 ## ASP.NET Core integration
 
-`Valiant.AspNetCore` contains ASP.NET-specific helpers so the core package can stay free of ASP.NET references.
+`Valiant.Validation.AspNetCore` contains ASP.NET-specific helpers so the core package can stay free of ASP.NET references.
 
 Minimal APIs can validate endpoint models with an endpoint filter:
 
 ```csharp
-using Valiant.AspNetCore;
+using Valiant.Validation.AspNetCore;
 
 app.MapPost("/users", (CreateUser user) => Results.Ok())
     .WithValiantValidation<CreateUser>();
@@ -324,10 +324,10 @@ app.MapPost("/users", (CreateUser user) => Results.Ok())
 `WithValiantValidation<T>()` validates endpoint arguments assignable to `T`. `WithValiantValidation()` validates all endpoint arguments that have registered `IValidator<T>` services.
 Both extensions add ASP.NET Core `ProducesValidationProblem(400)` endpoint metadata, so the built-in .NET OpenAPI generator can document validation problem responses without Swashbuckle or NSwag-specific hooks.
 
-`Valiant.AspNetCore.OpenApi` adds native .NET OpenAPI schema reflection for generated validation metadata:
+`Valiant.Validation.AspNetCore.OpenApi` adds native .NET OpenAPI schema reflection for generated validation metadata:
 
 ```csharp
-using Valiant.AspNetCore.OpenApi;
+using Valiant.Validation.AspNetCore.OpenApi;
 
 builder.Services.AddOpenApi();
 builder.Services.AddValiantValidations();
@@ -372,19 +372,19 @@ The source generator reports compiler diagnostics for invalid validator declarat
 
 ## Repository layout
 
-- `src/Valiant` contains runtime contracts and the NuGet package metadata.
-- `src/Valiant.AspNetCore` contains Minimal API, MVC, and problem details integrations.
-- `src/Valiant.AspNetCore.OpenApi` contains native ASP.NET Core OpenAPI schema integration.
-- `src/Valiant.SourceGeneration` contains the incremental source generator packaged as a NuGet analyzer.
-- `samples/Valiant.Sample` exercises core validation features, generated fast validators, validator reuse, collections, dictionaries, native branches/loops, severities, result helpers, metadata, and generated DI registration.
-- `samples/Valiant.AspNetCore.Sample` exercises ASP.NET Core registration, Minimal API endpoint validation, MVC integration, problem-details helpers, and native OpenAPI validation rule reflection.
+- `src/Valiant.Validation` contains runtime contracts and the NuGet package metadata.
+- `src/Valiant.Validation.AspNetCore` contains Minimal API, MVC, and problem details integrations.
+- `src/Valiant.Validation.AspNetCore.OpenApi` contains native ASP.NET Core OpenAPI schema integration.
+- `src/Valiant.Validation.SourceGeneration` contains the incremental source generator packaged as a NuGet analyzer.
+- `samples/Valiant.Validation.Sample` exercises core validation features, generated fast validators, validator reuse, collections, dictionaries, native branches/loops, severities, result helpers, metadata, and generated DI registration.
+- `samples/Valiant.Validation.AspNetCore.Sample` exercises ASP.NET Core registration, Minimal API endpoint validation, MVC integration, problem-details helpers, and native OpenAPI validation rule reflection.
 
 ## Local verification
 
 ```bash
 dotnet build Valiant.sln
-dotnet samples/Valiant.Sample/bin/Debug/net10.0/Valiant.Sample.dll
-dotnet samples/Valiant.AspNetCore.Sample/bin/Debug/net10.0/Valiant.AspNetCore.Sample.dll
-dotnet test --project tests/Valiant.Tests/Valiant.Tests.csproj
-dotnet pack src/Valiant/Valiant.csproj -c Release
+dotnet samples/Valiant.Validation.Sample/bin/Debug/net10.0/Valiant.Validation.Sample.dll
+dotnet samples/Valiant.Validation.AspNetCore.Sample/bin/Debug/net10.0/Valiant.Validation.AspNetCore.Sample.dll
+dotnet test --project tests/Valiant.Validation.Tests/Valiant.Validation.Tests.csproj
+dotnet pack src/Valiant.Validation/Valiant.Validation.csproj -c Release
 ```

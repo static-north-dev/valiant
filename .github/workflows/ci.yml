@@ -31,4 +31,4 @@ jobs:
         run: dotnet build Valiant.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test --project tests/Valiant.Tests/Valiant.Tests.csproj --configuration Release --no-build
+        run: dotnet test --project tests/Valiant.Validation.Tests/Valiant.Validation.Tests.csproj --configuration Release --no-build
