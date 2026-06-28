@@ -20,7 +20,9 @@ public static class ValiantMinimalApiExtensions
     {
         _ = builder ?? throw new ArgumentNullException(nameof(builder));
 
-        return builder.AddEndpointFilterFactory((factoryContext, next) =>
+        return builder
+            .ProducesValidationProblem(StatusCodes.Status400BadRequest)
+            .AddEndpointFilterFactory((factoryContext, next) =>
         {
             var candidates = GetValidationCandidates(factoryContext.MethodInfo.GetParameters());
             if (candidates.Length == 0)
@@ -70,7 +72,9 @@ public static class ValiantMinimalApiExtensions
     {
         _ = builder ?? throw new ArgumentNullException(nameof(builder));
 
-        return builder.AddEndpointFilter(async (invocationContext, next) =>
+        return builder
+            .ProducesValidationProblem(StatusCodes.Status400BadRequest)
+            .AddEndpointFilter(async (invocationContext, next) =>
         {
             var failures = new List<ValidationFailure>();
             var validators = invocationContext.HttpContext.RequestServices.GetServices<IValidator<T>>().ToArray();

@@ -209,6 +209,34 @@ public sealed class FluentRuleTests
     }
 
     [Test]
+    public async Task Severity_Warning_Does_Not_Make_Result_Invalid()
+    {
+        var fastResult = new WarningSeverityValidator(FastOptions()).Validate(new NullableTextModel());
+        var debugResult = new WarningSeverityValidator(new ValiantValidationOptions { Mode = ValiantValidationMode.Debuggable }).Validate(new NullableTextModel());
+
+        await Assert.That(fastResult.IsValid).IsTrue();
+        await Assert.That(debugResult.IsValid).IsTrue();
+        await Assert.That(fastResult.Failures).Count().IsEqualTo(1);
+        await Assert.That(debugResult.Failures).Count().IsEqualTo(1);
+        await Assert.That(fastResult.Errors).IsEmpty();
+        await Assert.That(debugResult.Errors).IsEmpty();
+        await Assert.That(fastResult.Warnings[0].Severity).IsEqualTo(ValiantSeverity.Warning);
+        await Assert.That(debugResult.Warnings[0].Severity).IsEqualTo(ValiantSeverity.Warning);
+    }
+
+    [Test]
+    public async Task ThrowIfFailed_Throws_Only_When_Result_Has_Errors()
+    {
+        var validWithWarning = new WarningSeverityValidator(FastOptions()).Validate(new NullableTextModel());
+        var failed = new RequiredValidator(FastOptions()).Validate(new NullableTextModel());
+
+        await Assert.That(validWithWarning.ThrowIfFailed()).IsSameReferenceAs(validWithWarning);
+        var exception = await Assert.ThrowsAsync<ValiantValidationException>(() => Task.FromResult(failed.ThrowIfFailed()));
+        await Assert.That(exception!.Result).IsSameReferenceAs(failed);
+        await Assert.That(exception.Errors[0].ErrorCode).IsEqualTo("Required");
+    }
+
+    [Test]
     public async Task IsValid_Returns_True_For_Sync_Only_Valid_Model()
     {
         var isValid = new RequiredValidator().IsValid(new NullableTextModel { Value = "ok" });
@@ -858,6 +886,15 @@ public sealed partial class MetadataValidator : IValidatorDefinition<NullableTex
     public static void Configure(ValidationContext<NullableTextModel> context)
     {
         context.Property(x => x.Value).Required(code: "ValueRequired", message: "Custom message.");
+    }
+}
+
+[ValiantValidator]
+public sealed partial class WarningSeverityValidator : IValidatorDefinition<NullableTextModel>
+{
+    public static void Configure(ValidationContext<NullableTextModel> context)
+    {
+        context.Property(x => x.Value).Required(severity: ValiantSeverity.Warning);
     }
 }
 

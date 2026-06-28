@@ -119,7 +119,7 @@ public struct PropertyValidation<T, TProperty>
     /// </summary>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> Required(string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> Required(string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         if (ShouldSkip)
         {
@@ -131,7 +131,7 @@ public struct PropertyValidation<T, TProperty>
             ? string.IsNullOrWhiteSpace(text)
             : EqualityComparer<TProperty>.Default.Equals(value, default!);
 
-        return Check("Required", failed, "'" + _propertyName + "' is required.", code, message);
+        return Check("Required", failed, "'" + _propertyName + "' is required.", code, message, severity);
     }
 
     /// <summary>
@@ -139,14 +139,14 @@ public struct PropertyValidation<T, TProperty>
     /// </summary>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> NotEmpty(string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> NotEmpty(string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         if (ShouldSkip)
         {
             return this;
         }
 
-        return Check("NotEmpty", ValidationChecks.IsEmpty(Value), "'" + _propertyName + "' must not be empty.", code, message);
+        return Check("NotEmpty", ValidationChecks.IsEmpty(Value), "'" + _propertyName + "' must not be empty.", code, message, severity);
     }
 
     /// <summary>
@@ -154,14 +154,14 @@ public struct PropertyValidation<T, TProperty>
     /// </summary>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> Empty(string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> Empty(string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         if (ShouldSkip)
         {
             return this;
         }
 
-        return Check("Empty", !ValidationChecks.IsEmpty(Value), "'" + _propertyName + "' must be empty.", code, message);
+        return Check("Empty", !ValidationChecks.IsEmpty(Value), "'" + _propertyName + "' must be empty.", code, message, severity);
     }
 
     /// <summary>
@@ -169,7 +169,7 @@ public struct PropertyValidation<T, TProperty>
     /// </summary>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> EnumName<TEnum>(string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> EnumName<TEnum>(string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TEnum : struct, global::System.Enum
     {
         if (ShouldSkip)
@@ -184,7 +184,7 @@ public struct PropertyValidation<T, TProperty>
             _ => true
         };
 
-        return Check("EnumName", failed, "'" + _propertyName + "' must be a valid enum name.", code, message);
+        return Check("EnumName", failed, "'" + _propertyName + "' must be a valid enum name.", code, message, severity);
     }
 
     /// <summary>
@@ -192,7 +192,7 @@ public struct PropertyValidation<T, TProperty>
     /// </summary>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> EnumValue<TEnum>(string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> EnumValue<TEnum>(string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TEnum : struct, global::System.Enum
     {
         if (ShouldSkip)
@@ -200,7 +200,7 @@ public struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        return Check("EnumValue", !ValidationChecks.IsEnumValue<TEnum, TProperty>(Value), "'" + _propertyName + "' must be a valid enum value.", code, message);
+        return Check("EnumValue", !ValidationChecks.IsEnumValue<TEnum, TProperty>(Value), "'" + _propertyName + "' must be a valid enum value.", code, message, severity);
     }
 
     /// <summary>
@@ -209,14 +209,14 @@ public struct PropertyValidation<T, TProperty>
     /// <param name="value">The expected value.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> Equal(TProperty value, string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> Equal(TProperty value, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         if (ShouldSkip)
         {
             return this;
         }
 
-        return Check("Equal", !EqualityComparer<TProperty>.Default.Equals(Value, value), "'" + _propertyName + "' must be equal to " + value + ".", code, message);
+        return Check("Equal", !EqualityComparer<TProperty>.Default.Equals(Value, value), "'" + _propertyName + "' must be equal to " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -225,14 +225,14 @@ public struct PropertyValidation<T, TProperty>
     /// <param name="value">The disallowed value.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> NotEqual(TProperty value, string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> NotEqual(TProperty value, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         if (ShouldSkip)
         {
             return this;
         }
 
-        return Check("NotEqual", EqualityComparer<TProperty>.Default.Equals(Value, value), "'" + _propertyName + "' must not be equal to " + value + ".", code, message);
+        return Check("NotEqual", EqualityComparer<TProperty>.Default.Equals(Value, value), "'" + _propertyName + "' must not be equal to " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -241,7 +241,7 @@ public struct PropertyValidation<T, TProperty>
     /// <param name="predicate">The predicate that must return true for the value to be valid.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> Satisfies(Func<TProperty, bool> predicate, string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> Satisfies(Func<TProperty, bool> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
         if (ShouldSkip)
@@ -249,7 +249,7 @@ public struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        return Check("Satisfies", !predicate(Value), "'" + _propertyName + "' did not satisfy the custom validation predicate.", code, message);
+        return Check("Satisfies", !predicate(Value), "'" + _propertyName + "' did not satisfy the custom validation predicate.", code, message, severity);
     }
 
     /// <summary>
@@ -258,7 +258,7 @@ public struct PropertyValidation<T, TProperty>
     /// <param name="predicate">The predicate that must return true for the value to be valid.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> Satisfies(Func<T, TProperty, bool> predicate, string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> Satisfies(Func<T, TProperty, bool> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
         if (ShouldSkip)
@@ -266,7 +266,7 @@ public struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        return Check("Satisfies", !predicate(_context.Instance, Value), "'" + _propertyName + "' did not satisfy the custom validation predicate.", code, message);
+        return Check("Satisfies", !predicate(_context.Instance, Value), "'" + _propertyName + "' did not satisfy the custom validation predicate.", code, message, severity);
     }
 
     /// <summary>
@@ -275,7 +275,7 @@ public struct PropertyValidation<T, TProperty>
     /// <param name="predicate">The asynchronous predicate that must return true for the value to be valid.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> SatisfiesAsync(Func<TProperty, global::System.Threading.CancellationToken, global::System.Threading.Tasks.ValueTask<bool>> predicate, string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> SatisfiesAsync(Func<TProperty, global::System.Threading.CancellationToken, global::System.Threading.Tasks.ValueTask<bool>> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
         if (ShouldSkip)
@@ -285,7 +285,7 @@ public struct PropertyValidation<T, TProperty>
 
         var context = _context;
         var property = _property;
-        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", cancellationToken => predicate(property(context.Instance), cancellationToken), code, message);
+        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", cancellationToken => predicate(property(context.Instance), cancellationToken), code, message, severity);
     }
 
     /// <summary>
@@ -294,7 +294,7 @@ public struct PropertyValidation<T, TProperty>
     /// <param name="predicate">The asynchronous predicate that must return true for the value to be valid.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> SatisfiesAsync(Func<T, TProperty, global::System.Threading.CancellationToken, global::System.Threading.Tasks.ValueTask<bool>> predicate, string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> SatisfiesAsync(Func<T, TProperty, global::System.Threading.CancellationToken, global::System.Threading.Tasks.ValueTask<bool>> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
         if (ShouldSkip)
@@ -304,7 +304,7 @@ public struct PropertyValidation<T, TProperty>
 
         var context = _context;
         var property = _property;
-        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", cancellationToken => predicate(context.Instance, property(context.Instance), cancellationToken), code, message);
+        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", cancellationToken => predicate(context.Instance, property(context.Instance), cancellationToken), code, message, severity);
     }
 
     /// <summary>
@@ -313,7 +313,7 @@ public struct PropertyValidation<T, TProperty>
     /// <param name="predicate">The asynchronous predicate that must return true for the value to be valid.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> SatisfiesAsync(Func<TProperty, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<bool>> predicate, string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> SatisfiesAsync(Func<TProperty, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<bool>> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
         if (ShouldSkip)
@@ -323,7 +323,7 @@ public struct PropertyValidation<T, TProperty>
 
         var context = _context;
         var property = _property;
-        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", async cancellationToken => await predicate(property(context.Instance), cancellationToken).ConfigureAwait(false), code, message);
+        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", async cancellationToken => await predicate(property(context.Instance), cancellationToken).ConfigureAwait(false), code, message, severity);
     }
 
     /// <summary>
@@ -332,7 +332,7 @@ public struct PropertyValidation<T, TProperty>
     /// <param name="predicate">The asynchronous predicate that must return true for the value to be valid.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public PropertyValidation<T, TProperty> SatisfiesAsync(Func<T, TProperty, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<bool>> predicate, string? code = null, string? message = null)
+    public PropertyValidation<T, TProperty> SatisfiesAsync(Func<T, TProperty, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<bool>> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
         if (ShouldSkip)
@@ -342,7 +342,7 @@ public struct PropertyValidation<T, TProperty>
 
         var context = _context;
         var property = _property;
-        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", async cancellationToken => await predicate(context.Instance, property(context.Instance), cancellationToken).ConfigureAwait(false), code, message);
+        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", async cancellationToken => await predicate(context.Instance, property(context.Instance), cancellationToken).ConfigureAwait(false), code, message, severity);
     }
 
     internal TProperty Value => _property(_context.Instance);
@@ -354,7 +354,7 @@ public struct PropertyValidation<T, TProperty>
     internal bool ShouldSkip => _context.ShouldStopValidation ||
         (_state.HasFailure && EffectiveFailureBehavior == ValiantFailureBehavior.FailFast);
 
-    internal PropertyValidation<T, TProperty> Check(string defaultCode, bool failed, string defaultMessage, string? code, string? message)
+    internal PropertyValidation<T, TProperty> Check(string defaultCode, bool failed, string defaultMessage, string? code, string? message, ValiantSeverity severity = ValiantSeverity.Error)
     {
         if (ShouldSkip)
         {
@@ -363,7 +363,7 @@ public struct PropertyValidation<T, TProperty>
 
         if (failed)
         {
-            _context.AddFailure(_propertyName, code ?? defaultCode, message ?? defaultMessage);
+            _context.AddFailure(_propertyName, code ?? defaultCode, message ?? defaultMessage, severity);
             _state.HasFailure = true;
         }
 
@@ -375,7 +375,8 @@ public struct PropertyValidation<T, TProperty>
         string defaultMessage,
         Func<global::System.Threading.CancellationToken, global::System.Threading.Tasks.ValueTask<bool>> predicate,
         string? code,
-        string? message)
+        string? message,
+        ValiantSeverity severity)
     {
         var context = _context;
         var propertyName = _propertyName;
@@ -393,7 +394,7 @@ public struct PropertyValidation<T, TProperty>
 
             if (!await predicate(cancellationToken).ConfigureAwait(false))
             {
-                context.AddFailure(propertyName, errorCode, errorMessage);
+                context.AddFailure(propertyName, errorCode, errorMessage, severity);
                 state.HasFailure = true;
             }
         });
@@ -409,15 +410,15 @@ public struct PropertyValidation<T, TProperty>
         ValidationResult result,
         PropertyValidationState state)
     {
-        if (result.IsValid)
+        if (result.Failures.Count == 0)
         {
             return;
         }
 
         state.HasFailure = true;
-        foreach (var failure in result.Errors)
+        foreach (var failure in result.Failures)
         {
-            context.AddFailure(CombinePropertyPath(propertyName, failure.PropertyName), failure.ErrorCode, failure.ErrorMessage);
+            context.AddFailure(CombinePropertyPath(propertyName, failure.PropertyName), failure.ErrorCode, failure.ErrorMessage, failure.Severity);
             if (context.ShouldStopValidation)
             {
                 break;

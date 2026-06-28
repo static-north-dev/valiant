@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Valiant.AspNetCore;
@@ -55,6 +57,32 @@ public sealed class AspNetCoreIntegrationTests
             .WithValiantValidation();
 
         await Assert.That(app).IsNotNull();
+    }
+
+    [Test]
+    public async Task Minimal_Api_Validation_Extensions_Add_OpenApi_Validation_Problem_Metadata()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.Services.AddSingleton<IValidator<AspNetUser>, AspNetUserValidator>();
+        var app = builder.Build();
+
+        app.MapPost("/generic", static (AspNetUser user) => Results.Ok(user.Name))
+            .WithValiantValidation<AspNetUser>();
+        app.MapPost("/all", static (AspNetUser user) => Results.Ok(user.Name))
+            .WithValiantValidation();
+
+        var endpoints = ((IEndpointRouteBuilder)app).DataSources
+            .SelectMany(static dataSource => dataSource.Endpoints)
+            .ToArray();
+
+        await Assert.That(endpoints).Count().IsEqualTo(2);
+        foreach (var endpoint in endpoints)
+        {
+            var produces = endpoint.Metadata.OfType<IProducesResponseTypeMetadata>().ToArray();
+            await Assert.That(produces.Any(static metadata =>
+                metadata.StatusCode == StatusCodes.Status400BadRequest &&
+                metadata.Type == typeof(HttpValidationProblemDetails))).IsTrue();
+        }
     }
 }
 

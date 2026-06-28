@@ -11,7 +11,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="property">The reference property validation builder.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TProperty> NotNull<T, TProperty>(this PropertyValidation<T, TProperty> property, string? code = null, string? message = null)
+    public static PropertyValidation<T, TProperty> NotNull<T, TProperty>(this PropertyValidation<T, TProperty> property, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TProperty : class?
     {
         if (property.ShouldSkip)
@@ -19,7 +19,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("NotNull", property.Value is null, "'" + property.PropertyName + "' must not be null.", code, message);
+        return property.Check("NotNull", property.Value is null, "'" + property.PropertyName + "' must not be null.", code, message, severity);
     }
 
     /// <summary>
@@ -28,7 +28,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="property">The nullable value property validation builder.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TProperty?> NotNull<T, TProperty>(this PropertyValidation<T, TProperty?> property, string? code = null, string? message = null)
+    public static PropertyValidation<T, TProperty?> NotNull<T, TProperty>(this PropertyValidation<T, TProperty?> property, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TProperty : struct
     {
         if (property.ShouldSkip)
@@ -36,7 +36,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("NotNull", property.Value is null, "'" + property.PropertyName + "' must not be null.", code, message);
+        return property.Check("NotNull", property.Value is null, "'" + property.PropertyName + "' must not be null.", code, message, severity);
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="property">The reference property validation builder.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TProperty> Null<T, TProperty>(this PropertyValidation<T, TProperty> property, string? code = null, string? message = null)
+    public static PropertyValidation<T, TProperty> Null<T, TProperty>(this PropertyValidation<T, TProperty> property, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TProperty : class?
     {
         if (property.ShouldSkip)
@@ -53,7 +53,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("Null", property.Value is not null, "'" + property.PropertyName + "' must be null.", code, message);
+        return property.Check("Null", property.Value is not null, "'" + property.PropertyName + "' must be null.", code, message, severity);
     }
 
     /// <summary>
@@ -62,7 +62,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="property">The nullable value property validation builder.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TProperty?> Null<T, TProperty>(this PropertyValidation<T, TProperty?> property, string? code = null, string? message = null)
+    public static PropertyValidation<T, TProperty?> Null<T, TProperty>(this PropertyValidation<T, TProperty?> property, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TProperty : struct
     {
         if (property.ShouldSkip)
@@ -70,7 +70,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("Null", property.Value is not null, "'" + property.PropertyName + "' must be null.", code, message);
+        return property.Check("Null", property.Value is not null, "'" + property.PropertyName + "' must be null.", code, message, severity);
     }
 
     /// <summary>
@@ -79,7 +79,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="property">The enum property validation builder.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TEnum> DefinedEnum<T, TEnum>(this PropertyValidation<T, TEnum> property, string? code = null, string? message = null)
+    public static PropertyValidation<T, TEnum> DefinedEnum<T, TEnum>(this PropertyValidation<T, TEnum> property, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TEnum : struct, Enum
     {
         if (property.ShouldSkip)
@@ -87,7 +87,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("DefinedEnum", !ValidationChecks.IsDefinedEnum(property.Value), "'" + property.PropertyName + "' must be a defined enum value.", code, message);
+        return property.Check("DefinedEnum", !ValidationChecks.IsDefinedEnum(property.Value), "'" + property.PropertyName + "' must be a defined enum value.", code, message, severity);
     }
 
     /// <summary>
@@ -96,7 +96,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="property">The nullable enum property validation builder.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TEnum?> DefinedEnum<T, TEnum>(this PropertyValidation<T, TEnum?> property, string? code = null, string? message = null)
+    public static PropertyValidation<T, TEnum?> DefinedEnum<T, TEnum>(this PropertyValidation<T, TEnum?> property, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TEnum : struct, Enum
     {
         if (property.ShouldSkip)
@@ -104,7 +104,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("DefinedEnum", !ValidationChecks.IsDefinedEnum(property.Value), "'" + property.PropertyName + "' must be a defined enum value.", code, message);
+        return property.Check("DefinedEnum", !ValidationChecks.IsDefinedEnum(property.Value), "'" + property.PropertyName + "' must be a defined enum value.", code, message, severity);
     }
 
     /// <summary>
@@ -114,14 +114,14 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose member names are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, string?> EnumName<T>(this PropertyValidation<T, string?> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, string?> EnumName<T>(this PropertyValidation<T, string?> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         if (property.ShouldSkip)
         {
             return property;
         }
 
-        return property.Check("EnumName", !ValidationChecks.IsEnumName(enumType, property.Value), "'" + property.PropertyName + "' must be a valid enum name.", code, message);
+        return property.Check("EnumName", !ValidationChecks.IsEnumName(enumType, property.Value), "'" + property.PropertyName + "' must be a valid enum name.", code, message, severity);
     }
 
     /// <summary>
@@ -131,9 +131,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, int> EnumValue<T>(this PropertyValidation<T, int> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, int> EnumValue<T>(this PropertyValidation<T, int> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -143,9 +143,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, int?> EnumValue<T>(this PropertyValidation<T, int?> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, int?> EnumValue<T>(this PropertyValidation<T, int?> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -155,9 +155,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, long> EnumValue<T>(this PropertyValidation<T, long> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, long> EnumValue<T>(this PropertyValidation<T, long> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -167,9 +167,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, long?> EnumValue<T>(this PropertyValidation<T, long?> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, long?> EnumValue<T>(this PropertyValidation<T, long?> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -179,9 +179,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, short> EnumValue<T>(this PropertyValidation<T, short> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, short> EnumValue<T>(this PropertyValidation<T, short> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -191,9 +191,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, short?> EnumValue<T>(this PropertyValidation<T, short?> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, short?> EnumValue<T>(this PropertyValidation<T, short?> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -203,9 +203,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, byte> EnumValue<T>(this PropertyValidation<T, byte> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, byte> EnumValue<T>(this PropertyValidation<T, byte> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -215,9 +215,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, byte?> EnumValue<T>(this PropertyValidation<T, byte?> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, byte?> EnumValue<T>(this PropertyValidation<T, byte?> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -227,9 +227,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, uint> EnumValue<T>(this PropertyValidation<T, uint> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, uint> EnumValue<T>(this PropertyValidation<T, uint> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -239,9 +239,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, uint?> EnumValue<T>(this PropertyValidation<T, uint?> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, uint?> EnumValue<T>(this PropertyValidation<T, uint?> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -251,9 +251,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, ulong> EnumValue<T>(this PropertyValidation<T, ulong> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, ulong> EnumValue<T>(this PropertyValidation<T, ulong> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -263,9 +263,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, ulong?> EnumValue<T>(this PropertyValidation<T, ulong?> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, ulong?> EnumValue<T>(this PropertyValidation<T, ulong?> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -275,9 +275,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, ushort> EnumValue<T>(this PropertyValidation<T, ushort> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, ushort> EnumValue<T>(this PropertyValidation<T, ushort> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -287,9 +287,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, ushort?> EnumValue<T>(this PropertyValidation<T, ushort?> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, ushort?> EnumValue<T>(this PropertyValidation<T, ushort?> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -299,9 +299,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, sbyte> EnumValue<T>(this PropertyValidation<T, sbyte> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, sbyte> EnumValue<T>(this PropertyValidation<T, sbyte> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -311,9 +311,9 @@ public static class TypedPropertyValidationExtensions
     /// <param name="enumType">The enum type whose values are allowed.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, sbyte?> EnumValue<T>(this PropertyValidation<T, sbyte?> property, Type enumType, string? code = null, string? message = null)
+    public static PropertyValidation<T, sbyte?> EnumValue<T>(this PropertyValidation<T, sbyte?> property, Type enumType, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return EnumValueCore(property, enumType, code, message);
+        return EnumValueCore(property, enumType, code, message, severity);
     }
 
     /// <summary>
@@ -324,7 +324,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="max">The maximum allowed string length.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, string?> LengthBetween<T>(this PropertyValidation<T, string?> property, int min, int max, string? code = null, string? message = null)
+    public static PropertyValidation<T, string?> LengthBetween<T>(this PropertyValidation<T, string?> property, int min, int max, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         if (property.ShouldSkip)
         {
@@ -332,7 +332,7 @@ public static class TypedPropertyValidationExtensions
         }
 
         var length = property.Value?.Length;
-        return property.Check("LengthBetween", length is not null && (length < min || length > max), "'" + property.PropertyName + "' must be between " + min + " and " + max + " characters.", code, message);
+        return property.Check("LengthBetween", length is not null && (length < min || length > max), "'" + property.PropertyName + "' must be between " + min + " and " + max + " characters.", code, message, severity);
     }
 
     /// <summary>
@@ -342,7 +342,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="min">The minimum allowed string length.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, string?> MinLength<T>(this PropertyValidation<T, string?> property, int min, string? code = null, string? message = null)
+    public static PropertyValidation<T, string?> MinLength<T>(this PropertyValidation<T, string?> property, int min, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         if (property.ShouldSkip)
         {
@@ -350,7 +350,7 @@ public static class TypedPropertyValidationExtensions
         }
 
         var length = property.Value?.Length;
-        return property.Check("MinLength", length is not null && length < min, "'" + property.PropertyName + "' must be at least " + min + " characters.", code, message);
+        return property.Check("MinLength", length is not null && length < min, "'" + property.PropertyName + "' must be at least " + min + " characters.", code, message, severity);
     }
 
     /// <summary>
@@ -360,7 +360,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="max">The maximum allowed string length.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, string?> MaxLength<T>(this PropertyValidation<T, string?> property, int max, string? code = null, string? message = null)
+    public static PropertyValidation<T, string?> MaxLength<T>(this PropertyValidation<T, string?> property, int max, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
         if (property.ShouldSkip)
         {
@@ -368,7 +368,7 @@ public static class TypedPropertyValidationExtensions
         }
 
         var length = property.Value?.Length;
-        return property.Check("MaxLength", length is not null && length > max, "'" + property.PropertyName + "' must be at most " + max + " characters.", code, message);
+        return property.Check("MaxLength", length is not null && length > max, "'" + property.PropertyName + "' must be at most " + max + " characters.", code, message, severity);
     }
 
     /// <summary>
@@ -379,7 +379,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="max">The maximum allowed count.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TCollection> CountBetween<T, TCollection>(this PropertyValidation<T, TCollection> property, int min, int max, string? code = null, string? message = null)
+    public static PropertyValidation<T, TCollection> CountBetween<T, TCollection>(this PropertyValidation<T, TCollection> property, int min, int max, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TCollection : System.Collections.ICollection?
     {
         if (property.ShouldSkip)
@@ -387,7 +387,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("CountBetween", !ValidationChecks.HasCountBetween(property.Value, min, max), "'" + property.PropertyName + "' must contain between " + min + " and " + max + " item(s).", code, message);
+        return property.Check("CountBetween", !ValidationChecks.HasCountBetween(property.Value, min, max), "'" + property.PropertyName + "' must contain between " + min + " and " + max + " item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -397,7 +397,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="min">The minimum allowed count.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TCollection> MinCount<T, TCollection>(this PropertyValidation<T, TCollection> property, int min, string? code = null, string? message = null)
+    public static PropertyValidation<T, TCollection> MinCount<T, TCollection>(this PropertyValidation<T, TCollection> property, int min, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TCollection : System.Collections.ICollection?
     {
         if (property.ShouldSkip)
@@ -405,7 +405,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("MinCount", !ValidationChecks.HasMinCount(property.Value, min), "'" + property.PropertyName + "' must contain at least " + min + " item(s).", code, message);
+        return property.Check("MinCount", !ValidationChecks.HasMinCount(property.Value, min), "'" + property.PropertyName + "' must contain at least " + min + " item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -415,7 +415,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="max">The maximum allowed count.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TCollection> MaxCount<T, TCollection>(this PropertyValidation<T, TCollection> property, int max, string? code = null, string? message = null)
+    public static PropertyValidation<T, TCollection> MaxCount<T, TCollection>(this PropertyValidation<T, TCollection> property, int max, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TCollection : System.Collections.ICollection?
     {
         if (property.ShouldSkip)
@@ -423,7 +423,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("MaxCount", !ValidationChecks.HasMaxCount(property.Value, max), "'" + property.PropertyName + "' must contain at most " + max + " item(s).", code, message);
+        return property.Check("MaxCount", !ValidationChecks.HasMaxCount(property.Value, max), "'" + property.PropertyName + "' must contain at most " + max + " item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -433,7 +433,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="item">The item that must be present.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TCollection> Contains<T, TCollection, TItem>(this PropertyValidation<T, TCollection> property, TItem item, string? code = null, string? message = null)
+    public static PropertyValidation<T, TCollection> Contains<T, TCollection, TItem>(this PropertyValidation<T, TCollection> property, TItem item, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TCollection : IEnumerable<TItem>?
     {
         if (property.ShouldSkip)
@@ -441,7 +441,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("Contains", !ValidationChecks.Contains(property.Value, item), "'" + property.PropertyName + "' must contain the expected item.", code, message);
+        return property.Check("Contains", !ValidationChecks.Contains(property.Value, item), "'" + property.PropertyName + "' must contain the expected item.", code, message, severity);
     }
 
     /// <summary>
@@ -451,7 +451,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="item">The item that must be absent.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TCollection> Excludes<T, TCollection, TItem>(this PropertyValidation<T, TCollection> property, TItem item, string? code = null, string? message = null)
+    public static PropertyValidation<T, TCollection> Excludes<T, TCollection, TItem>(this PropertyValidation<T, TCollection> property, TItem item, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TCollection : IEnumerable<TItem>?
     {
         if (property.ShouldSkip)
@@ -459,7 +459,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("Excludes", ValidationChecks.Contains(property.Value, item), "'" + property.PropertyName + "' must not contain the excluded item.", code, message);
+        return property.Check("Excludes", ValidationChecks.Contains(property.Value, item), "'" + property.PropertyName + "' must not contain the excluded item.", code, message, severity);
     }
 
     /// <summary>
@@ -469,7 +469,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="key">The key that must be present.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TDictionary> HasKey<T, TDictionary, TKey>(this PropertyValidation<T, TDictionary> property, TKey key, string? code = null, string? message = null)
+    public static PropertyValidation<T, TDictionary> HasKey<T, TDictionary, TKey>(this PropertyValidation<T, TDictionary> property, TKey key, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TDictionary : System.Collections.IDictionary?
     {
         if (property.ShouldSkip)
@@ -477,7 +477,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("HasKey", !ValidationChecks.HasKey(property.Value, key), "'" + property.PropertyName + "' must contain the expected key.", code, message);
+        return property.Check("HasKey", !ValidationChecks.HasKey(property.Value, key), "'" + property.PropertyName + "' must contain the expected key.", code, message, severity);
     }
 
     /// <summary>
@@ -487,7 +487,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="value">The value that must be present.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TDictionary> HasValue<T, TDictionary, TValue>(this PropertyValidation<T, TDictionary> property, TValue value, string? code = null, string? message = null)
+    public static PropertyValidation<T, TDictionary> HasValue<T, TDictionary, TValue>(this PropertyValidation<T, TDictionary> property, TValue value, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TDictionary : System.Collections.IDictionary?
     {
         if (property.ShouldSkip)
@@ -495,7 +495,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("HasValue", !ValidationChecks.HasValue(property.Value, value), "'" + property.PropertyName + "' must contain the expected value.", code, message);
+        return property.Check("HasValue", !ValidationChecks.HasValue(property.Value, value), "'" + property.PropertyName + "' must contain the expected value.", code, message, severity);
     }
 
     /// <summary>
@@ -505,7 +505,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="value">The exclusive lower bound.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TProperty> GreaterThan<T, TProperty>(this PropertyValidation<T, TProperty> property, TProperty value, string? code = null, string? message = null)
+    public static PropertyValidation<T, TProperty> GreaterThan<T, TProperty>(this PropertyValidation<T, TProperty> property, TProperty value, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TProperty : IComparable<TProperty>
     {
         if (property.ShouldSkip)
@@ -513,7 +513,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("GreaterThan", property.Value.CompareTo(value) <= 0, "'" + property.PropertyName + "' must be greater than " + value + ".", code, message);
+        return property.Check("GreaterThan", property.Value.CompareTo(value) <= 0, "'" + property.PropertyName + "' must be greater than " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -523,7 +523,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="value">The inclusive lower bound.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TProperty> GreaterThanOrEqualTo<T, TProperty>(this PropertyValidation<T, TProperty> property, TProperty value, string? code = null, string? message = null)
+    public static PropertyValidation<T, TProperty> GreaterThanOrEqualTo<T, TProperty>(this PropertyValidation<T, TProperty> property, TProperty value, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TProperty : IComparable<TProperty>
     {
         if (property.ShouldSkip)
@@ -531,7 +531,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("GreaterThanOrEqualTo", property.Value.CompareTo(value) < 0, "'" + property.PropertyName + "' must be greater than or equal to " + value + ".", code, message);
+        return property.Check("GreaterThanOrEqualTo", property.Value.CompareTo(value) < 0, "'" + property.PropertyName + "' must be greater than or equal to " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -541,7 +541,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="value">The exclusive upper bound.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TProperty> LessThan<T, TProperty>(this PropertyValidation<T, TProperty> property, TProperty value, string? code = null, string? message = null)
+    public static PropertyValidation<T, TProperty> LessThan<T, TProperty>(this PropertyValidation<T, TProperty> property, TProperty value, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TProperty : IComparable<TProperty>
     {
         if (property.ShouldSkip)
@@ -549,7 +549,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("LessThan", property.Value.CompareTo(value) >= 0, "'" + property.PropertyName + "' must be less than " + value + ".", code, message);
+        return property.Check("LessThan", property.Value.CompareTo(value) >= 0, "'" + property.PropertyName + "' must be less than " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -559,7 +559,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="value">The inclusive upper bound.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TProperty> LessThanOrEqualTo<T, TProperty>(this PropertyValidation<T, TProperty> property, TProperty value, string? code = null, string? message = null)
+    public static PropertyValidation<T, TProperty> LessThanOrEqualTo<T, TProperty>(this PropertyValidation<T, TProperty> property, TProperty value, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TProperty : IComparable<TProperty>
     {
         if (property.ShouldSkip)
@@ -567,7 +567,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("LessThanOrEqualTo", property.Value.CompareTo(value) > 0, "'" + property.PropertyName + "' must be less than or equal to " + value + ".", code, message);
+        return property.Check("LessThanOrEqualTo", property.Value.CompareTo(value) > 0, "'" + property.PropertyName + "' must be less than or equal to " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -578,7 +578,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="to">The inclusive upper bound.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TProperty> InclusiveBetween<T, TProperty>(this PropertyValidation<T, TProperty> property, TProperty from, TProperty to, string? code = null, string? message = null)
+    public static PropertyValidation<T, TProperty> InclusiveBetween<T, TProperty>(this PropertyValidation<T, TProperty> property, TProperty from, TProperty to, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TProperty : IComparable<TProperty>
     {
         if (property.ShouldSkip)
@@ -587,7 +587,7 @@ public static class TypedPropertyValidationExtensions
         }
 
         var value = property.Value;
-        return property.Check("InclusiveBetween", value.CompareTo(from) < 0 || value.CompareTo(to) > 0, "'" + property.PropertyName + "' must be between " + from + " and " + to + ".", code, message);
+        return property.Check("InclusiveBetween", value.CompareTo(from) < 0 || value.CompareTo(to) > 0, "'" + property.PropertyName + "' must be between " + from + " and " + to + ".", code, message, severity);
     }
 
     /// <summary>
@@ -598,7 +598,7 @@ public static class TypedPropertyValidationExtensions
     /// <param name="to">The exclusive upper bound.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TProperty> ExclusiveBetween<T, TProperty>(this PropertyValidation<T, TProperty> property, TProperty from, TProperty to, string? code = null, string? message = null)
+    public static PropertyValidation<T, TProperty> ExclusiveBetween<T, TProperty>(this PropertyValidation<T, TProperty> property, TProperty from, TProperty to, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TProperty : IComparable<TProperty>
     {
         if (property.ShouldSkip)
@@ -607,16 +607,21 @@ public static class TypedPropertyValidationExtensions
         }
 
         var value = property.Value;
-        return property.Check("ExclusiveBetween", value.CompareTo(from) <= 0 || value.CompareTo(to) >= 0, "'" + property.PropertyName + "' must be between " + from + " and " + to + ", exclusive.", code, message);
+        return property.Check("ExclusiveBetween", value.CompareTo(from) <= 0 || value.CompareTo(to) >= 0, "'" + property.PropertyName + "' must be between " + from + " and " + to + ", exclusive.", code, message, severity);
     }
 
-    private static PropertyValidation<T, TValue> EnumValueCore<T, TValue>(PropertyValidation<T, TValue> property, Type enumType, string? code, string? message)
+    private static PropertyValidation<T, TValue> EnumValueCore<T, TValue>(
+        PropertyValidation<T, TValue> property,
+        Type enumType,
+        string? code,
+        string? message,
+        ValiantSeverity severity)
     {
         if (property.ShouldSkip)
         {
             return property;
         }
 
-        return property.Check("EnumValue", !ValidationChecks.IsEnumValue(enumType, property.Value), "'" + property.PropertyName + "' must be a valid enum value.", code, message);
+        return property.Check("EnumValue", !ValidationChecks.IsEnumValue(enumType, property.Value), "'" + property.PropertyName + "' must be a valid enum value.", code, message, severity);
     }
 }

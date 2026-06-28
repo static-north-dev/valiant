@@ -47,12 +47,14 @@ public sealed partial class ValiantGenerator
 
         var checks = ImmutableArray.CreateBuilder<RuleCheck>();
         string? failureBehaviorExpression = null;
+        var failureBehaviorCallCount = 0;
         for (var index = 1; index < calls.Count; index++)
         {
             var call = calls[index];
             if (TryGetFailureBehaviorExpression(call.Name, out var behaviorExpression))
             {
                 failureBehaviorExpression = behaviorExpression;
+                failureBehaviorCallCount++;
                 continue;
             }
 
@@ -87,6 +89,8 @@ public sealed partial class ValiantGenerator
             property.IsString,
             property.IsInteger,
             failureBehaviorExpression,
+            failureBehaviorCallCount,
+            invocation.GetLocation(),
             checks.ToImmutable());
         return true;
     }
@@ -226,12 +230,14 @@ public sealed partial class ValiantGenerator
 
         var checks = ImmutableArray.CreateBuilder<RuleCheck>();
         string? failureBehaviorExpression = null;
+        var failureBehaviorCallCount = 0;
         for (var index = 2; index < calls.Count; index++)
         {
             var call = calls[index];
             if (TryGetFailureBehaviorExpression(call.Name, out var behaviorExpression))
             {
                 failureBehaviorExpression = behaviorExpression;
+                failureBehaviorCallCount++;
                 continue;
             }
 
@@ -266,6 +272,8 @@ public sealed partial class ValiantGenerator
             itemProperty.IsString,
             itemProperty.IsInteger,
             failureBehaviorExpression,
+            failureBehaviorCallCount,
+            invocation.GetLocation(),
             checks.ToImmutable());
         return true;
     }
@@ -465,6 +473,7 @@ public sealed partial class ValiantGenerator
             out var arguments,
             out var code,
             out var message,
+            out var severity,
             out diagnostic))
         {
             return false;
@@ -475,7 +484,7 @@ public sealed partial class ValiantGenerator
             return false;
         }
 
-        check = new RuleCheck(call.Name, arguments, typeArguments, false, null, 0, code, message);
+        check = new RuleCheck(call.Name, arguments, typeArguments, false, null, 0, code, message, severity, call.Invocation.GetLocation());
         return true;
     }
 
@@ -505,7 +514,9 @@ public sealed partial class ValiantGenerator
             null,
             0,
             null,
-            null);
+            null,
+            null,
+            call.Invocation.GetLocation());
         return true;
     }
 
@@ -526,13 +537,14 @@ public sealed partial class ValiantGenerator
             if (!TrySplitCheckArguments(
                 call,
                 0,
-                scope,
-                semanticModel,
-                cancellationToken,
+            scope,
+            semanticModel,
+            cancellationToken,
                 out _,
                 out var code,
                 out var message,
-                out diagnostic))
+                out var severity,
+            out diagnostic))
             {
                 return false;
             }
@@ -550,7 +562,9 @@ public sealed partial class ValiantGenerator
                 null,
                 0,
                 code,
-                message);
+                message,
+                severity,
+                call.Invocation.GetLocation());
             return true;
         }
 
@@ -572,12 +586,13 @@ public sealed partial class ValiantGenerator
             out var arguments,
             out var typeofCode,
             out var typeofMessage,
+            out var typeofSeverity,
             out diagnostic))
         {
             return false;
         }
 
-        check = new RuleCheck(call.Name, arguments, ImmutableArray<string>.Empty, false, null, 0, typeofCode, typeofMessage);
+        check = new RuleCheck(call.Name, arguments, ImmutableArray<string>.Empty, false, null, 0, typeofCode, typeofMessage, typeofSeverity, call.Invocation.GetLocation());
         return true;
     }
 
@@ -635,11 +650,13 @@ public sealed partial class ValiantGenerator
         out ImmutableArray<string> validationArguments,
         out string? code,
         out string? message,
+        out string? severity,
         out DiagnosticInfo? diagnostic)
     {
         validationArguments = ImmutableArray<string>.Empty;
         code = null;
         message = null;
+        severity = null;
         diagnostic = null;
 
         _ = semanticModel;
@@ -677,18 +694,31 @@ public sealed partial class ValiantGenerator
                     message = RewriteForValidation(argument.Expression, scope);
                     break;
 
+                case "severity":
+                    if (severity is not null)
+                    {
+                        diagnostic = new DiagnosticInfo(
+                            UnsupportedValidationDeclaration,
+                            argument.GetLocation(),
+                            "Validator call '" + call.Name + "' specifies severity more than once.");
+                        return false;
+                    }
+
+                    severity = RewriteForValidation(argument.Expression, scope);
+                    break;
+
                 default:
                     arguments.Add(argument);
                     break;
             }
         }
 
-        if (arguments.Count > requiredArgumentCount + 2)
+        if (arguments.Count > requiredArgumentCount + 3)
         {
             diagnostic = new DiagnosticInfo(
                 UnsupportedValidationDeclaration,
                 call.Invocation.GetLocation(),
-                "Validator call '" + call.Name + "' expects " + requiredArgumentCount.ToString(CultureInfo.InvariantCulture) + " validation argument(s), with optional code and message arguments.");
+                "Validator call '" + call.Name + "' expects " + requiredArgumentCount.ToString(CultureInfo.InvariantCulture) + " validation argument(s), with optional code, message, and severity arguments.");
             return false;
         }
 
@@ -720,12 +750,26 @@ public sealed partial class ValiantGenerator
             message = RewriteForValidation(arguments[requiredArgumentCount + 1].Expression, scope);
         }
 
+        if (arguments.Count > requiredArgumentCount + 2)
+        {
+            if (severity is not null)
+            {
+                diagnostic = new DiagnosticInfo(
+                    UnsupportedValidationDeclaration,
+                    arguments[requiredArgumentCount + 2].GetLocation(),
+                    "Validator call '" + call.Name + "' specifies severity more than once.");
+                return false;
+            }
+
+            severity = RewriteForValidation(arguments[requiredArgumentCount + 2].Expression, scope);
+        }
+
         if (arguments.Count < requiredArgumentCount)
         {
             diagnostic = new DiagnosticInfo(
                 UnsupportedValidationDeclaration,
                 call.Invocation.GetLocation(),
-                "Validator call '" + call.Name + "' expects " + requiredArgumentCount.ToString(CultureInfo.InvariantCulture) + " validation argument(s), with optional code and message arguments.");
+                "Validator call '" + call.Name + "' expects " + requiredArgumentCount.ToString(CultureInfo.InvariantCulture) + " validation argument(s), with optional code, message, and severity arguments.");
             return false;
         }
 
@@ -759,6 +803,7 @@ public sealed partial class ValiantGenerator
             out var arguments,
             out var code,
             out var message,
+            out var severity,
             out diagnostic))
         {
             return false;
@@ -812,7 +857,9 @@ public sealed partial class ValiantGenerator
             delegateType.ToDisplayString(TypeDisplayFormat),
             parameterCount,
             code,
-            message);
+            message,
+            severity,
+            call.Invocation.GetLocation());
         return true;
     }
 
@@ -836,6 +883,7 @@ public sealed partial class ValiantGenerator
             out var arguments,
             out var code,
             out var message,
+            out var severity,
             out diagnostic))
         {
             return false;
@@ -870,7 +918,9 @@ public sealed partial class ValiantGenerator
             delegateType.ToDisplayString(TypeDisplayFormat),
             1,
             code,
-            message);
+            message,
+            severity,
+            call.Invocation.GetLocation());
         return true;
     }
 

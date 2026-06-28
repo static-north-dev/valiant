@@ -8,11 +8,16 @@ public readonly struct ValidationFailure
     /// <summary>
     /// Initializes a validation failure.
     /// </summary>
-    public ValidationFailure(string propertyName, string errorCode, string errorMessage)
+    public ValidationFailure(
+        string propertyName,
+        string errorCode,
+        string errorMessage,
+        ValiantSeverity severity = ValiantSeverity.Error)
     {
         PropertyName = propertyName ?? throw new ArgumentNullException(nameof(propertyName));
         ErrorCode = errorCode ?? throw new ArgumentNullException(nameof(errorCode));
         ErrorMessage = errorMessage ?? throw new ArgumentNullException(nameof(errorMessage));
+        Severity = severity;
     }
 
     /// <summary>
@@ -29,6 +34,11 @@ public readonly struct ValidationFailure
     /// Gets the human-readable validation message.
     /// </summary>
     public string ErrorMessage { get; }
+
+    /// <summary>
+    /// Gets the validation failure severity.
+    /// </summary>
+    public ValiantSeverity Severity { get; }
 
     /// <inheritdoc />
     public override string ToString()

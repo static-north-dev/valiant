@@ -149,6 +149,8 @@ Validators expose both result and boolean APIs:
 
 ```csharp
 ValidationResult result = await validator.ValidateAsync(model);
+result.ThrowIfFailed();
+
 bool syncOnlyIsValid = validator.IsValid(model);
 bool isValid = await validator.IsValidAsync(model);
 ```
@@ -193,11 +195,21 @@ bool isValid = await validator.IsValidAsync(model);
 Type-specific checks are exposed only where they make sense. For example, `NotNull()` and `Null()` are available on reference and nullable value properties, string length checks are available on string properties, `DefinedEnum()` is available on enum properties, collection count, membership, and predicate checks are available on collection properties, and dictionary key/value checks are available on dictionary properties.
 
 Each validator call accepts optional `code` and `message` arguments for that exact check:
+It also accepts an optional `severity`; `Error` failures make the result invalid, while `Warning` and `Info` failures are reported without making `IsValid` false.
 
 ```csharp
 context.Property(user => user.Name)
     .Required(code: "NameRequired", message: "Name is required.")
-    .MaxLength(64, code: "NameTooLong", message: "Name must be 64 characters or fewer.");
+    .MaxLength(
+        64,
+        code: "NameTooLong",
+        message: "Name must be 64 characters or fewer.",
+        severity: ValiantSeverity.Warning);
+
+ValidationResult result = validator.Validate(user);
+IReadOnlyList<ValidationFailure> allFailures = result.Failures;
+IReadOnlyList<ValidationFailure> errors = result.Errors;
+IReadOnlyList<ValidationFailure> warnings = result.Warnings;
 ```
 
 Failure behavior can be configured globally, per validator, or for one property chain. The narrower setting wins:
@@ -310,6 +322,7 @@ app.MapPost("/users", (CreateUser user) => Results.Ok())
 ```
 
 `WithValiantValidation<T>()` validates endpoint arguments assignable to `T`. `WithValiantValidation()` validates all endpoint arguments that have registered `IValidator<T>` services.
+Both extensions add ASP.NET Core `ProducesValidationProblem(400)` endpoint metadata, so the built-in .NET OpenAPI generator can document validation problem responses without Swashbuckle or NSwag-specific hooks.
 
 MVC can add Valiant validators to the normal model validation pipeline:
 
@@ -336,6 +349,14 @@ IDictionary<string, string[]> errors = result.ToValidationProblemDictionary();
 HttpValidationProblemDetails httpProblem = result.ToHttpValidationProblemDetails();
 ValidationProblemDetails mvcProblem = result.ToMvcValidationProblemDetails();
 ```
+
+## Analyzer suggestions
+
+The source generator reports compiler diagnostics for invalid validator declarations and low-noise suggestions for suspicious rule chains:
+
+- `VLT101` warns when a check is redundant because another check in the same chain already covers it, such as `Required().NotNull()`.
+- `VLT102` warns when the same non-custom check is declared more than once in a property chain.
+- `VLT103` warns when a property chain sets failure behavior more than once, because only the last `FailFast()` or `ValidateAll()` setting is used.
 
 ## Repository layout
 

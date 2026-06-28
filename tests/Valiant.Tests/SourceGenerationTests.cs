@@ -237,6 +237,44 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
+    public async Task Analyzer_Suggestions_Report_Redundant_Duplicate_And_Overridden_Checks()
+    {
+        var result = RunGenerator(
+            """
+            using Valiant;
+
+            [ValiantValidator]
+            public sealed partial class PersonValidator : IValidatorDefinition<Person>
+            {
+                public static void Configure(ValidationContext<Person> context)
+                {
+                    context.Property(x => x.Name)
+                        .FailFast()
+                        .ValidateAll()
+                        .Required()
+                        .NotNull()
+                        .Required();
+                }
+            }
+
+            public sealed class Person
+            {
+                public string? Name { get; init; }
+            }
+            """);
+
+        var warningIds = result.Diagnostics
+            .Where(static x => x.Severity == DiagnosticSeverity.Warning)
+            .Select(static x => x.Id)
+            .ToArray();
+
+        await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(warningIds).Contains("VLT101");
+        await Assert.That(warningIds).Contains("VLT102");
+        await Assert.That(warningIds).Contains("VLT103");
+    }
+
+    [Test]
     public async Task If_Else_Conditions_Generate_Runtime_Branches()
     {
         var result = RunGenerator(
@@ -496,7 +534,7 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
-    public async Task Check_Metadata_Generates_Code_And_Message_On_Check()
+    public async Task Check_Metadata_Generates_Code_Message_And_Severity_On_Check()
     {
         var result = RunGenerator(
             """
@@ -507,7 +545,10 @@ public sealed class SourceGenerationTests
             {
                 public static void Configure(ValidationContext<Person> context)
                 {
-                    context.Property(x => x.Name).Required(code: "NameRequired", message: "Name is required.");
+                    context.Property(x => x.Name).Required(
+                        code: "NameRequired",
+                        message: "Name is required.",
+                        severity: ValiantSeverity.Warning);
                 }
             }
 
@@ -522,6 +563,7 @@ public sealed class SourceGenerationTests
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated.Contains("\"NameRequired\" ?? \"Required\"", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("\"Name is required.\" ?? \"'Name' is required.\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("ValiantSeverity.Warning", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]

@@ -181,6 +181,8 @@ public sealed partial class ValiantGenerator
         bool isString,
         bool isInteger,
         string? failureBehaviorExpression,
+        int failureBehaviorCallCount,
+        Location location,
         ImmutableArray<RuleCheck> checks)
     {
         public string PropertyName { get; } = propertyName;
@@ -199,6 +201,10 @@ public sealed partial class ValiantGenerator
 
         public string? FailureBehaviorExpression { get; } = failureBehaviorExpression;
 
+        public int FailureBehaviorCallCount { get; } = failureBehaviorCallCount;
+
+        public Location Location { get; } = location;
+
         public ImmutableArray<RuleCheck> Checks { get; } = checks;
     }
 
@@ -210,7 +216,9 @@ public sealed partial class ValiantGenerator
         string? delegateType,
         int predicateParameterCount,
         string? code,
-        string? message)
+        string? message,
+        string? severity,
+        Location location)
     {
         public string Kind { get; } = kind;
 
@@ -227,6 +235,10 @@ public sealed partial class ValiantGenerator
         public string? Code { get; } = code;
 
         public string? Message { get; } = message;
+
+        public string? Severity { get; } = severity;
+
+        public Location Location { get; } = location;
     }
 
     private sealed class PropertySelector(

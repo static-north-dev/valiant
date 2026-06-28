@@ -810,7 +810,7 @@ public sealed partial class ValiantGenerator
         }
 
         AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append("if (!").Append(resultName).AppendLine(".IsValid)");
+        builder.Append("if (").Append(resultName).AppendLine(".Failures.Count > 0)");
         AppendIndent(builder, indentLevel, namespaceName);
         builder.AppendLine("{");
         if (node.PropertyPathPrefixExpression is null)
@@ -820,14 +820,14 @@ public sealed partial class ValiantGenerator
                 .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
                 .Append(")).AddRange(")
                 .Append(resultName)
-                .AppendLine(".Errors);");
+                .AppendLine(".Failures);");
         }
         else
         {
             var failureName = "reusedFailure" + ruleIndex.ToString(CultureInfo.InvariantCulture);
             var propertyName = "reusedProperty" + ruleIndex.ToString(CultureInfo.InvariantCulture);
             AppendIndent(builder, indentLevel + 1, namespaceName);
-            builder.Append("foreach (var ").Append(failureName).Append(" in ").Append(resultName).AppendLine(".Errors)");
+            builder.Append("foreach (var ").Append(failureName).Append(" in ").Append(resultName).AppendLine(".Failures)");
             AppendIndent(builder, indentLevel + 1, namespaceName);
             builder.AppendLine("{");
             AppendIndent(builder, indentLevel + 2, namespaceName);
@@ -847,7 +847,9 @@ public sealed partial class ValiantGenerator
                 .Append(failureName)
                 .Append(".ErrorCode, ")
                 .Append(failureName)
-                .AppendLine(".ErrorMessage));");
+                .Append(".ErrorMessage, ")
+                .Append(failureName)
+                .AppendLine(".Severity));");
             AppendIndent(builder, indentLevel + 1, namespaceName);
             builder.AppendLine("}");
         }
@@ -1068,9 +1070,20 @@ public sealed partial class ValiantGenerator
             .Append(GetFailureCodeExpression(check))
             .Append(", ")
             .Append(GetFailureMessageExpression(rule, check))
+            .Append(", ")
+            .Append(GetFailureSeverityExpression(check))
             .AppendLine("));");
         AppendIndent(builder, indentLevel + 1, namespaceName);
-        builder.AppendLine("if (validationFailureBehavior == global::Valiant.ValiantFailureBehavior.FailFast)");
+        if (check.Severity is null)
+        {
+            builder.AppendLine("if (validationFailureBehavior == global::Valiant.ValiantFailureBehavior.FailFast)");
+        }
+        else
+        {
+            builder.Append("if (validationFailureBehavior == global::Valiant.ValiantFailureBehavior.FailFast && ")
+                .Append(GetFailureSeverityExpression(check))
+                .AppendLine(" == global::Valiant.ValiantSeverity.Error)");
+        }
         AppendIndent(builder, indentLevel + 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, indentLevel + 2, namespaceName);
@@ -1118,7 +1131,7 @@ public sealed partial class ValiantGenerator
         }
 
         AppendIndent(builder, indentLevel + 1, namespaceName);
-        builder.Append("if (!").Append(resultName).AppendLine(".IsValid)");
+        builder.Append("if (").Append(resultName).AppendLine(".Failures.Count > 0)");
         AppendIndent(builder, indentLevel + 1, namespaceName);
         builder.AppendLine("{");
         if (ruleFailedName is not null)
@@ -1128,7 +1141,7 @@ public sealed partial class ValiantGenerator
         }
 
         AppendIndent(builder, indentLevel + 2, namespaceName);
-        builder.Append("foreach (var ").Append(failureName).Append(" in ").Append(resultName).AppendLine(".Errors)");
+        builder.Append("foreach (var ").Append(failureName).Append(" in ").Append(resultName).AppendLine(".Failures)");
         AppendIndent(builder, indentLevel + 2, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, indentLevel + 3, namespaceName);
@@ -1142,9 +1155,11 @@ public sealed partial class ValiantGenerator
             .Append(failureName)
             .Append(".ErrorCode, ")
             .Append(failureName)
-            .AppendLine(".ErrorMessage));");
+            .Append(".ErrorMessage, ")
+            .Append(failureName)
+            .AppendLine(".Severity));");
         AppendIndent(builder, indentLevel + 3, namespaceName);
-        builder.AppendLine("if (validationFailureBehavior == global::Valiant.ValiantFailureBehavior.FailFast)");
+        builder.AppendLine("if (validationFailureBehavior == global::Valiant.ValiantFailureBehavior.FailFast && " + failureName + ".Severity == global::Valiant.ValiantSeverity.Error)");
         AppendIndent(builder, indentLevel + 3, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, indentLevel + 4, namespaceName);
@@ -1172,6 +1187,11 @@ public sealed partial class ValiantGenerator
         return check.Message is null
             ? defaultMessage
             : "(" + check.Message + " ?? " + defaultMessage + ")";
+    }
+
+    private static string GetFailureSeverityExpression(RuleCheck check)
+    {
+        return check.Severity ?? "global::Valiant.ValiantSeverity.Error";
     }
 
     private static string GetFailureCondition(string localName, string instanceName, RuleModel rule, RuleCheck check, bool emitAsync)

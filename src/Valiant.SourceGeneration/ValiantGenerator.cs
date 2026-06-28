@@ -64,6 +64,30 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
         DiagnosticSeverity.Error,
         true);
 
+    private static readonly DiagnosticDescriptor RedundantValidationCheck = new(
+        "VLT101",
+        "Redundant validation check",
+        "Validation check '{0}' is redundant because '{1}' already covers it in this property chain",
+        "Valiant",
+        DiagnosticSeverity.Warning,
+        true);
+
+    private static readonly DiagnosticDescriptor DuplicateValidationCheck = new(
+        "VLT102",
+        "Duplicate validation check",
+        "Validation check '{0}' is declared more than once in this property chain",
+        "Valiant",
+        DiagnosticSeverity.Warning,
+        true);
+
+    private static readonly DiagnosticDescriptor OverriddenFailureBehavior = new(
+        "VLT103",
+        "Overridden failure behavior",
+        "This property chain sets failure behavior more than once; only the last setting is used",
+        "Valiant",
+        DiagnosticSeverity.Warning,
+        true);
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var nonGenericValidators = context.SyntaxProvider
@@ -251,6 +275,7 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
             if (methodSyntax.Body is not null)
             {
                 ParseStatements(methodSyntax.Body.Statements, ParseScope.Root(parameterName), semanticModel, cancellationToken, nodes, diagnostics);
+                AnalyzeValidationSuggestions(nodes, diagnostics);
             }
             else if (methodSyntax.ExpressionBody?.Expression is IdentifierNameSyntax identifier &&
                 identifier.Identifier.ValueText == parameterName)

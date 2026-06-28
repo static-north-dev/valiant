@@ -12,9 +12,9 @@ public static class CollectionPropertyValidationExtensions
     /// <param name="predicate">The predicate that every item must satisfy.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, List<TItem>> All<T, TItem>(this PropertyValidation<T, List<TItem>> property, Func<TItem, bool> predicate, string? code = null, string? message = null)
+    public static PropertyValidation<T, List<TItem>> All<T, TItem>(this PropertyValidation<T, List<TItem>> property, Func<TItem, bool> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return All<T, List<TItem>, TItem>(property, predicate, code, message);
+        return All<T, List<TItem>, TItem>(property, predicate, code, message, severity);
     }
 
     /// <summary>
@@ -24,9 +24,9 @@ public static class CollectionPropertyValidationExtensions
     /// <param name="predicate">The predicate that every item must satisfy.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TItem[]?> All<T, TItem>(this PropertyValidation<T, TItem[]?> property, Func<TItem, bool> predicate, string? code = null, string? message = null)
+    public static PropertyValidation<T, TItem[]?> All<T, TItem>(this PropertyValidation<T, TItem[]?> property, Func<TItem, bool> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return All<T, TItem[]?, TItem>(property, predicate, code, message);
+        return All<T, TItem[]?, TItem>(property, predicate, code, message, severity);
     }
 
     /// <summary>
@@ -36,9 +36,9 @@ public static class CollectionPropertyValidationExtensions
     /// <param name="predicate">The predicate that at least one item must satisfy.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, List<TItem>> Any<T, TItem>(this PropertyValidation<T, List<TItem>> property, Func<TItem, bool> predicate, string? code = null, string? message = null)
+    public static PropertyValidation<T, List<TItem>> Any<T, TItem>(this PropertyValidation<T, List<TItem>> property, Func<TItem, bool> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return Any<T, List<TItem>, TItem>(property, predicate, code, message);
+        return Any<T, List<TItem>, TItem>(property, predicate, code, message, severity);
     }
 
     /// <summary>
@@ -48,9 +48,9 @@ public static class CollectionPropertyValidationExtensions
     /// <param name="predicate">The predicate that at least one item must satisfy.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TItem[]?> Any<T, TItem>(this PropertyValidation<T, TItem[]?> property, Func<TItem, bool> predicate, string? code = null, string? message = null)
+    public static PropertyValidation<T, TItem[]?> Any<T, TItem>(this PropertyValidation<T, TItem[]?> property, Func<TItem, bool> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return Any<T, TItem[]?, TItem>(property, predicate, code, message);
+        return Any<T, TItem[]?, TItem>(property, predicate, code, message, severity);
     }
 
     /// <summary>
@@ -60,9 +60,9 @@ public static class CollectionPropertyValidationExtensions
     /// <param name="predicate">The predicate that no item may satisfy.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, List<TItem>> None<T, TItem>(this PropertyValidation<T, List<TItem>> property, Func<TItem, bool> predicate, string? code = null, string? message = null)
+    public static PropertyValidation<T, List<TItem>> None<T, TItem>(this PropertyValidation<T, List<TItem>> property, Func<TItem, bool> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return None<T, List<TItem>, TItem>(property, predicate, code, message);
+        return None<T, List<TItem>, TItem>(property, predicate, code, message, severity);
     }
 
     /// <summary>
@@ -72,9 +72,9 @@ public static class CollectionPropertyValidationExtensions
     /// <param name="predicate">The predicate that no item may satisfy.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TItem[]?> None<T, TItem>(this PropertyValidation<T, TItem[]?> property, Func<TItem, bool> predicate, string? code = null, string? message = null)
+    public static PropertyValidation<T, TItem[]?> None<T, TItem>(this PropertyValidation<T, TItem[]?> property, Func<TItem, bool> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        return None<T, TItem[]?, TItem>(property, predicate, code, message);
+        return None<T, TItem[]?, TItem>(property, predicate, code, message, severity);
     }
 
     /// <summary>
@@ -124,7 +124,7 @@ public static class CollectionPropertyValidationExtensions
     /// <param name="count">The exact allowed count.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TCollection> Count<T, TCollection>(this PropertyValidation<T, TCollection> property, int count, string? code = null, string? message = null)
+    public static PropertyValidation<T, TCollection> Count<T, TCollection>(this PropertyValidation<T, TCollection> property, int count, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TCollection : System.Collections.ICollection?
     {
         if (property.ShouldSkip)
@@ -132,7 +132,7 @@ public static class CollectionPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("Count", !ValidationChecks.HasCount(property.Value, count), "'" + property.PropertyName + "' must contain exactly " + count + " item(s).", code, message);
+        return property.Check("Count", !ValidationChecks.HasCount(property.Value, count), "'" + property.PropertyName + "' must contain exactly " + count + " item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -142,7 +142,7 @@ public static class CollectionPropertyValidationExtensions
     /// <param name="predicate">The predicate that every item must satisfy.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TCollection> All<T, TCollection, TItem>(this PropertyValidation<T, TCollection> property, Func<TItem, bool> predicate, string? code = null, string? message = null)
+    public static PropertyValidation<T, TCollection> All<T, TCollection, TItem>(this PropertyValidation<T, TCollection> property, Func<TItem, bool> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TCollection : IEnumerable<TItem>?
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
@@ -151,7 +151,7 @@ public static class CollectionPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("All", !ValidationChecks.All(property.Value, predicate), "'" + property.PropertyName + "' must contain only matching item(s).", code, message);
+        return property.Check("All", !ValidationChecks.All(property.Value, predicate), "'" + property.PropertyName + "' must contain only matching item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -161,7 +161,7 @@ public static class CollectionPropertyValidationExtensions
     /// <param name="predicate">The predicate that at least one item must satisfy.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TCollection> Any<T, TCollection, TItem>(this PropertyValidation<T, TCollection> property, Func<TItem, bool> predicate, string? code = null, string? message = null)
+    public static PropertyValidation<T, TCollection> Any<T, TCollection, TItem>(this PropertyValidation<T, TCollection> property, Func<TItem, bool> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TCollection : IEnumerable<TItem>?
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
@@ -170,7 +170,7 @@ public static class CollectionPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("Any", !ValidationChecks.Any(property.Value, predicate), "'" + property.PropertyName + "' must contain at least one matching item.", code, message);
+        return property.Check("Any", !ValidationChecks.Any(property.Value, predicate), "'" + property.PropertyName + "' must contain at least one matching item.", code, message, severity);
     }
 
     /// <summary>
@@ -180,7 +180,7 @@ public static class CollectionPropertyValidationExtensions
     /// <param name="predicate">The predicate that no item may satisfy.</param>
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
-    public static PropertyValidation<T, TCollection> None<T, TCollection, TItem>(this PropertyValidation<T, TCollection> property, Func<TItem, bool> predicate, string? code = null, string? message = null)
+    public static PropertyValidation<T, TCollection> None<T, TCollection, TItem>(this PropertyValidation<T, TCollection> property, Func<TItem, bool> predicate, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
         where TCollection : IEnumerable<TItem>?
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
@@ -189,7 +189,7 @@ public static class CollectionPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("None", !ValidationChecks.None(property.Value, predicate), "'" + property.PropertyName + "' must not contain matching item(s).", code, message);
+        return property.Check("None", !ValidationChecks.None(property.Value, predicate), "'" + property.PropertyName + "' must not contain matching item(s).", code, message, severity);
     }
 
     /// <summary>

@@ -49,7 +49,8 @@ public sealed class ValidationContext<T>
 
     internal ValiantFailureBehavior FailureBehavior => _failureBehavior;
 
-    internal bool ShouldStopValidation => _failureBehavior == ValiantFailureBehavior.FailFast && _failures.Count > 0;
+    internal bool ShouldStopValidation => _failureBehavior == ValiantFailureBehavior.FailFast &&
+        _failures.Any(static failure => failure.Severity == ValiantSeverity.Error);
 
     /// <summary>
     /// Starts validation for a model property.
@@ -129,9 +130,9 @@ public sealed class ValidationContext<T>
         return this;
     }
 
-    internal int AddFailure(string propertyName, string errorCode, string errorMessage)
+    internal int AddFailure(string propertyName, string errorCode, string errorMessage, ValiantSeverity severity = ValiantSeverity.Error)
     {
-        _failures.Add(new ValidationFailure(ApplyPropertyPathPrefix(propertyName), errorCode, errorMessage));
+        _failures.Add(new ValidationFailure(ApplyPropertyPathPrefix(propertyName), errorCode, errorMessage, severity));
         return _failures.Count - 1;
     }
 
@@ -161,7 +162,7 @@ public sealed class ValidationContext<T>
     {
         foreach (var failure in failures)
         {
-            AddFailure(failure.PropertyName, failure.ErrorCode, failure.ErrorMessage);
+            AddFailure(failure.PropertyName, failure.ErrorCode, failure.ErrorMessage, failure.Severity);
             if (ShouldStopValidation)
             {
                 break;
