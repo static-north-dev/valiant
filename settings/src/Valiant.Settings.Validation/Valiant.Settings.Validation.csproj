@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageId>Valiant.Settings.Validation</PackageId>
+    <Description>Options validation integration between Valiant Settings and Valiant Validation.</Description>
+    <PackageTags>settings;configuration;validation;options</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../../../validation/src/Valiant.Validation/Valiant.Validation.csproj" PrivateAssets="contentfiles" />
+    <ProjectReference Include="../Valiant.Settings/Valiant.Settings.csproj" PrivateAssets="contentfiles" />
+  </ItemGroup>
+
+</Project>

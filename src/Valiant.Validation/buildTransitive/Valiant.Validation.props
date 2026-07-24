@@ -1,6 +1,0 @@
-<Project>
-  <PropertyGroup Condition="'$(Configuration)' == 'Debug' and '$(ValiantEmitCompilerGeneratedFiles)' != 'false'">
-    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
-  </PropertyGroup>
-</Project>

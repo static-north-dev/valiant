@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net8.0": {
+      "valiant.settings": {
+        "type": "Project"
+      },
+      "valiant.validation": {
+        "type": "Project"
+      }
+    }
+  }
+}

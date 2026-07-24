@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageId>Valiant.Validation.AspNetCore.OpenApi</PackageId>
+    <Description>Native ASP.NET Core OpenAPI integration for Valiant validation metadata.</Description>
+    <PackageTags>validation;aspnetcore;openapi;swagger</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-v5pm-xwqc-g5wc" />
+    <ProjectReference Include="../Valiant.Validation/Valiant.Validation.csproj" PrivateAssets="contentfiles" />
+  </ItemGroup>
+
+</Project>

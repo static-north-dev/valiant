@@ -1,0 +1,4 @@
+namespace Valiant.Mapping.Samples.DependencyInjection;
+
+[ValiantMapper]
+public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;

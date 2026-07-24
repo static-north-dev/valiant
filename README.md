@@ -1,18 +1,35 @@
 # Valiant
 
-Valiant is an experimental .NET validation library with a property-focused authoring surface and source-generated runtime implementation.
+Valiant is a family of source-generated .NET libraries for validation, Minimal API endpoints, object mapping, and strongly typed settings.
 
-The goal is to keep the developer API small while generating direct validation code that is friendly to trimming, Native AOT, and dependency injection without reflection-based assembly scanning.
+The goal is to keep developer APIs explicit while generating direct runtime code and deterministic metadata that are friendly to trimming, Native AOT, and dependency injection without reflection-based assembly scanning.
 
-## Current shape
+## Packages
+
+- `Valiant.Validation` provides the runtime API and source generator.
+- `Valiant.Validation.AspNetCore` adds Minimal API, MVC, and problem-details integration.
+- `Valiant.Validation.AspNetCore.OpenApi` adds native ASP.NET Core OpenAPI schema integration.
+- `Valiant.Validation.MediatR` adds a MediatR pipeline behavior. It intentionally pins MediatR to `12.5.0`, the final free MediatR release.
+- `Valiant.Validation.Mediator` adds the equivalent behavior for the source-generated Mediator package.
+- `Valiant.Endpoints.AspNetCore` provides endpoint-per-class Minimal APIs, generated route registration, groups, conventions, and query binding.
+- `Valiant.Mapping` provides source-generated object mapping.
+- `Valiant.Settings` provides source-generation primitives for strongly typed settings schemas.
+- `Valiant.Settings.AspNetCore` adds a built-in ASP.NET Core UI for visualizing generated settings schemas.
+- `Valiant.Settings.Validation` adapts Valiant validators to `IValidateOptions<TOptions>` for generated settings models.
+
+Integration packages are standalone installation points: install the most specific package or packages your application uses. Their parent runtime, build, and source-generator assets flow transitively; add parent packages directly only when you want to use that parent package without an integration.
+
+The full module guides live in the [Docusaurus documentation site](docs/README.md).
+
+## Quick start
 
 ```csharp
 using Valiant.Validation;
 
 [ValiantValidator]
-public sealed partial class CreateUserValidator : IValidatorDefinition<CreateUser>
+public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser>
 {
-    public static void Configure(ValidationContext<CreateUser> context)
+    public override void Configure(ValidationContext<CreateUser> context)
     {
         context.Property(user => user.Name)
             .Required()
@@ -35,7 +52,7 @@ public sealed partial class CreateUserValidator : IValidatorDefinition<CreateUse
 Native C# conditionals can be used to make validations conditional. The generator rewrites `context.Instance` references to the runtime model instance:
 
 ```csharp
-public static void Configure(ValidationContext<CreateUser> context)
+public override void Configure(ValidationContext<CreateUser> context)
 {
     if (context.Instance.RequiresInvite)
     {
@@ -59,21 +76,20 @@ public static void Configure(ValidationContext<CreateUser> context)
 
 In `Debuggable` mode, the user-authored `Configure` method executes at runtime, so breakpoints in native `if`/`else` and `switch` statements work normally.
 
-
 Whole-model validators can be reused from another validator for the same model type. Inject the validator through the normal constructor and pass that dependency to `UseValidator`; generated DI registers concrete validators so this resolves out of the box:
 
 ```csharp
 [ValiantValidator]
-public sealed partial class CreateUserNameValidator : IValidatorDefinition<CreateUser>
+public sealed partial class CreateUserNameValidator : ValidatorDefinition<CreateUser>
 {
-    public static void Configure(ValidationContext<CreateUser> context)
+    public override void Configure(ValidationContext<CreateUser> context)
     {
         context.Property(user => user.Name).Required();
     }
 }
 
 [ValiantValidator]
-public sealed partial class CreateUserValidator : IValidatorDefinition<CreateUser>
+public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser>
 {
     private readonly CreateUserNameValidator _nameValidator;
 
@@ -82,7 +98,7 @@ public sealed partial class CreateUserValidator : IValidatorDefinition<CreateUse
         _nameValidator = nameValidator;
     }
 
-    public void Configure(ValidationContext<CreateUser> context)
+    public override void Configure(ValidationContext<CreateUser> context)
     {
         context.UseValidator(_nameValidator);
         context.Property(user => user.Age).GreaterThanOrEqualTo(18);
@@ -90,30 +106,30 @@ public sealed partial class CreateUserValidator : IValidatorDefinition<CreateUse
 }
 ```
 
-Validators can also be reused for a property value. This is useful for nested objects such as addresses. The child validator is a normal Valiant validator, so it is discovered and registered in DI the same way as every other validator:
+Property validators can be reused for a property value. This is useful for nested objects such as addresses. Property validators derive from `PropertyValidatorDefinition<TProperty>` and are discovered for DI when they are marked with `[ValiantValidator]`. Override `Validate(...)`, `ValidateAsync(...)`, or both:
 
 ```csharp
 [ValiantValidator]
-public sealed partial class AddressValidator : IValidatorDefinition<Address>
+public sealed class AddressPropertyValidator : PropertyValidatorDefinition<Address>
 {
-    public static void Configure(ValidationContext<Address> context)
+    public override ValidationResult Validate(Address value)
     {
-        context.Property(address => address.Line1).Required();
-        context.Property(address => address.Zip).Required();
+        // Return failures for invalid address properties.
+        return ValidationResult.Valid;
     }
 }
 
 [ValiantValidator]
-public sealed partial class CreateUserValidator : IValidatorDefinition<CreateUser>
+public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser>
 {
-    private readonly AddressValidator _addressValidator;
+    private readonly AddressPropertyValidator _addressValidator;
 
-    public CreateUserValidator(AddressValidator addressValidator)
+    public CreateUserValidator(AddressPropertyValidator addressValidator)
     {
         _addressValidator = addressValidator;
     }
 
-    public void Configure(ValidationContext<CreateUser> context)
+    public override void Configure(ValidationContext<CreateUser> context)
     {
         context.Property(user => user.Address).UseValidator(_addressValidator);
     }
@@ -122,10 +138,44 @@ public sealed partial class CreateUserValidator : IValidatorDefinition<CreateUse
 
 Property validators skip null property values. Add `Required()` before `UseValidator(...)` when the property itself must be present. Child failures are reported under the parent path, for example `Address.Line1`.
 
+Validators can also derive from `ValidatorDefinition<T>` when model attributes should define the default rules:
+
+```csharp
+using Valiant.Validation;
+
+[ValiantValidator]
+public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser>;
+
+public sealed class CreateUser
+{
+    [Required("NameRequired", "Name is required.")]
+    [MaxLength(64)]
+    public string? Name { get; init; }
+}
+```
+
+Validation attributes are Valiant attributes, not `System.ComponentModel.DataAnnotations`. They use the same rule names and generated logic as fluent rules. Optional `Code`, `Message`, and `Severity` metadata can be supplied through constructors or named properties. Conditional attributes use a static model predicate by name:
+
+```csharp
+[Required(ConditionMethod = nameof(ShouldValidateName))]
+public string? Name { get; init; }
+
+public static bool ShouldValidateName(CreateUser user) => user.Name != "skip";
+```
+
+Attribute-based models can also reuse a parameterless property validator:
+
+```csharp
+[UseValidator<AddressPropertyValidator>]
+public Address? Address { get; init; }
+```
+
+`ValidatorDefinition<T>` authoring is intentionally mutually exclusive: omit `Configure(ValidationContext<T>)` to use model validation attributes, or declare `Configure` to use fluent rules on a model without validation attributes. If both are present, Valiant reports an analyzer error so rule ownership stays explicit.
+
 The generator emits an `IValidator<CreateUser>` implementation with direct property reads and native branch checks. When `Microsoft.Extensions.DependencyInjection` is available in the consumer project, it also emits:
 
 ```csharp
-services.AddValiantValidations(options =>
+services.AddValiantValidators(options =>
 {
     options.Mode = ValiantValidationMode.Auto;
     options.Lifetime = ValiantValidatorLifetime.Scoped;
@@ -141,9 +191,90 @@ That generated extension registers validators without reflection scanning and co
 - `Lifetime` controls DI registration for generated validators: `Singleton`, `Scoped`, or `Transient`.
 - `FailureBehavior` controls whether validators collect every failure or stop after the first one.
 
-The attribute is the generator discovery hook; `IValidatorDefinition<T>` supplies the model type, and the generator validates the `Configure` declaration shape.
+The attribute is the generator discovery hook. `ValidatorDefinition<T>` supplies the model type and exposes the overridable `Configure(ValidationContext<T>)` authoring surface for fluent rules. Leaving the override out enables attribute-based default validation.
 
-The older `[ValiantValidator(typeof(CreateUser))]` and `[ValiantValidator<CreateUser>]` forms are still supported for compatibility, but the marker attribute is the preferred API when the validator implements `IValidatorDefinition<T>`.
+The older `[ValiantValidator(typeof(CreateUser))]` and `[ValiantValidator<CreateUser>]` forms are still supported for compatibility, but `[ValiantValidator]` with `ValidatorDefinition<T>` is the recommended API.
+
+Generated validators also expose static validation metadata through `IValiantValidationMetadataProvider`. The metadata is registered by `AddValiantValidators` and is used by the OpenAPI package, but it can also be consumed by other tooling.
+
+## Mapping
+
+Mapping follows the same authoring style as validators: add the marker attribute and implement the definition interface so the generator can infer the source and target types.
+
+```csharp
+using Valiant.Mapping;
+
+[ValiantMapper]
+public sealed partial class UserMapper : MapperDefinition<User, UserDto>;
+```
+
+`[ValiantMapper]` is the generator discovery hook, while `MapperDefinition<TSource, TTarget>` supplies the mapping pair through `IMapperDefinition<TSource, TTarget>`. The generator emits a direct `Map(User source)` implementation and adds `IMapper<User, UserDto>` to the generated partial type. Public source properties and fields are mapped to public settable target properties and fields by name. Constructor parameters are mapped first, which supports immutable targets and records:
+
+```csharp
+public sealed record UserDto(string Name, int Age);
+```
+
+Mapper definitions can override `Configure(...)` for explicit member mappings. When `Configure(...)` is present, convention mapping is disabled so rule ownership stays explicit; normal unmapped and incompatible-target diagnostics still apply. `When(...)` makes a member assignment conditional; for constructor parameters, the fallback value is `default`.
+
+```csharp
+public sealed partial class UserMapper : MapperDefinition<User, UserDto>
+{
+    public override void Configure(MappingContext<User, UserDto> context)
+    {
+        context.Map(source => source.EmailAddress, target => target.Email)
+            .When(source => source.IncludeEmail);
+    }
+}
+```
+
+Native `if/else` blocks can branch on `context.Source` and are supported by both generated fast mode and debuggable runtime mode:
+
+```csharp
+public sealed partial class UserMapper : MapperDefinition<User, UserDto>
+{
+    public override void Configure(MappingContext<User, UserDto> context)
+    {
+        if (context.Source.UseEmail)
+        {
+            context.Map(source => source.Email, target => target.DisplayName);
+        }
+        else
+        {
+            context.Map(source => source.Name, target => target.DisplayName);
+        }
+    }
+}
+```
+
+Targets can be ignored explicitly. A conditional ignore can also guard an explicit map for the same target:
+
+```csharp
+public sealed partial class UserMapper : MapperDefinition<User, UserDto>
+{
+    public override void Configure(MappingContext<User, UserDto> context)
+    {
+        context.Map(source => source.DisplayName, target => target.Name);
+        context.Ignore(target => target.Name)
+            .When(source => source.HideName);
+    }
+}
+```
+
+Mapper definitions can reuse other mappers declared as dependencies:
+
+```csharp
+public sealed partial class UserMapper(AddressMapper addressMapper) : MapperDefinition<User, UserDto>
+{
+    public override void Configure(MappingContext<User, UserDto> context)
+    {
+        context.UseMapper<AddressMapper>(addressMapper);
+    }
+}
+```
+
+Generated mappers use `ValiantMappingMode.Auto` by default: Debug builds execute `Configure(...)` at runtime so breakpoints work, while Release builds use source-generated fast mapping. Pass `new ValiantMappingOptions { Mode = ValiantMappingMode.Fast }` or `Debuggable` to force a backend.
+
+When dependency injection abstractions are available, the generator emits `AddValiantMappers(...)` and registers discovered mappers as concrete services, `IMapper<TSource, TTarget>` services, a convenience `IMapper` facade, `IMapperFactory`, and `ValiantMappingOptions`.
 
 Validators expose both result and boolean APIs:
 
@@ -170,10 +301,6 @@ bool isValid = await validator.IsValidAsync(model);
 - `LengthBetween(min, max)`
 - `MinLength(min)`
 - `MaxLength(max)`
-- `Count(count)`
-- `CountBetween(min, max)`
-- `MinCount(min)`
-- `MaxCount(max)`
 - `Contains(item)`
 - `Excludes(item)`
 - `All(predicate)`
@@ -191,8 +318,10 @@ bool isValid = await validator.IsValidAsync(model);
 - `ExclusiveBetween(from, to)`
 - `Satisfies(predicate)`
 - `SatisfiesAsync(predicate)`
+- `UseValidator(validator)`
+- `[UseValidator<TValidator>]`
 
-Type-specific checks are exposed only where they make sense. For example, `NotNull()` and `Null()` are available on reference and nullable value properties, string length checks are available on string properties, `DefinedEnum()` is available on enum properties, collection count, membership, and predicate checks are available on collection properties, and dictionary key/value checks are available on dictionary properties.
+Type-specific checks are exposed only where they make sense. For example, `NotNull()` and `Null()` are available on reference and nullable value properties, length checks are available on string and collection properties, `DefinedEnum()` is available on enum properties, membership and predicate checks are available on collection properties, and dictionary key/value checks are available on dictionary properties.
 
 Each validator call accepts optional `code` and `message` arguments for that exact check:
 It also accepts an optional `severity`; `Error` failures make the result invalid, while `Warning` and `Info` failures are reported without making `IsValid` false.
@@ -215,12 +344,12 @@ IReadOnlyList<ValidationFailure> warnings = result.Warnings;
 Failure behavior can be configured globally, per validator, or for one property chain. The narrower setting wins:
 
 ```csharp
-services.AddValiantValidations(options =>
+services.AddValiantValidators(options =>
 {
     options.FailureBehavior = ValiantFailureBehavior.FailFast;
 });
 
-public static void Configure(ValidationContext<CreateUser> context)
+public override void Configure(ValidationContext<CreateUser> context)
 {
     context.ValidateAll();
 
@@ -261,13 +390,12 @@ foreach (var item in context.Instance.Items)
 }
 ```
 
-Collection and dictionary checks cover exact/ranged counts, membership, predicates, and dictionary keys/values:
+Collection and dictionary checks cover size, membership, predicates, and dictionary keys/values:
 
 ```csharp
 context.Property(order => order.Items)
     .NotEmpty()
-    .Count(3)
-    .CountBetween(1, 25)
+    .LengthBetween(1, 25)
     .Contains(requiredItem)
     .All(item => item.Quantity > 0)
     .None(item => item.IsDeleted);
@@ -330,7 +458,7 @@ Both extensions add ASP.NET Core `ProducesValidationProblem(400)` endpoint metad
 using Valiant.Validation.AspNetCore.OpenApi;
 
 builder.Services.AddOpenApi();
-builder.Services.AddValiantValidations();
+builder.Services.AddValiantValidators();
 builder.Services.AddValiantOpenApi();
 ```
 
@@ -362,7 +490,76 @@ HttpValidationProblemDetails httpProblem = result.ToHttpValidationProblemDetails
 ValidationProblemDetails mvcProblem = result.ToMvcValidationProblemDetails();
 ```
 
-## Analyzer suggestions
+## Mediator integrations
+
+`Valiant.Validation.MediatR` adds a MediatR pipeline behavior that runs all registered `IValidator<TRequest>` instances before the request handler:
+
+```csharp
+using Valiant.Validation.MediatR;
+
+services.AddMediatR(configuration =>
+{
+    configuration.RegisterServicesFromAssemblyContaining<CreateUserCommand>();
+    configuration.AddValiantValidation();
+});
+```
+
+The package intentionally pins MediatR to `12.5.0`, the final free MediatR release, and should not be automatically updated.
+
+`Valiant.Validation.Mediator` adds the equivalent behavior for the source-generated Mediator package:
+
+```csharp
+using Valiant.Validation.Mediator;
+
+services.AddMediator(options =>
+{
+    options.Assemblies = [typeof(CreateUserCommand).Assembly];
+});
+
+services.AddValiantMediatorValidation();
+```
+
+For NativeAOT, configure the behavior in the `AddMediator` options delegate instead:
+
+```csharp
+using Valiant.Validation.Mediator;
+
+services.AddMediator(options =>
+{
+    options.Assemblies = [typeof(CreateUserCommand).Assembly];
+    options.PipelineBehaviors = [typeof(ValiantValidationBehavior<,>)];
+});
+```
+
+Use one Mediator registration path for the Valiant behavior. Do not also call `AddValiantMediatorValidation()` when `ValiantValidationBehavior<,>` is listed in `PipelineBehaviors`.
+
+Both integrations validate by request/message type. To validate a command, register a normal Valiant validator for that command type:
+
+```csharp
+[ValiantValidator]
+public sealed partial class CreateUserCommandValidator : ValidatorDefinition<CreateUserCommand>
+{
+    public override void Configure(ValidationContext<CreateUserCommand> context)
+    {
+        context.Property(x => x.Email).Required();
+    }
+}
+```
+
+If validation returns errors, the behavior throws `ValiantValidationException` and the handler is not invoked. Warnings and informational failures are preserved in the aggregate result but do not block handler execution.
+
+## Source generation and analyzer diagnostics
+
+The generator is incremental and attribute-driven. It discovers validators through `[ValiantValidator]` / `[ValiantValidator<T>]`, emits each validator independently, and keeps dependency-injection generation on a lightweight registration model so unrelated source edits do not force reflection-style rescans.
+
+The generated output includes:
+
+- `IValidator<T>` implementation for each valid validator definition.
+- `IPropertyValidator<TProperty>` DI registrations for property validator definitions.
+- `IValiantValidationMetadataProvider` implementation for generated metadata.
+- `AddValiantValidators` when DI symbols are available in the consuming compilation.
+
+The generated DI extension registers concrete validators, `IValidator<TModel>` services, concrete property validator definitions, `IPropertyValidator<TProperty>` services, metadata providers, and `ValiantValidationOptions`.
 
 The source generator reports compiler diagnostics for invalid validator declarations and low-noise suggestions for suspicious rule chains:
 
@@ -372,19 +569,42 @@ The source generator reports compiler diagnostics for invalid validator declarat
 
 ## Repository layout
 
-- `src/Valiant.Validation` contains runtime contracts and the NuGet package metadata.
-- `src/Valiant.Validation.AspNetCore` contains Minimal API, MVC, and problem details integrations.
-- `src/Valiant.Validation.AspNetCore.OpenApi` contains native ASP.NET Core OpenAPI schema integration.
-- `src/Valiant.Validation.SourceGeneration` contains the incremental source generator packaged as a NuGet analyzer.
-- `samples/Valiant.Validation.Sample` exercises core validation features, generated fast validators, validator reuse, collections, dictionaries, native branches/loops, severities, result helpers, metadata, and generated DI registration.
-- `samples/Valiant.Validation.AspNetCore.Sample` exercises ASP.NET Core registration, Minimal API endpoint validation, MVC integration, problem-details helpers, and native OpenAPI validation rule reflection.
+- `validation/src/Valiant.Validation` contains runtime contracts and the NuGet package metadata.
+- `validation/src/Valiant.Validation.AspNetCore` contains Minimal API, MVC, and problem details integrations.
+- `validation/src/Valiant.Validation.AspNetCore.OpenApi` contains native ASP.NET Core OpenAPI schema integration.
+- `validation/src/Valiant.Validation.MediatR` contains MediatR pipeline behavior integration.
+- `validation/src/Valiant.Validation.Mediator` contains source-generated Mediator pipeline behavior integration.
+- `validation/src/Valiant.Validation.SourceGeneration` contains the incremental source generator packaged as a NuGet analyzer.
+- `assets/logo.png` contains the NuGet package icon used by all packable projects.
+- `AGENTS.md` and `AGENT_GUIDE.md` document repository context for coding agents.
+- `validation/samples/Valiant.Validation.Samples` contains selectable core samples for fluent and attribute rules, generated DI, sync/async behavior, severities, composition and paths, failure handling, collections, and control flow.
+- `validation/samples/Valiant.Validation.AspNetCore.Samples` contains selectable ASP.NET Core samples for Minimal API filters, automatic MVC validation, problem-details conversion, and validation metadata in a real OpenAPI document.
 
 ## Local verification
 
 ```bash
-dotnet build Valiant.sln
-dotnet samples/Valiant.Validation.Sample/bin/Debug/net10.0/Valiant.Validation.Sample.dll
-dotnet samples/Valiant.Validation.AspNetCore.Sample/bin/Debug/net10.0/Valiant.Validation.AspNetCore.Sample.dll
-dotnet test --project tests/Valiant.Validation.Tests/Valiant.Validation.Tests.csproj
-dotnet pack src/Valiant.Validation/Valiant.Validation.csproj -c Release
+dotnet restore Valiant.sln --locked-mode
+dotnet build Valiant.sln --configuration Debug --no-restore
+dotnet test --solution Valiant.sln --configuration Debug --no-build
+dotnet build Valiant.sln --configuration Release --no-restore
+dotnet test --solution Valiant.sln --configuration Release --no-build
+dotnet run --project validation/samples/Valiant.Validation.Samples
+dotnet run --project validation/samples/Valiant.Validation.AspNetCore.Samples
+dotnet msbuild Valiant.Pack.proj -t:VerifyPackageConsumers -m:1 -p:Configuration=Release -p:NoBuild=true
+dotnet msbuild Valiant.Pack.proj -t:VerifyAotSmoke -m:1 -p:Configuration=Release -p:NoBuild=true -p:AotRuntimeIdentifier=osx-arm64
 ```
+
+Repository-wide build, analyzer, package metadata, and dependency versions live in
+`Directory.Build.props`, `Directory.Build.targets`, and `Directory.Packages.props`.
+Every solution project commits `packages.lock.json`; after changing
+`Directory.Packages.props`, regenerate the graph with:
+
+```bash
+dotnet restore Valiant.sln --force-evaluate
+```
+
+`Valiant.Pack.proj` is the authoritative ten-package release manifest. Its
+verification targets pack serially, inspect NuGet and symbol-package contents,
+and run leaf-only applications that restore the produced packages from the
+local feed. `Valiant.Endpoints` is an internal contract assembly bundled inside
+`Valiant.Endpoints.AspNetCore`; it is not a standalone package.

@@ -2,6 +2,11 @@ name: Publish Preview Packages
 
 on:
   workflow_dispatch:
+    inputs:
+      package_version:
+        description: NuGet package version to publish, for example 0.1.0-preview.2.
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -21,36 +26,42 @@ jobs:
       DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
       NUGET_SOURCE: https://api.nuget.org/v3/index.json
       PACKAGE_OUTPUT: artifacts/packages
+      PACKAGE_VERSION: ${{ inputs.package_version }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
 
       - name: Restore
-        run: dotnet restore Valiant.sln
+        run: dotnet restore Valiant.sln --locked-mode
 
       - name: Build
-        run: dotnet build Valiant.sln --configuration Release --no-restore
+        run: dotnet build Valiant.sln --configuration Release --no-restore --disable-build-servers
 
       - name: Test
-        run: dotnet test --project tests/Valiant.Validation.Tests/Valiant.Validation.Tests.csproj --configuration Release --no-build
+        run: dotnet test --solution Valiant.sln --configuration Release --no-build
 
-      - name: Pack Valiant
-        run: dotnet pack src/Valiant.Validation/Valiant.Validation.csproj --configuration Release --no-build --no-restore --output "$PACKAGE_OUTPUT"
+      - name: Validate package version
+        run: |
+          if [ -z "$PACKAGE_VERSION" ]; then
+            echo "package_version input is required." >&2
+            exit 1
+          fi
 
-      - name: Pack ASP.NET Core integration
-        run: dotnet pack src/Valiant.Validation.AspNetCore/Valiant.Validation.AspNetCore.csproj --configuration Release --no-build --no-restore --output "$PACKAGE_OUTPUT"
+          echo "Publishing NuGet package version $PACKAGE_VERSION"
 
-      - name: Pack OpenAPI integration
-        run: dotnet pack src/Valiant.Validation.AspNetCore.OpenApi/Valiant.Validation.AspNetCore.OpenApi.csproj --configuration Release --no-build --no-restore --output "$PACKAGE_OUTPUT"
+      - name: Pack, inspect, and run leaf consumers
+        run: dotnet msbuild Valiant.Pack.proj -t:VerifyPackageConsumers -m:1 -p:Configuration=Release -p:NoBuild=true -p:PackageVersion="$PACKAGE_VERSION"
 
       - name: Upload package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
           name: valiant-preview-packages
           path: |
@@ -59,7 +70,7 @@ jobs:
           if-no-files-found: error
 
       - name: NuGet login
-        uses: NuGet/login@v1
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
         id: nuget-login
         with:
           user: ${{ vars.NUGET_USER }}

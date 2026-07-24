@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <PackageId>Valiant.Validation</PackageId>
+    <Description>A source-generated, AOT-friendly validation library for .NET.</Description>
+    <PackageTags>validation;source-generator;aot;nativeaot;dependency-injection</PackageTags>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddValiantSourceGeneratorToPackage</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="buildTransitive/Valiant.Validation.props" Pack="true" PackagePath="buildTransitive/Valiant.Validation.props" />
+    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
+    <ProjectReference Include="../Valiant.Validation.SourceGeneration/Valiant.Validation.SourceGeneration.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" Condition="'$(BuildProjectReferences)' != 'false'" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="System.Threading.Tasks.Extensions" />
+  </ItemGroup>
+
+  <Target Name="BuildValiantSourceGeneratorForPack" Condition="'$(NoBuild)' != 'true'">
+    <MSBuild Projects="../Valiant.Validation.SourceGeneration/Valiant.Validation.SourceGeneration.csproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" RemoveProperties="TargetFrameworks;RuntimeIdentifier;SelfContained" />
+  </Target>
+
+  <Target Name="AddValiantSourceGeneratorToPackage" DependsOnTargets="BuildValiantSourceGeneratorForPack" Condition="'$(TargetFramework)' == 'net8.0'">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="../Valiant.Validation.SourceGeneration/bin/$(Configuration)/netstandard2.0/Valiant.Validation.SourceGeneration.dll" PackagePath="analyzers/dotnet/cs" />
+    </ItemGroup>
+  </Target>
+
+</Project>

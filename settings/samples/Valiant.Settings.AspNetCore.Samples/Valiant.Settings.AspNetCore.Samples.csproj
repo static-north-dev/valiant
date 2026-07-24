@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/Generated</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
+    <ProjectReference Include="../../src/Valiant.Settings/Valiant.Settings.csproj" />
+    <ProjectReference Include="../../src/Valiant.Settings.AspNetCore/Valiant.Settings.AspNetCore.csproj" />
+    <ProjectReference Include="../../src/Valiant.Settings.Validation/Valiant.Settings.Validation.csproj" />
+    <ProjectReference Include="../../src/Valiant.Settings.SourceGeneration/Valiant.Settings.SourceGeneration.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../validation/src/Valiant.Validation/Valiant.Validation.csproj" />
+    <ProjectReference Include="../../../validation/src/Valiant.Validation.SourceGeneration/Valiant.Validation.SourceGeneration.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

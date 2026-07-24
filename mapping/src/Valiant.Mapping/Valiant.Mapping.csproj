@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <PackageId>Valiant.Mapping</PackageId>
+    <Description>A source-generated, AOT-friendly object mapping library for .NET.</Description>
+    <PackageTags>mapping;mapper;source-generator;aot;nativeaot</PackageTags>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddValiantMappingSourceGeneratorToPackage</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="buildTransitive/Valiant.Mapping.props" Pack="true" PackagePath="buildTransitive/Valiant.Mapping.props" />
+    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
+    <ProjectReference Include="../Valiant.Mapping.SourceGeneration/Valiant.Mapping.SourceGeneration.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" Condition="'$(BuildProjectReferences)' != 'false'" />
+  </ItemGroup>
+
+  <Target Name="BuildValiantMappingSourceGeneratorForPack" Condition="'$(NoBuild)' != 'true'">
+    <MSBuild Projects="../Valiant.Mapping.SourceGeneration/Valiant.Mapping.SourceGeneration.csproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" RemoveProperties="TargetFrameworks;RuntimeIdentifier;SelfContained" />
+  </Target>
+
+  <Target Name="AddValiantMappingSourceGeneratorToPackage" DependsOnTargets="BuildValiantMappingSourceGeneratorForPack" Condition="'$(TargetFramework)' == 'net8.0'">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="../Valiant.Mapping.SourceGeneration/bin/$(Configuration)/netstandard2.0/Valiant.Mapping.SourceGeneration.dll" PackagePath="analyzers/dotnet/cs" />
+    </ItemGroup>
+  </Target>
+
+</Project>

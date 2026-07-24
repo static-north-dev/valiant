@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Valiant.Endpoints.AspNetCore.TestApp</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
+    <ProjectReference Include="../../src/Valiant.Endpoints/Valiant.Endpoints.csproj" />
+    <ProjectReference Include="../../src/Valiant.Endpoints.AspNetCore/Valiant.Endpoints.AspNetCore.csproj" />
+    <ProjectReference Include="../../src/Valiant.Endpoints.AspNetCore.SourceGeneration/Valiant.Endpoints.AspNetCore.SourceGeneration.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

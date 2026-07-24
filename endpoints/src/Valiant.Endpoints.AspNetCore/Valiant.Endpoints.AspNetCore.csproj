@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageId>Valiant.Endpoints.AspNetCore</PackageId>
+    <Description>Endpoint-per-class helpers for ASP.NET Core Minimal APIs.</Description>
+    <PackageTags>aspnetcore;minimal-api;endpoints;vertical-slice</PackageTags>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddValiantEndpointsSourceGeneratorToPackage</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
+    <ProjectReference Include="../Valiant.Endpoints/Valiant.Endpoints.csproj" PrivateAssets="all" Pack="false" />
+    <ProjectReference Include="../Valiant.Endpoints.AspNetCore.SourceGeneration/Valiant.Endpoints.AspNetCore.SourceGeneration.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" Condition="'$(BuildProjectReferences)' != 'false'" />
+  </ItemGroup>
+
+  <Target Name="BuildValiantEndpointsSourceGeneratorForPack" Condition="'$(NoBuild)' != 'true'">
+    <MSBuild Projects="../Valiant.Endpoints.AspNetCore.SourceGeneration/Valiant.Endpoints.AspNetCore.SourceGeneration.csproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" RemoveProperties="TargetFrameworks;RuntimeIdentifier;SelfContained" />
+  </Target>
+
+  <Target Name="AddValiantEndpointsSourceGeneratorToPackage" DependsOnTargets="BuildValiantEndpointsSourceGeneratorForPack" Condition="'$(TargetFramework)' == 'net8.0'">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="../Valiant.Endpoints/bin/$(Configuration)/netstandard2.0/Valiant.Endpoints.dll" PackagePath="lib/net8.0" />
+      <TfmSpecificPackageFile Include="../Valiant.Endpoints.AspNetCore.SourceGeneration/bin/$(Configuration)/netstandard2.0/Valiant.Endpoints.AspNetCore.SourceGeneration.dll" PackagePath="analyzers/dotnet/cs" />
+    </ItemGroup>
+  </Target>
+
+</Project>

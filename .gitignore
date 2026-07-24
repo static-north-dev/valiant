@@ -194,6 +194,13 @@ AutoTest.Net/
 # Web workbench (sass)
 .sass-cache/
 
+# Node / docs site generators
+node_modules/
+.astro/
+.docusaurus/
+dist/
+docs/build/
+
 # Installshield output folder
 [Ee]xpress/
 

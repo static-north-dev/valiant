@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+    <IsTestingPlatformApplication>true</IsTestingPlatformApplication>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <TestingPlatformShowTestsFailure>true</TestingPlatformShowTestsFailure>
+    <UseTestingPlatformProtocol>true</UseTestingPlatformProtocol>
+    <IsTestingPlatformEnabled>true</IsTestingPlatformEnabled>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/Generated</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
+    <PackageReference Include="TUnit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../../shared/tests/Valiant.SourceGeneration.Testing/*.cs" LinkBase="Shared" />
+    <ProjectReference Include="../../src/Valiant.Settings.AspNetCore/Valiant.Settings.AspNetCore.csproj" />
+    <ProjectReference Include="../../src/Valiant.Settings/Valiant.Settings.csproj" />
+    <ProjectReference Include="../../src/Valiant.Settings.Validation/Valiant.Settings.Validation.csproj" />
+    <ProjectReference Include="../../src/Valiant.Settings.SourceGeneration/Valiant.Settings.SourceGeneration.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../src/Valiant.Settings.SourceGeneration/Valiant.Settings.SourceGeneration.csproj" PrivateAssets="all" />
+    <ProjectReference Include="../../samples/Valiant.Settings.AspNetCore.Samples/Valiant.Settings.AspNetCore.Samples.csproj" />
+    <ProjectReference Include="../../samples/Valiant.Settings.Samples/Valiant.Settings.Samples.csproj" />
+    <ProjectReference Include="../../../validation/src/Valiant.Validation/Valiant.Validation.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>
