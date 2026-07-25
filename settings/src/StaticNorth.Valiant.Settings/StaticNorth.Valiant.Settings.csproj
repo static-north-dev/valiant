@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <PackageId>StaticNorth.Valiant.Settings</PackageId>
+    <Description>Source-generation primitives for strongly typed settings schemas.</Description>
+    <PackageTags>settings;configuration;schema;source-generator;aot;nativeaot</PackageTags>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddValiantSettingsSourceGeneratorToPackage</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="buildTransitive/StaticNorth.Valiant.Settings.props" Pack="true" PackagePath="buildTransitive/StaticNorth.Valiant.Settings.props" />
+    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
+    <ProjectReference Include="../StaticNorth.Valiant.Settings.SourceGeneration/StaticNorth.Valiant.Settings.SourceGeneration.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" Condition="'$(BuildProjectReferences)' != 'false'" />
+  </ItemGroup>
+
+  <Target Name="BuildValiantSettingsSourceGeneratorForPack" Condition="'$(NoBuild)' != 'true'">
+    <MSBuild Projects="../StaticNorth.Valiant.Settings.SourceGeneration/StaticNorth.Valiant.Settings.SourceGeneration.csproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" RemoveProperties="TargetFrameworks;RuntimeIdentifier;SelfContained" />
+  </Target>
+
+  <Target Name="AddValiantSettingsSourceGeneratorToPackage" DependsOnTargets="BuildValiantSettingsSourceGeneratorForPack" Condition="'$(TargetFramework)' == 'net8.0'">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="../StaticNorth.Valiant.Settings.SourceGeneration/bin/$(Configuration)/netstandard2.0/StaticNorth.Valiant.Settings.SourceGeneration.dll" PackagePath="analyzers/dotnet/cs" />
+    </ItemGroup>
+  </Target>
+
+</Project>

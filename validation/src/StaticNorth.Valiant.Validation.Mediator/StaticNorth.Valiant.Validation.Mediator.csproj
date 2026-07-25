@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageId>StaticNorth.Valiant.Validation.Mediator</PackageId>
+    <Description>Source-generated Mediator pipeline behavior integration for Valiant validation.</Description>
+    <PackageTags>validation;mediator;source-generator;pipeline-behavior;cqrs</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Mediator.Abstractions" />
+    <ProjectReference Include="..\StaticNorth.Valiant.Validation\StaticNorth.Valiant.Validation.csproj" PrivateAssets="contentfiles" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="contentFiles\**\*.cs" />
+    <None Include="buildTransitive\StaticNorth.Valiant.Validation.Mediator.props" Pack="true" PackagePath="buildTransitive\StaticNorth.Valiant.Validation.Mediator.props" />
+    <None Include="contentFiles\cs\any\ValiantMediatorServiceCollectionExtensions.cs" Pack="true" PackagePath="contentFiles\cs\any\ValiantMediatorServiceCollectionExtensions.cs" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,7 @@
+<Project>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)..\contentFiles\cs\any\ValiantMediatorServiceCollectionExtensions.cs"
+             Link="StaticNorth.Valiant.Validation.Mediator\ValiantMediatorServiceCollectionExtensions.cs"
+             Visible="false" />
+  </ItemGroup>
+</Project>

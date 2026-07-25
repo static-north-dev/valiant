@@ -1,0 +1,78 @@
+{
+  "validationSidebar": [
+    "validation/index",
+    "validation/quick-start",
+    "validation/samples",
+    {
+      "type": "category",
+      "label": "Guides",
+      "items": [
+        "validation/guides/authoring-rules",
+        "validation/guides/composition-control-flow",
+        "validation/guides/aspnetcore-openapi",
+        "validation/guides/mediator-pipelines"
+      ]
+    },
+    {
+      "type": "category",
+      "label": "Reference",
+      "items": [
+        "validation/reference/validation-checks",
+        "validation/reference/runtime-generation",
+        "validation/reference/packages"
+      ]
+    }
+  ],
+  "endpointsSidebar": [
+    "endpoints/index",
+    "endpoints/quick-start",
+    "endpoints/samples",
+    {
+      "type": "category",
+      "label": "Guides",
+      "items": [
+        "endpoints/guides/groups-conventions",
+        "endpoints/guides/conditional-registration",
+        "endpoints/guides/request-binding"
+      ]
+    },
+    {
+      "type": "category",
+      "label": "Reference",
+      "items": [
+        "endpoints/reference/query-parameters",
+        "endpoints/reference/registration-generation"
+      ]
+    }
+  ],
+  "mappingSidebar": [
+    "mapping/index",
+    "mapping/quick-start",
+    "mapping/samples",
+    {
+      "type": "category",
+      "label": "Guides",
+      "items": [
+        "mapping/guides/conventions",
+        "mapping/guides/explicit-mapping",
+        "mapping/guides/composition-dependency-injection"
+      ]
+    },
+    "mapping/reference"
+  ],
+  "settingsSidebar": [
+    "settings/index",
+    "settings/quick-start",
+    "settings/samples",
+    {
+      "type": "category",
+      "label": "Guides",
+      "items": [
+        "settings/guides/schema-generation",
+        "settings/guides/binding-validation",
+        "settings/guides/aspnetcore-ui"
+      ]
+    },
+    "settings/reference/schema-api"
+  ]
+}

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageId>StaticNorth.Valiant.Settings.AspNetCore</PackageId>
+    <Description>ASP.NET Core UI helpers for visualizing generated Valiant settings schemas.</Description>
+    <PackageTags>settings;configuration;schema;aspnetcore;ui</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../StaticNorth.Valiant.Settings/StaticNorth.Valiant.Settings.csproj" PrivateAssets="contentfiles" />
+  </ItemGroup>
+
+</Project>

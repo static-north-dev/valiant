@@ -1,0 +1,154 @@
+name: Release
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-publication
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  NUGET_SOURCE: https://api.nuget.org/v3/index.json
+  PACKAGE_OUTPUT: artifacts/packages
+
+jobs:
+  prepare:
+    name: verify and package release
+    runs-on: ubuntu-latest
+    outputs:
+      package_version: ${{ steps.version.outputs.package_version }}
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Derive version from release tag
+        id: version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          bash .github/scripts/derive-release-version.sh "$RELEASE_TAG" "$GITHUB_OUTPUT"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Report .NET SDK
+        run: dotnet --version
+
+      - name: Restore locked dependency graph
+        run: dotnet restore StaticNorth.Valiant.Release.slnf --locked-mode
+
+      - name: Build
+        run: >
+          dotnet build StaticNorth.Valiant.Release.slnf
+          --configuration Release
+          --no-restore
+          --disable-build-servers
+          -p:Version="${{ steps.version.outputs.package_version }}"
+          -p:PackageVersion="${{ steps.version.outputs.package_version }}"
+
+      - name: Test
+        run: dotnet test --solution StaticNorth.Valiant.Release.slnf --configuration Release --no-build
+
+      - name: Audit dependencies
+        shell: bash
+        run: |
+          projects=()
+          while IFS= read -r project; do
+            projects+=("$project")
+          done < <(dotnet sln StaticNorth.Valiant.Release.slnf list | awk '/\.csproj$/')
+
+          if [ "${#projects[@]}" -eq 0 ]; then
+            echo "No PackageReference projects were found in StaticNorth.Valiant.Release.slnf." >&2
+            exit 1
+          fi
+
+          for project in "${projects[@]}"; do
+            echo "::group::Audit $project"
+            dotnet list "$project" package --vulnerable --include-transitive --no-restore
+            echo "::endgroup::"
+          done
+
+      - name: Pack, inspect, and run leaf consumers
+        run: >
+          dotnet msbuild StaticNorth.Valiant.Pack.proj
+          -t:VerifyPackageConsumers
+          -m:1
+          -p:Configuration=Release
+          -p:NoBuild=true
+          -p:PackageVersion="${{ steps.version.outputs.package_version }}"
+
+      - name: Publish and run Native AOT package smoke
+        run: >
+          dotnet msbuild StaticNorth.Valiant.Pack.proj
+          -t:VerifyAotSmoke
+          -m:1
+          -p:Configuration=Release
+          -p:NoBuild=true
+          -p:PackageVersion="${{ steps.version.outputs.package_version }}"
+          -p:AotRuntimeIdentifier=linux-x64
+
+      - name: Upload verified packages
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: valiant-packages-${{ steps.version.outputs.package_version }}
+          path: |
+            ${{ env.PACKAGE_OUTPUT }}/*.nupkg
+            ${{ env.PACKAGE_OUTPUT }}/*.snupkg
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-nuget:
+    name: publish NuGet packages
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          dotnet-version: 10.0.110
+
+      - name: Download verified packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: valiant-packages-${{ needs.prepare.outputs.package_version }}
+          path: artifacts/packages
+
+      - name: NuGet login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        id: nuget-login
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Publish to NuGet
+        shell: bash
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "NuGet trusted publishing did not return a temporary API key." >&2
+            exit 1
+          fi
+
+          for package in "$PACKAGE_OUTPUT"/*.nupkg; do
+            dotnet nuget push "$package" \
+              --api-key "$NUGET_API_KEY" \
+              --source "$NUGET_SOURCE" \
+              --skip-duplicate
+          done

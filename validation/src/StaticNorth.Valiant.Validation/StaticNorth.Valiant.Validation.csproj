@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <PackageId>StaticNorth.Valiant.Validation</PackageId>
+    <Description>A source-generated, AOT-friendly validation library for .NET.</Description>
+    <PackageTags>validation;source-generator;aot;nativeaot;dependency-injection</PackageTags>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddValiantSourceGeneratorToPackage</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="buildTransitive/StaticNorth.Valiant.Validation.props" Pack="true" PackagePath="buildTransitive/StaticNorth.Valiant.Validation.props" />
+    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
+    <ProjectReference Include="../StaticNorth.Valiant.Validation.SourceGeneration/StaticNorth.Valiant.Validation.SourceGeneration.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" Condition="'$(BuildProjectReferences)' != 'false'" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="System.Threading.Tasks.Extensions" />
+  </ItemGroup>
+
+  <Target Name="BuildValiantSourceGeneratorForPack" Condition="'$(NoBuild)' != 'true'">
+    <MSBuild Projects="../StaticNorth.Valiant.Validation.SourceGeneration/StaticNorth.Valiant.Validation.SourceGeneration.csproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" RemoveProperties="TargetFrameworks;RuntimeIdentifier;SelfContained" />
+  </Target>
+
+  <Target Name="AddValiantSourceGeneratorToPackage" DependsOnTargets="BuildValiantSourceGeneratorForPack" Condition="'$(TargetFramework)' == 'net8.0'">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="../StaticNorth.Valiant.Validation.SourceGeneration/bin/$(Configuration)/netstandard2.0/StaticNorth.Valiant.Validation.SourceGeneration.dll" PackagePath="analyzers/dotnet/cs" />
+    </ItemGroup>
+  </Target>
+
+</Project>

@@ -1,0 +1,185 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Report .NET SDK
+        run: dotnet --version
+
+      - name: Restore locked dependency graph
+        run: dotnet restore StaticNorth.Valiant.sln --locked-mode
+
+      - name: Build
+        run: dotnet build StaticNorth.Valiant.sln --configuration Release --no-restore --disable-build-servers
+
+      - name: Test
+        run: dotnet test --solution StaticNorth.Valiant.sln --configuration Release --no-build
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: test-results-${{ matrix.os }}
+          path: '**/bin/**/TestResults/**'
+          if-no-files-found: warn
+          retention-days: 14
+
+  package-consumers:
+    name: pack and consume
+    needs: verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Report .NET SDK
+        run: dotnet --version
+
+      - name: Restore locked dependency graph
+        run: dotnet restore StaticNorth.Valiant.sln --locked-mode
+
+      - name: Build
+        run: dotnet build StaticNorth.Valiant.sln --configuration Release --no-restore --disable-build-servers
+
+      - name: Pack, inspect, and run leaf consumers
+        run: dotnet msbuild StaticNorth.Valiant.Pack.proj -t:VerifyPackageConsumers -m:1 -p:Configuration=Release -p:NoBuild=true
+
+      - name: Upload packages
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: valiant-packages
+          path: artifacts/packages/*.*nupkg
+          if-no-files-found: error
+          retention-days: 14
+
+  native-aot:
+    name: native aot (linux x64)
+    needs: verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Report .NET SDK
+        run: dotnet --version
+
+      - name: Restore locked dependency graph
+        run: dotnet restore StaticNorth.Valiant.sln --locked-mode
+
+      - name: Build
+        run: dotnet build StaticNorth.Valiant.sln --configuration Release --no-restore --disable-build-servers
+
+      - name: Publish and run Native AOT package smoke
+        run: dotnet msbuild StaticNorth.Valiant.Pack.proj -t:VerifyAotSmoke -m:1 -p:Configuration=Release -p:NoBuild=true -p:AotRuntimeIdentifier=linux-x64
+
+  build-docs:
+    name: build docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install documentation dependencies
+        run: npm ci
+        working-directory: docs
+
+      - name: Audit documentation dependencies
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: docs
+
+      - name: Test documentation versioning
+        run: npm run test:docs-versions
+        working-directory: docs
+
+      - name: Build documentation
+        run: npm run build
+        working-directory: docs
+
+  dependency-audit:
+    name: dependency advisory audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Report .NET SDK
+        run: dotnet --version
+
+      - name: Restore locked dependency graph
+        run: dotnet restore StaticNorth.Valiant.sln --locked-mode
+
+      - name: Audit dependencies
+        shell: bash
+        run: |
+          projects=()
+          while IFS= read -r project; do
+            projects+=("$project")
+          done < <(dotnet sln StaticNorth.Valiant.sln list | awk '/\.csproj$/')
+
+          if [ "${#projects[@]}" -eq 0 ]; then
+            echo "No PackageReference projects were found in StaticNorth.Valiant.sln." >&2
+            exit 1
+          fi
+
+          for project in "${projects[@]}"; do
+            echo "::group::Audit $project"
+            dotnet list "$project" package --vulnerable --include-transitive --no-restore
+            echo "::endgroup::"
+          done

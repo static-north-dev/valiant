@@ -1,0 +1,418 @@
+name: Publish Docs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-publication
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_PAGES_PROJECT: valiant-docs
+  CLOUDFLARE_PAGES_PRODUCTION_BRANCH: main
+
+jobs:
+  prepare:
+    name: pin documentation source
+    runs-on: ubuntu-latest
+    outputs:
+      docs_major: ${{ steps.source.outputs.docs_major }}
+      source_sha: ${{ steps.source.outputs.source_sha }}
+
+    steps:
+      - name: Checkout canonical documentation source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: develop
+          path: docs-source
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+
+      - name: Read current documentation major and source SHA
+        id: source
+        shell: bash
+        working-directory: docs-source
+        run: |
+          docs_major="$(node docs/scripts/current-major.js)"
+          source_sha="$(git rev-parse HEAD)"
+          echo "docs_major=$docs_major" >>"$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >>"$GITHUB_OUTPUT"
+
+  generate-docs-snapshot:
+    name: generate documentation snapshot
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout pinned documentation source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          path: docs-source
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs-source/docs/package-lock.json
+
+      - name: Install documentation dependencies
+        run: npm ci
+        working-directory: docs-source/docs
+
+      - name: Test documentation tooling
+        run: npm run test:docs-versions
+        working-directory: docs-source/docs
+
+      - name: Audit documentation dependencies
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: docs-source/docs
+
+      - name: Generate current major snapshot
+        env:
+          DOCS_MAJOR: ${{ needs.prepare.outputs.docs_major }}
+        run: npm run docs:snapshot-major -- "$DOCS_MAJOR"
+        working-directory: docs-source/docs
+
+      - name: Stage constrained snapshot artifact
+        shell: bash
+        env:
+          DOCS_MAJOR: ${{ needs.prepare.outputs.docs_major }}
+          SNAPSHOT_ROOT: ${{ runner.temp }}/docs-snapshot
+        run: |
+          mkdir -p "$SNAPSHOT_ROOT"
+          snapshot_paths=(
+            "versioned_docs/version-$DOCS_MAJOR"
+            "versioned_sidebars/version-$DOCS_MAJOR-sidebars.json"
+          )
+
+          for relative_path in "${snapshot_paths[@]}"; do
+            source_path="docs-source/docs/$relative_path"
+            if [ ! -e "$source_path" ]; then
+              echo "Missing generated snapshot path: $relative_path" >&2
+              exit 1
+            fi
+
+            if [ -L "$source_path" ] ||
+               find "$source_path" -type l -print -quit | grep -q .; then
+              echo "Generated snapshot path contains a symlink: $relative_path" >&2
+              exit 1
+            fi
+
+            mkdir -p "$(dirname "$SNAPSHOT_ROOT/$relative_path")"
+            cp -R "$source_path" "$SNAPSHOT_ROOT/$relative_path"
+          done
+
+      - name: Upload documentation snapshot
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: valiant-docs-snapshot-${{ needs.prepare.outputs.docs_major }}
+          path: ${{ runner.temp }}/docs-snapshot
+          if-no-files-found: error
+          retention-days: 7
+
+  verify-docs-candidate:
+    name: verify candidate documentation history
+    needs:
+      - prepare
+      - generate-docs-snapshot
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout pinned documentation history
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          path: docs-history
+          persist-credentials: false
+
+      - name: Download documentation snapshot
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: valiant-docs-snapshot-${{ needs.prepare.outputs.docs_major }}
+          path: ${{ runner.temp }}/docs-snapshot
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs-history/docs/package-lock.json
+
+      - name: Install documentation dependencies
+        run: npm ci
+        working-directory: docs-history/docs
+
+      - name: Import current major into complete history
+        env:
+          DOCS_MAJOR: ${{ needs.prepare.outputs.docs_major }}
+          SNAPSHOT_ROOT: ${{ runner.temp }}/docs-snapshot
+        run: npm run docs:import-major -- "$DOCS_MAJOR" "$SNAPSHOT_ROOT"
+        working-directory: docs-history/docs
+
+      - name: Validate documentation major
+        env:
+          DOCS_MAJOR: ${{ needs.prepare.outputs.docs_major }}
+        run: npm run docs:validate-major -- "$DOCS_MAJOR"
+        working-directory: docs-history/docs
+
+      - name: Build candidate documentation
+        env:
+          DOCS_INCLUDE_CURRENT: false
+        run: npm run build
+        working-directory: docs-history/docs
+
+      - name: Validate every generated major route
+        shell: bash
+        working-directory: docs-history
+        run: |
+          mapfile -t majors < <(node -e "for (const version of require('./docs/versions.json')) console.log(version)")
+          if [ "${#majors[@]}" -eq 0 ]; then
+            echo "No documentation majors were generated." >&2
+            exit 1
+          fi
+
+          newest_major="${majors[0]}"
+          for product in validation endpoints mapping settings; do
+            for major in "${majors[@]}"; do
+              if [ "$major" = "$newest_major" ]; then
+                route="docs/build/$product/index.html"
+              else
+                route="docs/build/$major/$product/index.html"
+              fi
+
+              if [ ! -f "$route" ]; then
+                echo "Missing generated documentation route: $route" >&2
+                exit 1
+              fi
+            done
+          done
+
+  cloudflare-preflight:
+    name: ensure Cloudflare Pages project
+    needs:
+      - prepare
+      - verify-docs-candidate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout pinned deployment automation
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Ensure Cloudflare Pages project
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: bash .github/scripts/ensure-cloudflare-pages-project.sh
+
+  persist-docs-snapshot:
+    name: persist documentation snapshot
+    needs:
+      - prepare
+      - generate-docs-snapshot
+      - verify-docs-candidate
+      - cloudflare-preflight
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      docs_commit: ${{ steps.persist.outputs.docs_commit }}
+
+    steps:
+      - name: Checkout pinned documentation source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Download validated documentation snapshot
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: valiant-docs-snapshot-${{ needs.prepare.outputs.docs_major }}
+          path: ${{ runner.temp }}/docs-snapshot
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+
+      - name: Import, commit, and push documentation snapshot
+        id: persist
+        shell: bash
+        env:
+          DOCS_MAJOR: ${{ needs.prepare.outputs.docs_major }}
+          DOCS_SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          SNAPSHOT_ROOT: ${{ runner.temp }}/docs-snapshot
+        run: |
+          git fetch origin develop
+          remote_head="$(git rev-parse origin/develop)"
+          if [ "$remote_head" != "$DOCS_SOURCE_SHA" ]; then
+            echo "develop moved from $DOCS_SOURCE_SHA to $remote_head during publication." >&2
+            echo "Run the Publish Docs workflow again to publish the new head safely." >&2
+            exit 1
+          fi
+
+          current_major="$(node docs/scripts/current-major.js)"
+          if [ "$current_major" != "$DOCS_MAJOR" ]; then
+            echo "The tracked documentation major changed during publication." >&2
+            echo "Run the Publish Docs workflow again." >&2
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          node docs/scripts/docs-versions.js import "$DOCS_MAJOR" "$SNAPSHOT_ROOT"
+          node docs/scripts/docs-versions.js validate "$DOCS_MAJOR"
+
+          git add \
+            docs/versions.json \
+            docs/versioned_docs \
+            docs/versioned_sidebars
+
+          if git diff --cached --quiet; then
+            docs_commit="$DOCS_SOURCE_SHA"
+          else
+            short_source="${DOCS_SOURCE_SHA:0:12}"
+            git commit -m "docs: publish v$DOCS_MAJOR from $short_source"
+            if ! push_output="$(git push origin HEAD:develop 2>&1)"; then
+              echo "$push_output" >&2
+              echo "Could not persist the documentation snapshot; verify branch rules or rerun if develop moved." >&2
+              exit 1
+            fi
+            echo "$push_output"
+            docs_commit="$(git rev-parse HEAD)"
+          fi
+
+          git fetch origin develop
+          if [ "$(git rev-parse origin/develop)" != "$docs_commit" ]; then
+            echo "origin/develop does not match the persisted documentation commit." >&2
+            exit 1
+          fi
+
+          echo "docs_commit=$docs_commit" >>"$GITHUB_OUTPUT"
+
+  verify-docs:
+    name: verify persisted documentation
+    needs:
+      - prepare
+      - persist-docs-snapshot
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout persisted documentation commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.persist-docs-snapshot.outputs.docs_commit }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install documentation dependencies
+        run: npm ci
+        working-directory: docs
+
+      - name: Test persisted documentation
+        run: npm run test:docs-versions
+        working-directory: docs
+
+      - name: Audit documentation dependencies
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: docs
+
+      - name: Validate documentation major
+        env:
+          DOCS_MAJOR: ${{ needs.prepare.outputs.docs_major }}
+        run: npm run docs:validate-major -- "$DOCS_MAJOR"
+        working-directory: docs
+
+      - name: Build persisted documentation
+        env:
+          DOCS_INCLUDE_CURRENT: false
+        run: npm run build
+        working-directory: docs
+
+      - name: Validate every persisted major route
+        shell: bash
+        run: |
+          mapfile -t majors < <(node -e "for (const version of require('./docs/versions.json')) console.log(version)")
+          if [ "${#majors[@]}" -eq 0 ]; then
+            echo "No documentation majors were generated." >&2
+            exit 1
+          fi
+
+          newest_major="${majors[0]}"
+          for product in validation endpoints mapping settings; do
+            for major in "${majors[@]}"; do
+              if [ "$major" = "$newest_major" ]; then
+                route="docs/build/$product/index.html"
+              else
+                route="docs/build/$major/$product/index.html"
+              fi
+
+              if [ ! -f "$route" ]; then
+                echo "Missing generated documentation route: $route" >&2
+                exit 1
+              fi
+            done
+          done
+
+      - name: Upload verified documentation site
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: valiant-docs-${{ needs.prepare.outputs.docs_major }}
+          path: docs/build
+          if-no-files-found: error
+          retention-days: 30
+
+  deploy-docs:
+    name: deploy documentation to Cloudflare Pages
+    needs:
+      - prepare
+      - persist-docs-snapshot
+      - verify-docs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - name: Checkout persisted documentation commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.persist-docs-snapshot.outputs.docs_commit }}
+          persist-credentials: false
+
+      - name: Download verified documentation site
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: valiant-docs-${{ needs.prepare.outputs.docs_major }}
+          path: docs/build
+
+      - name: Deploy documentation
+        id: deploy
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          wranglerVersion: 4.114.0
+          workingDirectory: docs
+          command: pages deploy build --project-name=${{ env.CLOUDFLARE_PAGES_PROJECT }} --branch=${{ env.CLOUDFLARE_PAGES_PRODUCTION_BRANCH }}

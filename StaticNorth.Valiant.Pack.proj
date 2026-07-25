@@ -1,0 +1,60 @@
+<Project>
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+    <NoBuild Condition="'$(NoBuild)' == ''">false</NoBuild>
+    <PackageVersion Condition="'$(PackageVersion)' == ''">0.1.0-preview.1</PackageVersion>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)artifacts/packages</PackageOutputPath>
+    <AotRuntimeIdentifier Condition="'$(AotRuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">osx-arm64</AotRuntimeIdentifier>
+    <AotExecutableExtension Condition="$([System.String]::Copy('$(AotRuntimeIdentifier)').StartsWith('win'))">.exe</AotExecutableExtension>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackProject Include="validation/src/StaticNorth.Valiant.Validation/StaticNorth.Valiant.Validation.csproj" PackageId="StaticNorth.Valiant.Validation" />
+    <PackProject Include="validation/src/StaticNorth.Valiant.Validation.AspNetCore/StaticNorth.Valiant.Validation.AspNetCore.csproj" PackageId="StaticNorth.Valiant.Validation.AspNetCore" />
+    <PackProject Include="validation/src/StaticNorth.Valiant.Validation.AspNetCore.OpenApi/StaticNorth.Valiant.Validation.AspNetCore.OpenApi.csproj" PackageId="StaticNorth.Valiant.Validation.AspNetCore.OpenApi" />
+    <PackProject Include="validation/src/StaticNorth.Valiant.Validation.MediatR/StaticNorth.Valiant.Validation.MediatR.csproj" PackageId="StaticNorth.Valiant.Validation.MediatR" />
+    <PackProject Include="validation/src/StaticNorth.Valiant.Validation.Mediator/StaticNorth.Valiant.Validation.Mediator.csproj" PackageId="StaticNorth.Valiant.Validation.Mediator" />
+    <PackProject Include="mapping/src/StaticNorth.Valiant.Mapping/StaticNorth.Valiant.Mapping.csproj" PackageId="StaticNorth.Valiant.Mapping" />
+    <PackProject Include="endpoints/src/StaticNorth.Valiant.Endpoints.AspNetCore/StaticNorth.Valiant.Endpoints.AspNetCore.csproj" PackageId="StaticNorth.Valiant.Endpoints.AspNetCore" />
+    <PackProject Include="settings/src/StaticNorth.Valiant.Settings/StaticNorth.Valiant.Settings.csproj" PackageId="StaticNorth.Valiant.Settings" />
+    <PackProject Include="settings/src/StaticNorth.Valiant.Settings.AspNetCore/StaticNorth.Valiant.Settings.AspNetCore.csproj" PackageId="StaticNorth.Valiant.Settings.AspNetCore" />
+    <PackProject Include="settings/src/StaticNorth.Valiant.Settings.Validation/StaticNorth.Valiant.Settings.Validation.csproj" PackageId="StaticNorth.Valiant.Settings.Validation" />
+
+    <PackageConsumer Include="smoke/StaticNorth.Valiant.Endpoints.PackageConsumer/StaticNorth.Valiant.Endpoints.PackageConsumer.csproj" />
+    <PackageConsumer Include="smoke/StaticNorth.Valiant.Mapping.PackageConsumer/StaticNorth.Valiant.Mapping.PackageConsumer.csproj" />
+    <PackageConsumer Include="smoke/StaticNorth.Valiant.Validation.AspNetCore.PackageConsumer/StaticNorth.Valiant.Validation.AspNetCore.PackageConsumer.csproj" />
+    <PackageConsumer Include="smoke/StaticNorth.Valiant.Validation.OpenApi.PackageConsumer/StaticNorth.Valiant.Validation.OpenApi.PackageConsumer.csproj" />
+    <PackageConsumer Include="smoke/StaticNorth.Valiant.Settings.AspNetCore.PackageConsumer/StaticNorth.Valiant.Settings.AspNetCore.PackageConsumer.csproj" />
+    <PackageConsumer Include="smoke/StaticNorth.Valiant.Settings.Validation.PackageConsumer/StaticNorth.Valiant.Settings.Validation.PackageConsumer.csproj" />
+    <PackageConsumer Include="smoke/StaticNorth.Valiant.Validation.MediatR.PackageConsumer/StaticNorth.Valiant.Validation.MediatR.PackageConsumer.csproj" />
+    <PackageConsumer Include="smoke/StaticNorth.Valiant.Validation.Mediator.PackageConsumer/StaticNorth.Valiant.Validation.Mediator.PackageConsumer.csproj" />
+  </ItemGroup>
+
+  <Target Name="Pack">
+    <MSBuild
+      Projects="@(PackProject)"
+      Targets="Pack"
+      BuildInParallel="false"
+      Properties="Configuration=$(Configuration);NoBuild=$(NoBuild);Version=$(PackageVersion);PackageVersion=$(PackageVersion);PackageOutputPath=$(PackageOutputPath)" />
+  </Target>
+
+  <Target Name="VerifyPackageArtifacts" DependsOnTargets="Pack">
+    <Exec Command="dotnet run --project &quot;smoke/StaticNorth.Valiant.PackageVerifier/StaticNorth.Valiant.PackageVerifier.csproj&quot; --configuration $(Configuration) -- &quot;$(PackageOutputPath)&quot; &quot;$(PackageVersion)&quot;" />
+  </Target>
+
+  <Target Name="PreparePackageSmokeCache" DependsOnTargets="VerifyPackageArtifacts">
+    <RemoveDir Directories="$(MSBuildThisFileDirectory)artifacts/nuget-packages" />
+  </Target>
+
+  <Target Name="VerifyPackageConsumers" DependsOnTargets="PreparePackageSmokeCache">
+    <Exec
+      Command="dotnet restore &quot;%(PackageConsumer.Identity)&quot; --configfile &quot;smoke/NuGet.Config&quot; --packages &quot;artifacts/nuget-packages&quot; --force-evaluate -p:StaticNorthValiantPackageVersion=$(PackageVersion)" />
+    <Exec
+      Command="dotnet run --project &quot;%(PackageConsumer.Identity)&quot; --configuration $(Configuration) --no-restore -p:StaticNorthValiantPackageVersion=$(PackageVersion)" />
+  </Target>
+
+  <Target Name="VerifyAotSmoke" DependsOnTargets="PreparePackageSmokeCache" Condition="'$(AotRuntimeIdentifier)' != ''">
+    <Exec Command="dotnet publish &quot;smoke/StaticNorth.Valiant.AotSmoke/StaticNorth.Valiant.AotSmoke.csproj&quot; --configuration $(Configuration) --runtime $(AotRuntimeIdentifier) --self-contained true -p:StaticNorthValiantPackageVersion=$(PackageVersion) -p:RestoreConfigFile=$(MSBuildThisFileDirectory)smoke/NuGet.Config -p:RestorePackagesPath=$(MSBuildThisFileDirectory)artifacts/nuget-packages -p:RestoreForce=true" />
+    <Exec Command="smoke/StaticNorth.Valiant.AotSmoke/bin/$(Configuration)/net10.0/$(AotRuntimeIdentifier)/publish/StaticNorth.Valiant.AotSmoke$(AotExecutableExtension)" />
+  </Target>
+</Project>

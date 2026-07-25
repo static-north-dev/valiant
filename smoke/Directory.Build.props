@@ -1,0 +1,15 @@
+<Project>
+  <Import Project="../Directory.Build.props" />
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <RestoreLockedMode>false</RestoreLockedMode>
+    <StaticNorthValiantPackageVersion Condition="'$(StaticNorthValiantPackageVersion)' == ''">0.1.0-preview.1</StaticNorthValiantPackageVersion>
+    <NoWarn>$(NoWarn);CA1050</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'StaticNorth.Valiant.PackageVerifier'">
+    <PackageReference Include="Microsoft.Net.Compilers.Toolset" Version="5.6.0" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

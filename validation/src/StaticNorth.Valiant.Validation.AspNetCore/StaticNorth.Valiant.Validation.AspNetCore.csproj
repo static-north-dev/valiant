@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageId>StaticNorth.Valiant.Validation.AspNetCore</PackageId>
+    <Description>ASP.NET Core integration helpers for Valiant validation.</Description>
+    <PackageTags>validation;aspnetcore;minimal-api;mvc;problem-details</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../StaticNorth.Valiant.Validation/StaticNorth.Valiant.Validation.csproj" PrivateAssets="contentfiles" />
+  </ItemGroup>
+
+</Project>

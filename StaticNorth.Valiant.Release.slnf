@@ -1,0 +1,34 @@
+{
+  "solution": {
+    "path": "StaticNorth.Valiant.sln",
+    "projects": [
+      "validation/samples/StaticNorth.Valiant.Validation.AspNetCore.Samples/StaticNorth.Valiant.Validation.AspNetCore.Samples.csproj",
+      "validation/samples/StaticNorth.Valiant.Validation.Samples/StaticNorth.Valiant.Validation.Samples.csproj",
+      "validation/tests/StaticNorth.Valiant.Validation.Tests/StaticNorth.Valiant.Validation.Tests.csproj",
+      "validation/src/StaticNorth.Valiant.Validation/StaticNorth.Valiant.Validation.csproj",
+      "validation/src/StaticNorth.Valiant.Validation.SourceGeneration/StaticNorth.Valiant.Validation.SourceGeneration.csproj",
+      "validation/src/StaticNorth.Valiant.Validation.MediatR/StaticNorth.Valiant.Validation.MediatR.csproj",
+      "validation/src/StaticNorth.Valiant.Validation.Mediator/StaticNorth.Valiant.Validation.Mediator.csproj",
+      "validation/src/StaticNorth.Valiant.Validation.AspNetCore.OpenApi/StaticNorth.Valiant.Validation.AspNetCore.OpenApi.csproj",
+      "validation/src/StaticNorth.Valiant.Validation.AspNetCore/StaticNorth.Valiant.Validation.AspNetCore.csproj",
+      "mapping/src/StaticNorth.Valiant.Mapping/StaticNorth.Valiant.Mapping.csproj",
+      "mapping/src/StaticNorth.Valiant.Mapping.SourceGeneration/StaticNorth.Valiant.Mapping.SourceGeneration.csproj",
+      "mapping/tests/StaticNorth.Valiant.Mapping.Tests/StaticNorth.Valiant.Mapping.Tests.csproj",
+      "mapping/samples/StaticNorth.Valiant.Mapping.Samples/StaticNorth.Valiant.Mapping.Samples.csproj",
+      "shared/src/StaticNorth.Valiant.SourceGeneration/StaticNorth.Valiant.SourceGeneration.csproj",
+      "endpoints/src/StaticNorth.Valiant.Endpoints.AspNetCore/StaticNorth.Valiant.Endpoints.AspNetCore.csproj",
+      "endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples.csproj",
+      "endpoints/src/StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration/StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration.csproj",
+      "endpoints/src/StaticNorth.Valiant.Endpoints/StaticNorth.Valiant.Endpoints.csproj",
+      "endpoints/tests/StaticNorth.Valiant.Endpoints.Tests/StaticNorth.Valiant.Endpoints.Tests.csproj",
+      "settings/src/StaticNorth.Valiant.Settings/StaticNorth.Valiant.Settings.csproj",
+      "settings/src/StaticNorth.Valiant.Settings.SourceGeneration/StaticNorth.Valiant.Settings.SourceGeneration.csproj",
+      "settings/tests/StaticNorth.Valiant.Settings.Tests/StaticNorth.Valiant.Settings.Tests.csproj",
+      "settings/samples/StaticNorth.Valiant.Settings.Samples/StaticNorth.Valiant.Settings.Samples.csproj",
+      "settings/src/StaticNorth.Valiant.Settings.AspNetCore/StaticNorth.Valiant.Settings.AspNetCore.csproj",
+      "settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/StaticNorth.Valiant.Settings.AspNetCore.Samples.csproj",
+      "settings/src/StaticNorth.Valiant.Settings.Validation/StaticNorth.Valiant.Settings.Validation.csproj",
+      "endpoints/tests/StaticNorth.Valiant.Endpoints.AspNetCore.TestApp/StaticNorth.Valiant.Endpoints.AspNetCore.TestApp.csproj"
+    ]
+  }
+}

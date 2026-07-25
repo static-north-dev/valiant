@@ -1,0 +1,57 @@
+<Project>
+  <!--
+    Preserve the existing source-generator analyzer baseline while making every
+    newly introduced compiler and .NET analyzer warning fail the build.
+  -->
+  <PropertyGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').EndsWith('.SourceGeneration'))">
+    <NoWarn>$(NoWarn);CA1068;CA1305;CA1834;CA1859;CA2016</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
+    <NoWarn>$(NoWarn);CA1000;CA1305;CA1707;CA1861</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'StaticNorth.Valiant.Settings'">
+    <NoWarn>$(NoWarn);CA1720</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'StaticNorth.Valiant.Validation'">
+    <NoWarn>$(NoWarn);CA1859;CA1865;CA2249</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'StaticNorth.Valiant.Endpoints.AspNetCore'">
+    <NoWarn>$(NoWarn);CA1859</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'StaticNorth.Valiant.Endpoints.AspNetCore.TestApp'">
+    <NoWarn>$(NoWarn);CA1305</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'StaticNorth.Valiant.Settings.AspNetCore'">
+    <NoWarn>$(NoWarn);CA1859</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'StaticNorth.Valiant.Validation.AspNetCore'">
+    <NoWarn>$(NoWarn);CA2263</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'StaticNorth.Valiant.Validation.AspNetCore.OpenApi'">
+    <NoWarn>$(NoWarn);CA1859</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsPackable)' == 'true' and '$(OutputType)' != 'Exe'">
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildProjectDirectory)/../../README.md"
+          Pack="true"
+          PackagePath="/"
+          Condition="Exists('$(MSBuildProjectDirectory)/../../README.md')" />
+    <None Include="$(MSBuildThisFileDirectory)assets/logo.png"
+          Pack="true"
+          PackagePath="/" />
+  </ItemGroup>
+</Project>

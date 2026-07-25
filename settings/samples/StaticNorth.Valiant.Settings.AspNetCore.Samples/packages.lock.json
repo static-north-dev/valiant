@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0": {
+      "Microsoft.Net.Compilers.Toolset": {
+        "type": "Direct",
+        "requested": "[5.6.0, )",
+        "resolved": "5.6.0",
+        "contentHash": "9zNchixeYg1+Gqwvv/tPbExDrF7Q6OfL222GCVls6M/q0Vng2LQ55WxossnyJ/rQAFmEXnSVY7c/MFjPr48/Mg=="
+      },
+      "staticnorth.valiant.settings": {
+        "type": "Project"
+      },
+      "staticnorth.valiant.settings.aspnetcore": {
+        "type": "Project",
+        "dependencies": {
+          "StaticNorth.Valiant.Settings": "[0.1.0-preview.1, )"
+        }
+      },
+      "staticnorth.valiant.settings.validation": {
+        "type": "Project",
+        "dependencies": {
+          "StaticNorth.Valiant.Settings": "[0.1.0-preview.1, )",
+          "StaticNorth.Valiant.Validation": "[0.1.0-preview.1, )"
+        }
+      },
+      "staticnorth.valiant.validation": {
+        "type": "Project"
+      }
+    }
+  }
+}
