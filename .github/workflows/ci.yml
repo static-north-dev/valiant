@@ -133,7 +133,7 @@ jobs:
         working-directory: docs
 
       - name: Audit documentation dependencies
-        run: npm audit --omit=dev --audit-level=high
+        run: npm run audit:dependencies
         working-directory: docs
 
       - name: Test documentation versioning

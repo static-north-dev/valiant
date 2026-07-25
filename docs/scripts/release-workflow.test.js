@@ -17,6 +17,10 @@ const docsWorkflow = fs.readFileSync(
   path.join(workflowsRoot, 'publish-docs.yml'),
   'utf8',
 );
+const ciWorkflow = fs.readFileSync(
+  path.join(workflowsRoot, 'ci.yml'),
+  'utf8',
+);
 const releaseSolutionFilter = JSON.parse(
   fs.readFileSync(path.join(repositoryRoot, 'StaticNorth.Valiant.Release.slnf'), 'utf8'),
 );
@@ -102,6 +106,16 @@ test('documentation publication is a separate manual workflow', () => {
     'verify-docs',
     'deploy-docs',
   ]);
+});
+
+test('documentation audits retain a narrow no-fix advisory gate', () => {
+  assert.match(job(ciWorkflow, 'build-docs'), /npm run audit:dependencies/);
+  assert.doesNotMatch(job(ciWorkflow, 'build-docs'), /npm audit/);
+
+  for (const name of ['generate-docs-snapshot', 'verify-docs']) {
+    assert.match(job(docsWorkflow, name), /npm run audit:dependencies/);
+    assert.doesNotMatch(job(docsWorkflow, name), /npm audit/);
+  }
 });
 
 test('documentation publication pins the tracked major and develop source SHA', () => {

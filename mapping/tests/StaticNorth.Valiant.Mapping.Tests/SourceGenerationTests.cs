@@ -12,6 +12,16 @@ namespace Valiant.Mapping.Tests;
 public sealed class SourceGenerationTests
 {
     [Test]
+    public async Task Trusted_Platform_References_Exclude_Local_Generated_Assemblies()
+    {
+        var referenceFileNames = GetTrustedPlatformReferences()
+            .Select(static reference => Path.GetFileName(reference.Display));
+
+        await Assert.That(referenceFileNames).DoesNotContain(Path.GetFileName(typeof(SourceGenerationTests).Assembly.Location));
+        await Assert.That(referenceFileNames).DoesNotContain(Path.GetFileName(typeof(global::Valiant.Mapping.Samples.Basic.Person).Assembly.Location));
+    }
+
+    [Test]
     public async Task Mapping_Definition_Generates_Map_Method()
     {
         var result = RunGenerator(
@@ -2659,10 +2669,13 @@ public sealed class SourceGenerationTests
 
     private static ImmutableArray<MetadataReference> GetTrustedPlatformReferences()
     {
-        return GeneratorTestHarness.GetTrustedPlatformReferences("Valiant.Mapping.Tests.dll")
-            .Where(static reference => !string.Equals(
+        var testAssemblyFileName = Path.GetFileName(typeof(SourceGenerationTests).Assembly.Location);
+        var sampleAssemblyFileName = Path.GetFileName(typeof(global::Valiant.Mapping.Samples.Basic.Person).Assembly.Location);
+
+        return GeneratorTestHarness.GetTrustedPlatformReferences(testAssemblyFileName)
+            .Where(reference => !string.Equals(
                 Path.GetFileName(reference.Display),
-                "Valiant.Mapping.Samples.dll",
+                sampleAssemblyFileName,
                 StringComparison.OrdinalIgnoreCase))
             .ToImmutableArray();
     }
