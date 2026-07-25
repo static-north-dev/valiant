@@ -10,6 +10,7 @@
     "docs:import-major": "node scripts/docs-versions.js import",
     "docs:snapshot-major": "node scripts/docs-versions.js snapshot",
     "docs:validate-major": "node scripts/docs-versions.js validate",
+    "audit:dependencies": "node scripts/audit-dependencies.js",
     "test:docs-versions": "node --test scripts/*.test.js",
     "serve": "docusaurus serve",
     "docusaurus": "docusaurus"

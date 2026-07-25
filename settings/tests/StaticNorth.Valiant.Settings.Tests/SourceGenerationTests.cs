@@ -17,6 +17,15 @@ namespace Valiant.Settings.Tests;
 public sealed class SourceGenerationTests
 {
     [Test]
+    public async Task Trusted_Platform_References_Exclude_The_Executing_Test_Assembly()
+    {
+        var referenceFileNames = GetTrustedPlatformReferences()
+            .Select(static reference => Path.GetFileName(reference.Display));
+
+        await Assert.That(referenceFileNames).DoesNotContain(Path.GetFileName(typeof(SourceGenerationTests).Assembly.Location));
+    }
+
+    [Test]
     public async Task Settings_Model_Generates_Schema_Provider_With_Section_Path()
     {
         var assembly = CompileAndLoad(
@@ -615,7 +624,7 @@ public sealed class SourceGenerationTests
 
     private static ImmutableArray<MetadataReference> GetTrustedPlatformReferences()
     {
-        return GeneratorTestHarness.GetTrustedPlatformReferences("Valiant.Settings.Tests.dll");
+        return GeneratorTestHarness.GetTrustedPlatformReferences(Path.GetFileName(typeof(SourceGenerationTests).Assembly.Location));
     }
 
     private sealed record SourceGenerationResult(
