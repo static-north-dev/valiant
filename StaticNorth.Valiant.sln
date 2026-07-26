@@ -95,6 +95,23 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StaticNorth.Valiant.Setting
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StaticNorth.Valiant.Endpoints.AspNetCore.TestApp", "endpoints\tests\StaticNorth.Valiant.Endpoints.AspNetCore.TestApp\StaticNorth.Valiant.Endpoints.AspNetCore.TestApp.csproj", "{8DD6AEF1-036C-422F-B0E7-591763A3366D}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{A38026E6-91E4-4E36-AB8F-9144344A7FBD}"
+	ProjectSection(SolutionItems) = preProject
+		Directory.Build.props = Directory.Build.props
+		Directory.Build.targets = Directory.Build.targets
+		Directory.Packages.props = Directory.Packages.props
+		global.json = global.json
+		NuGet.Config = NuGet.Config
+		README.md = README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "assets", "assets", "{CFFA2390-1564-48CA-AA4D-5D94B979737E}"
+	ProjectSection(SolutionItems) = preProject
+		assets\logo_fullsize.png = assets\logo_fullsize.png
+		assets\logo_w_text_fullsize.png = assets\logo_w_text_fullsize.png
+		assets\logo.png = assets\logo.png
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -486,5 +503,6 @@ Global
 		{EFF0A1DB-3718-48C6-B35C-EADDB9BF8F0A} = {CD837C2E-B0A6-2F00-C2B2-19FB31CFF5B9}
 		{62D6BC3B-4BF1-4BA4-A8F6-AF60ECF88091} = {3070BFAD-09B0-F088-06D4-64AAE0FF2A66}
 		{8DD6AEF1-036C-422F-B0E7-591763A3366D} = {3AE715BB-0BBF-70B7-B40F-A686D50001F3}
+		{CFFA2390-1564-48CA-AA4D-5D94B979737E} = {A38026E6-91E4-4E36-AB8F-9144344A7FBD}
 	EndGlobalSection
 EndGlobal

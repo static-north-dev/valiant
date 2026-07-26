@@ -5,7 +5,7 @@ const includeCurrentVersion = process.env.DOCS_INCLUDE_CURRENT !== 'false';
 const config = {
   title: 'Valiant',
   tagline: 'Source-generated building blocks for dependable .NET applications.',
-  favicon: 'img/favicon.svg',
+  favicon: 'img/valiant-logo.png',
 
   url: 'https://valiant.dev',
   baseUrl: '/',
@@ -48,6 +48,10 @@ const config = {
   themeConfig: {
     navbar: {
       title: 'Valiant',
+      logo: {
+        alt: 'Valiant logo',
+        src: 'img/valiant-logo.png',
+      },
       items: [
         {
           type: 'docSidebar',
