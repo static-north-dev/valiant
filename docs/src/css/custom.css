@@ -24,6 +24,137 @@
   --ifm-background-surface-color: #131e2e;
 }
 
+/*
+ * Docusaurus adds the document id to the root element for both current and
+ * versioned docs. Keep the homepage and shared chrome neutral, but let each
+ * module carry the accent introduced by its card throughout its own docs.
+ */
+html[class*='docs-doc-id-validation/'] {
+  --valiant-module-accent: #2878d0;
+  --valiant-module-accent-text: #1f67b4;
+}
+
+html[class*='docs-doc-id-endpoints/'] {
+  --valiant-module-accent: #bd6b18;
+  --valiant-module-accent-text: #9a520e;
+}
+
+html[class*='docs-doc-id-mapping/'] {
+  --valiant-module-accent: #7556d8;
+  --valiant-module-accent-text: #6443c2;
+}
+
+html[class*='docs-doc-id-settings/'] {
+  --valiant-module-accent: #17866b;
+  --valiant-module-accent-text: #126f59;
+}
+
+html[data-theme='dark'][class*='docs-doc-id-validation/'] {
+  --valiant-module-accent: #73b7ff;
+  --valiant-module-accent-text: #8bc7ff;
+}
+
+html[data-theme='dark'][class*='docs-doc-id-endpoints/'] {
+  --valiant-module-accent: #ffb35d;
+  --valiant-module-accent-text: #ffc47f;
+}
+
+html[data-theme='dark'][class*='docs-doc-id-mapping/'] {
+  --valiant-module-accent: #b49aff;
+  --valiant-module-accent-text: #c6b3ff;
+}
+
+html[data-theme='dark'][class*='docs-doc-id-settings/'] {
+  --valiant-module-accent: #5ad6b5;
+  --valiant-module-accent-text: #79e7c9;
+}
+
+html:is(
+  [class*='docs-doc-id-validation/'],
+  [class*='docs-doc-id-endpoints/'],
+  [class*='docs-doc-id-mapping/'],
+  [class*='docs-doc-id-settings/']
+) .main-wrapper {
+  --ifm-color-primary: var(--valiant-module-accent-text);
+  --ifm-color-primary-dark: color-mix(in srgb, var(--valiant-module-accent-text) 82%, #000);
+  --ifm-color-primary-darker: color-mix(in srgb, var(--valiant-module-accent-text) 70%, #000);
+  --ifm-color-primary-darkest: color-mix(in srgb, var(--valiant-module-accent-text) 56%, #000);
+  --ifm-color-primary-light: color-mix(in srgb, var(--valiant-module-accent-text) 84%, #fff);
+  --ifm-color-primary-lighter: color-mix(in srgb, var(--valiant-module-accent-text) 68%, #fff);
+  --ifm-color-primary-lightest: color-mix(in srgb, var(--valiant-module-accent-text) 44%, #fff);
+  --ifm-link-color: var(--valiant-module-accent-text);
+  --ifm-link-hover-color: var(--valiant-module-accent);
+  --ifm-menu-color-active: var(--valiant-module-accent-text);
+  --ifm-menu-color-background-active: color-mix(in srgb, var(--valiant-module-accent) 13%, transparent);
+}
+
+html:is(
+  [class*='docs-doc-id-validation/'],
+  [class*='docs-doc-id-endpoints/'],
+  [class*='docs-doc-id-mapping/'],
+  [class*='docs-doc-id-settings/']
+) .theme-doc-markdown h1 {
+  border-bottom: 1px solid color-mix(in srgb, var(--valiant-module-accent) 28%, var(--ifm-color-emphasis-200));
+  margin-bottom: 1.4rem;
+  padding-bottom: 1rem;
+  position: relative;
+}
+
+html:is(
+  [class*='docs-doc-id-validation/'],
+  [class*='docs-doc-id-endpoints/'],
+  [class*='docs-doc-id-mapping/'],
+  [class*='docs-doc-id-settings/']
+) .theme-doc-markdown h1::after {
+  background: var(--valiant-module-accent);
+  bottom: -1px;
+  content: '';
+  height: 0.22rem;
+  left: 0;
+  position: absolute;
+  width: 3.6rem;
+}
+
+html:is(
+  [class*='docs-doc-id-validation/'],
+  [class*='docs-doc-id-endpoints/'],
+  [class*='docs-doc-id-mapping/'],
+  [class*='docs-doc-id-settings/']
+) .theme-doc-markdown h2 {
+  border-top-color: color-mix(in srgb, var(--valiant-module-accent) 24%, var(--ifm-color-emphasis-200));
+}
+
+html:is(
+  [class*='docs-doc-id-validation/'],
+  [class*='docs-doc-id-endpoints/'],
+  [class*='docs-doc-id-mapping/'],
+  [class*='docs-doc-id-settings/']
+) .theme-doc-markdown :not(pre) > code {
+  background: color-mix(in srgb, var(--valiant-module-accent) 10%, var(--ifm-background-surface-color));
+  border: 1px solid color-mix(in srgb, var(--valiant-module-accent) 28%, var(--ifm-color-emphasis-200));
+  color: var(--valiant-module-accent-text);
+}
+
+html:is(
+  [class*='docs-doc-id-validation/'],
+  [class*='docs-doc-id-endpoints/'],
+  [class*='docs-doc-id-mapping/'],
+  [class*='docs-doc-id-settings/']
+) .theme-doc-markdown blockquote {
+  background: color-mix(in srgb, var(--valiant-module-accent) 7%, transparent);
+  border-left-color: var(--valiant-module-accent);
+}
+
+html:is(
+  [class*='docs-doc-id-validation/'],
+  [class*='docs-doc-id-endpoints/'],
+  [class*='docs-doc-id-mapping/'],
+  [class*='docs-doc-id-settings/']
+) .main-wrapper :focus-visible {
+  outline: 2px solid var(--valiant-module-accent);
+  outline-offset: 3px;
+}
+
 .navbar {
   backdrop-filter: blur(14px);
   background: color-mix(in srgb, var(--ifm-navbar-background-color) 90%, transparent);

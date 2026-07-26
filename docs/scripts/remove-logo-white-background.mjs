@@ -61,7 +61,14 @@ for (let row = 0; row < height; row += 1) {
 }
 
 for (let index = 0; index < pixels.length; index += bytesPerPixel) {
-  if (pixels[index] === 255 && pixels[index + 1] === 255 && pixels[index + 2] === 255) {
+  const red = pixels[index];
+  const green = pixels[index + 1];
+  const blue = pixels[index + 2];
+
+  // The exported logo uses a very light checkerboard-like matte rather than
+  // one uniform white. Removing near-white pixels keeps the blue/navy mark
+  // intact while making the whole background transparent.
+  if (red >= 235 && green >= 235 && blue >= 235) {
     pixels[index + 3] = 0;
   }
 }
