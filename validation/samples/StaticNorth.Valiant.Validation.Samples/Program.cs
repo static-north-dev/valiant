@@ -1,4 +1,4 @@
-using Samples = Valiant.Validation.Samples;
+using Samples = StaticNorth.Valiant.Validation.Samples;
 
 Func<Task> sample;
 

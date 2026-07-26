@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace Valiant.Validation.SourceGeneration;
+namespace StaticNorth.Valiant.Validation.SourceGeneration;
 
 /// <summary>
 /// Generates Valiant validation implementations and dependency injection registration code.
@@ -405,10 +405,10 @@ public sealed partial class ValiantGenerator
         switch (callName)
         {
             case "FailFast":
-                behaviorExpression = "global::Valiant.Validation.ValiantFailureBehavior.FailFast";
+                behaviorExpression = "global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast";
                 return true;
             case "ValidateAll":
-                behaviorExpression = "global::Valiant.Validation.ValiantFailureBehavior.ValidateAll";
+                behaviorExpression = "global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.ValidateAll";
                 return true;
             default:
                 behaviorExpression = string.Empty;

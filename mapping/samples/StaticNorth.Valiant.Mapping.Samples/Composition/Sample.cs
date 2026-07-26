@@ -1,4 +1,4 @@
-namespace Valiant.Mapping.Samples.Composition;
+namespace StaticNorth.Valiant.Mapping.Samples.Composition;
 
 /// <summary>
 /// Demonstrates constructor-injected mapper reuse for both a nested object and

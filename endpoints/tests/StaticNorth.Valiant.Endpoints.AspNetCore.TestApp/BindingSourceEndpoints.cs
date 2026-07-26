@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Valiant.Endpoints.AspNetCore;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
 
-namespace Valiant.Endpoints.AspNetCore.TestApp;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.TestApp;
 
 public sealed record BindingSourcePayload(string Value);
 

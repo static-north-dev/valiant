@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
-namespace Valiant.Validation.AspNetCore.OpenApi;
+namespace StaticNorth.Valiant.Validation.AspNetCore.OpenApi;
 
 /// <summary>
 /// Registration helpers for Valiant native OpenAPI integration.

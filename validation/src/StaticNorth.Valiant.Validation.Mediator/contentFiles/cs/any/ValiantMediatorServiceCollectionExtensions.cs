@@ -3,7 +3,7 @@ using Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Valiant.Validation.Mediator;
+namespace StaticNorth.Valiant.Validation.Mediator;
 
 /// <summary>
 /// Registration helpers for Valiant validation in source-generated Mediator pipelines.

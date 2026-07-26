@@ -1,9 +1,9 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
-using static Valiant.SourceGeneration.ValiantFingerprint;
+using static StaticNorth.Valiant.SourceGeneration.ValiantFingerprint;
 
-namespace Valiant.Validation.SourceGeneration;
+namespace StaticNorth.Valiant.Validation.SourceGeneration;
 
 /// <summary>
 /// Generates Valiant validation implementations and dependency injection registration code.

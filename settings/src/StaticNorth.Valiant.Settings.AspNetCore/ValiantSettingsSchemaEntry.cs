@@ -1,4 +1,4 @@
-namespace Valiant.Settings.AspNetCore;
+namespace StaticNorth.Valiant.Settings.AspNetCore;
 
 using System.Text.Json.Serialization;
 

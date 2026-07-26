@@ -16,7 +16,7 @@ For an application integration, install the most specific package instead. For e
 ## 2. Declare a validator
 
 ```csharp
-using Valiant.Validation;
+using StaticNorth.Valiant.Validation;
 
 public sealed record RegisterUser(string? Name, int Age);
 
@@ -58,7 +58,7 @@ Use `ValidateAsync` for validators that contain async rules. Convenience APIs in
 ## 4. Register generated validators
 
 ```csharp
-using Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Validation.DependencyInjection;
 
 builder.Services.AddValiantValidators(options =>
 {

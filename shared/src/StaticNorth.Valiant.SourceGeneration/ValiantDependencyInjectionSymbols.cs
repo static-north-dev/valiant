@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
 
-namespace Valiant.SourceGeneration;
+namespace StaticNorth.Valiant.SourceGeneration;
 
 internal static class ValiantDependencyInjectionSymbols
 {

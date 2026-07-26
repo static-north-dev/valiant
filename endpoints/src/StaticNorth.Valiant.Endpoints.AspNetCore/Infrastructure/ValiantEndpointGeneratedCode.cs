@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
-namespace Valiant.Endpoints.AspNetCore.Infrastructure;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure;
 
 /// <summary>
 /// Provides the cross-assembly runtime bridge used by Valiant-generated code.

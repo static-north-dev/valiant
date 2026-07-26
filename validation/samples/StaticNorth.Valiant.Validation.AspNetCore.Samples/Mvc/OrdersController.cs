@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Valiant.Validation.AspNetCore.Samples.Orders;
+using StaticNorth.Valiant.Validation.AspNetCore.Samples.Orders;
 
-namespace Valiant.Validation.AspNetCore.Samples.Mvc;
+namespace StaticNorth.Valiant.Validation.AspNetCore.Samples.Mvc;
 
 /// <summary>
 /// Handles orders after automatic MVC validation has succeeded.

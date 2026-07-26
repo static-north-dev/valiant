@@ -1,12 +1,12 @@
-global using DiagnosticInfo = Valiant.SourceGeneration.ValiantDiagnosticInfo;
+global using DiagnosticInfo = StaticNorth.Valiant.SourceGeneration.ValiantDiagnosticInfo;
 
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Valiant.SourceGeneration;
+using StaticNorth.Valiant.SourceGeneration;
 
-namespace Valiant.Validation.SourceGeneration;
+namespace StaticNorth.Valiant.Validation.SourceGeneration;
 
 /// <summary>
 /// Generates Valiant validation implementations and dependency injection registration code.

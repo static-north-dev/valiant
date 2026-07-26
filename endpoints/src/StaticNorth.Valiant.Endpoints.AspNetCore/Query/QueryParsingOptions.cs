@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.AspNetCore;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 
 /// <summary>
 /// Configures which query string formats are accepted by <see cref="QueryStringParser" />.

@@ -1,6 +1,6 @@
-using Valiant.Mapping;
-using Valiant.Settings;
-using Valiant.Validation;
+using StaticNorth.Valiant.Mapping;
+using StaticNorth.Valiant.Settings;
+using StaticNorth.Valiant.Validation;
 
 var mapped = new AotMapper(new ValiantMappingOptions
 {

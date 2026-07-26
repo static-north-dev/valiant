@@ -1,4 +1,4 @@
-namespace Valiant.Mapping.Samples.ConditionalMapping;
+namespace StaticNorth.Valiant.Mapping.Samples.ConditionalMapping;
 
 /// <summary>
 /// Demonstrates native if/else mapping, a chained <c>When</c> condition, and

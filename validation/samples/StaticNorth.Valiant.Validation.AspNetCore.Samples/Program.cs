@@ -1,4 +1,4 @@
-using Samples = Valiant.Validation.AspNetCore.Samples;
+using Samples = StaticNorth.Valiant.Validation.AspNetCore.Samples;
 
 Type startup;
 

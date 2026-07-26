@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace Valiant.Endpoints.AspNetCore.Samples.QueryBinding;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Samples.QueryBinding;
 
 [ValiantEndpoint<QueryBindingEndpointGroup>]
 [ValiantQueryParsing(JsonValues = JsonQueryValues.Disabled)]

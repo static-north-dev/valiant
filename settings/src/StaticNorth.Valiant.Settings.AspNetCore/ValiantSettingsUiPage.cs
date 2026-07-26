@@ -1,4 +1,4 @@
-namespace Valiant.Settings.AspNetCore;
+namespace StaticNorth.Valiant.Settings.AspNetCore;
 
 internal static class ValiantSettingsUiPage
 {

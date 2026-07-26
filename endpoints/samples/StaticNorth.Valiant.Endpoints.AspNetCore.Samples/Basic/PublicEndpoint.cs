@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.AspNetCore.Samples.Basic;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Samples.Basic;
 
 [ValiantEndpoint]
 public class PublicEndpoint : IEndpoint

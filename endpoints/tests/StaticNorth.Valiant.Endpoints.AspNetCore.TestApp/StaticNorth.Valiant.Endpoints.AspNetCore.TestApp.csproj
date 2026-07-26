@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>Valiant.Endpoints.AspNetCore.TestApp</RootNamespace>
+    <RootNamespace>StaticNorth.Valiant.Endpoints.AspNetCore.TestApp</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

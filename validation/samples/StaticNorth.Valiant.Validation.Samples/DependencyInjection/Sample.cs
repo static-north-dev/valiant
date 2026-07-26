@@ -1,8 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
-using Valiant.Validation.DependencyInjection;
-using Valiant.Validation.Samples.Catalog;
+using StaticNorth.Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Validation.Samples.Catalog;
 
-namespace Valiant.Validation.Samples.DependencyInjection;
+namespace StaticNorth.Valiant.Validation.Samples.DependencyInjection;
 
 /// <summary>
 /// Demonstrates generated validator registration, configurable lifetime and

@@ -1,4 +1,4 @@
-namespace Valiant.Validation.AspNetCore.Samples.Orders;
+namespace StaticNorth.Valiant.Validation.AspNetCore.Samples.Orders;
 
 /// <summary>
 /// Validates sample order creation requests.

@@ -1,4 +1,4 @@
-namespace Valiant.Settings.Samples.SchemaRegistry;
+namespace StaticNorth.Valiant.Settings.Samples.SchemaRegistry;
 
 [ValiantSettings("Samples:SchemaRegistry")]
 public sealed record RegistrySettings

@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Reflection;
 
-namespace Valiant.Validation.AspNetCore;
+namespace StaticNorth.Valiant.Validation.AspNetCore;
 
 internal static class ValiantValidatorExecutor
 {

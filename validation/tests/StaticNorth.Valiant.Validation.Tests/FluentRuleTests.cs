@@ -1,4 +1,4 @@
-namespace Valiant.Validation.Tests;
+namespace StaticNorth.Valiant.Validation.Tests;
 
 public sealed class FluentRuleTests
 {

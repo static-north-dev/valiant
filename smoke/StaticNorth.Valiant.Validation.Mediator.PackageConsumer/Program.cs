@@ -1,8 +1,8 @@
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
-using Valiant.Validation;
-using Valiant.Validation.DependencyInjection;
-using Valiant.Validation.Mediator;
+using StaticNorth.Valiant.Validation;
+using StaticNorth.Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Validation.Mediator;
 
 var services = new ServiceCollection();
 services.AddValiantValidators();
@@ -15,7 +15,7 @@ if (services.All(static descriptor =>
     throw new InvalidOperationException("The packaged Mediator build-transitive registration was not applied.");
 }
 
-Console.WriteLine("Valiant.Validation.Mediator package consumer passed.");
+Console.WriteLine("StaticNorth.Valiant.Validation.Mediator package consumer passed.");
 
 public sealed record MediatorSmokeRequest(string? Name) : IRequest<string>;
 

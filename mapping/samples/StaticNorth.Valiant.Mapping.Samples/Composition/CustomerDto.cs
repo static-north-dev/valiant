@@ -1,4 +1,4 @@
-namespace Valiant.Mapping.Samples.Composition;
+namespace StaticNorth.Valiant.Mapping.Samples.Composition;
 
 public sealed record CustomerDto
 {

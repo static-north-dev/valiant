@@ -4,10 +4,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using TUnit.Core.Interfaces;
-using Valiant.Endpoints.AspNetCore;
-using Valiant.Endpoints.AspNetCore.TestApp;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+using StaticNorth.Valiant.Endpoints.AspNetCore.TestApp;
 
-namespace Valiant.Endpoints.Tests.Runtime;
+namespace StaticNorth.Valiant.Endpoints.Tests.Runtime;
 
 public abstract class ConditionalRegistrationApplicationFactory :
     WebApplicationFactory<TestApplicationMarker>,

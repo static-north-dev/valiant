@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 
-namespace Valiant.Endpoints.AspNetCore.SourceGeneration;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration;
 
 /// <summary>
 /// Reports missing endpoint marker attributes for directly declared Valiant endpoint interfaces.
@@ -12,8 +12,8 @@ namespace Valiant.Endpoints.AspNetCore.SourceGeneration;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class ValiantEndpointDeclarationAnalyzer : DiagnosticAnalyzer
 {
-    private const string EndpointNamespace = "Valiant.Endpoints.AspNetCore";
-    private const string EndpointAttributeNamespace = "Valiant.Endpoints";
+    private const string EndpointNamespace = "StaticNorth.Valiant.Endpoints.AspNetCore";
+    private const string EndpointAttributeNamespace = "StaticNorth.Valiant.Endpoints";
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
     [

@@ -2,9 +2,9 @@ using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Valiant.SourceGeneration;
+using StaticNorth.Valiant.SourceGeneration;
 
-namespace Valiant.Mapping.SourceGeneration;
+namespace StaticNorth.Valiant.Mapping.SourceGeneration;
 
 /// <summary>
 /// Generates Valiant mapper implementations and dependency injection registration code.

@@ -2,9 +2,9 @@ using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
-using static Valiant.SourceGeneration.ValiantSourceBuilder;
+using static StaticNorth.Valiant.SourceGeneration.ValiantSourceBuilder;
 
-namespace Valiant.Mapping.SourceGeneration;
+namespace StaticNorth.Valiant.Mapping.SourceGeneration;
 
 /// <summary>
 /// Generates Valiant mapper implementations and dependency injection registration code.
@@ -42,7 +42,7 @@ public sealed partial class ValiantMappingGenerator
         }
 
         context.AddSource(
-            "Valiant.Mapping.DependencyInjection.g.cs",
+            "StaticNorth.Valiant.Mapping.DependencyInjection.g.cs",
             SourceText.From(GenerateDependencyInjection([..mappers.Distinct().OrderBy(static mapper => mapper.MapperType, StringComparer.Ordinal)]), Encoding.UTF8));
     }
 
@@ -56,7 +56,7 @@ public sealed partial class ValiantMappingGenerator
         }
 
         context.AddSource(
-            "Valiant.Mapping.MapperRegistrations.g.cs",
+            "StaticNorth.Valiant.Mapping.MapperRegistrations.g.cs",
             SourceText.From(GenerateMapperPairRegistrations([..mapperPairs.Distinct().OrderBy(static mapper => mapper.SourceType, StringComparer.Ordinal).ThenBy(static mapper => mapper.TargetType, StringComparer.Ordinal)]), Encoding.UTF8));
     }
 
@@ -103,7 +103,7 @@ public sealed partial class ValiantMappingGenerator
 
         foreach (var mapperPair in mapperPairs)
         {
-            builder.Append("[assembly: global::Valiant.Mapping.ValiantMapperRegistrationAttribute(typeof(")
+            builder.Append("[assembly: global::StaticNorth.Valiant.Mapping.ValiantMapperRegistrationAttribute(typeof(")
                 .Append(mapperPair.SourceType)
                 .Append("), typeof(")
                 .Append(mapperPair.TargetType)
@@ -143,7 +143,7 @@ public sealed partial class ValiantMappingGenerator
             .Append(declaration.Keyword)
             .Append(' ')
             .Append(declaration.Name)
-            .Append(" : global::Valiant.Mapping.IMapper<")
+            .Append(" : global::StaticNorth.Valiant.Mapping.IMapper<")
             .Append(mapping.SourceType)
             .Append(", ")
             .Append(mapping.TargetType)
@@ -176,7 +176,7 @@ public sealed partial class ValiantMappingGenerator
         var builder = new StringBuilder();
         AppendGeneratedFileHeader(builder);
         builder.AppendLine();
-        builder.AppendLine("namespace Valiant.Mapping");
+        builder.AppendLine("namespace StaticNorth.Valiant.Mapping");
         builder.AppendLine("{");
         builder.AppendLine("    /// <summary>");
         builder.AppendLine("    /// Provides dependency injection registration for Valiant mappers.");
@@ -188,18 +188,18 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("        /// </summary>");
         builder.AppendLine("        /// <param name=\"services\">The service collection.</param>");
         builder.AppendLine("        /// <returns>The service collection.</returns>");
-        builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantMappers(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::System.Action<global::Valiant.Mapping.ValiantMappingOptions>? configure = null)");
+        builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantMappers(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::System.Action<global::StaticNorth.Valiant.Mapping.ValiantMappingOptions>? configure = null)");
         builder.AppendLine("        {");
         builder.AppendLine("            if (services is null)");
         builder.AppendLine("            {");
         builder.AppendLine("                throw new global::System.ArgumentNullException(nameof(services));");
         builder.AppendLine("            }");
         builder.AppendLine();
-        builder.AppendLine("            var valiantMappingOptions = new global::Valiant.Mapping.ValiantMappingOptions();");
+        builder.AppendLine("            var valiantMappingOptions = new global::StaticNorth.Valiant.Mapping.ValiantMappingOptions();");
         builder.AppendLine("            configure?.Invoke(valiantMappingOptions);");
-        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::Valiant.Mapping.ValiantMappingOptions), valiantMappingOptions));");
-        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::Valiant.Mapping.IMapper), typeof(global::Valiant.Mapping.ValiantGeneratedMapper)));");
-        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::Valiant.Mapping.IMapperFactory), typeof(global::Valiant.Mapping.ValiantGeneratedMapperFactory)));");
+        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Mapping.ValiantMappingOptions), valiantMappingOptions));");
+        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Mapping.IMapper), typeof(global::StaticNorth.Valiant.Mapping.ValiantGeneratedMapper)));");
+        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Mapping.IMapperFactory), typeof(global::StaticNorth.Valiant.Mapping.ValiantGeneratedMapperFactory)));");
         builder.AppendLine();
 
         foreach (var mapper in mappers)
@@ -209,7 +209,7 @@ public sealed partial class ValiantMappingGenerator
                 .Append("), typeof(")
                 .Append(mapper.MapperType)
                 .AppendLine(")));");
-            builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Transient(typeof(global::Valiant.Mapping.IMapper<")
+            builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Transient(typeof(global::StaticNorth.Valiant.Mapping.IMapper<")
                 .Append(mapper.SourceType)
                 .Append(", ")
                 .Append(mapper.TargetType)
@@ -238,7 +238,7 @@ public sealed partial class ValiantMappingGenerator
 
     private static void AppendGeneratedMapper(StringBuilder builder, ImmutableArray<DependencyInjectionMapperModel> mappers)
     {
-        builder.AppendLine("    file sealed class ValiantGeneratedMapper : global::Valiant.Mapping.IMapper");
+        builder.AppendLine("    file sealed class ValiantGeneratedMapper : global::StaticNorth.Valiant.Mapping.IMapper");
         builder.AppendLine("    {");
         builder.AppendLine("        private readonly global::System.IServiceProvider _services;");
         builder.AppendLine();
@@ -285,11 +285,11 @@ public sealed partial class ValiantMappingGenerator
                 .Append(mapper.TargetType)
                 .AppendLine("))");
             builder.AppendLine("            {");
-            builder.Append("                if (_services.GetService(typeof(global::Valiant.Mapping.IMapper<")
+            builder.Append("                if (_services.GetService(typeof(global::StaticNorth.Valiant.Mapping.IMapper<")
                 .Append(mapper.SourceType)
                 .Append(", ")
                 .Append(mapper.TargetType)
-                .Append(">)) is global::Valiant.Mapping.IMapper<")
+                .Append(">)) is global::StaticNorth.Valiant.Mapping.IMapper<")
                 .Append(mapper.SourceType)
                 .Append(", ")
                 .Append(mapper.TargetType)
@@ -338,11 +338,11 @@ public sealed partial class ValiantMappingGenerator
                     .Append(mapper.TargetType)
                     .AppendLine("))");
                 builder.AppendLine("            {");
-                builder.Append("                if (_services.GetService(typeof(global::Valiant.Mapping.IMapper<")
+                builder.Append("                if (_services.GetService(typeof(global::StaticNorth.Valiant.Mapping.IMapper<")
                     .Append(mapper.SourceType)
                     .Append(", ")
                     .Append(mapper.TargetType)
-                    .Append(">)) is global::Valiant.Mapping.IMapper<")
+                    .Append(">)) is global::StaticNorth.Valiant.Mapping.IMapper<")
                     .Append(mapper.SourceType)
                     .Append(", ")
                     .Append(mapper.TargetType)
@@ -374,7 +374,7 @@ public sealed partial class ValiantMappingGenerator
 
     private static void AppendGeneratedMapperFactory(StringBuilder builder, ImmutableArray<DependencyInjectionMapperModel> mappers)
     {
-        builder.AppendLine("    file sealed class ValiantGeneratedMapperFactory : global::Valiant.Mapping.IMapperFactory");
+        builder.AppendLine("    file sealed class ValiantGeneratedMapperFactory : global::StaticNorth.Valiant.Mapping.IMapperFactory");
         builder.AppendLine("    {");
         builder.AppendLine("        private readonly global::System.IServiceProvider _services;");
         builder.AppendLine();
@@ -383,7 +383,7 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("            _services = services ?? throw new global::System.ArgumentNullException(nameof(services));");
         builder.AppendLine("        }");
         builder.AppendLine();
-        builder.AppendLine("        public global::Valiant.Mapping.IMapper<TSource, TTarget> CreateMapper<TSource, TTarget>()");
+        builder.AppendLine("        public global::StaticNorth.Valiant.Mapping.IMapper<TSource, TTarget> CreateMapper<TSource, TTarget>()");
         builder.AppendLine("        {");
         builder.AppendLine("            if (TryCreateMapper<TSource, TTarget>(out var mapper))");
         builder.AppendLine("            {");
@@ -403,7 +403,7 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("            throw CreateMissingMapperException(sourceType, targetType);");
         builder.AppendLine("        }");
         builder.AppendLine();
-        builder.AppendLine("        public bool TryCreateMapper<TSource, TTarget>(out global::Valiant.Mapping.IMapper<TSource, TTarget>? mapper)");
+        builder.AppendLine("        public bool TryCreateMapper<TSource, TTarget>(out global::StaticNorth.Valiant.Mapping.IMapper<TSource, TTarget>? mapper)");
         builder.AppendLine("        {");
         foreach (var mapper in mappers)
         {
@@ -413,17 +413,17 @@ public sealed partial class ValiantMappingGenerator
                 .Append(mapper.TargetType)
                 .AppendLine("))");
             builder.AppendLine("            {");
-            builder.Append("                if (_services.GetService(typeof(global::Valiant.Mapping.IMapper<")
+            builder.Append("                if (_services.GetService(typeof(global::StaticNorth.Valiant.Mapping.IMapper<")
                 .Append(mapper.SourceType)
                 .Append(", ")
                 .Append(mapper.TargetType)
-                .Append(">)) is global::Valiant.Mapping.IMapper<")
+                .Append(">)) is global::StaticNorth.Valiant.Mapping.IMapper<")
                 .Append(mapper.SourceType)
                 .Append(", ")
                 .Append(mapper.TargetType)
                 .AppendLine("> resolvedMapper)");
             builder.AppendLine("                {");
-            builder.AppendLine("                    mapper = (global::Valiant.Mapping.IMapper<TSource, TTarget>)(object)resolvedMapper;");
+            builder.AppendLine("                    mapper = (global::StaticNorth.Valiant.Mapping.IMapper<TSource, TTarget>)(object)resolvedMapper;");
             builder.AppendLine("                    return true;");
             builder.AppendLine("                }");
             builder.AppendLine();
@@ -463,7 +463,7 @@ public sealed partial class ValiantMappingGenerator
                     .Append(mapper.TargetType)
                     .AppendLine("))");
                 builder.AppendLine("            {");
-                builder.Append("                mapper = _services.GetService(typeof(global::Valiant.Mapping.IMapper<")
+                builder.Append("                mapper = _services.GetService(typeof(global::StaticNorth.Valiant.Mapping.IMapper<")
                     .Append(mapper.SourceType)
                     .Append(", ")
                     .Append(mapper.TargetType)
@@ -529,16 +529,16 @@ public sealed partial class ValiantMappingGenerator
                 .Append(mapper.TargetType)
                 .Append("))] = new Entry(")
                 .AppendLine();
-            builder.Append("                    static services => services.GetService(typeof(global::Valiant.Mapping.IMapper<")
+            builder.Append("                    static services => services.GetService(typeof(global::StaticNorth.Valiant.Mapping.IMapper<")
                 .Append(mapper.SourceType)
                 .Append(", ")
                 .Append(mapper.TargetType)
                 .AppendLine(">)),");
-            builder.Append("                    static (services, source) => services.GetService(typeof(global::Valiant.Mapping.IMapper<")
+            builder.Append("                    static (services, source) => services.GetService(typeof(global::StaticNorth.Valiant.Mapping.IMapper<")
                 .Append(mapper.SourceType)
                 .Append(", ")
                 .Append(mapper.TargetType)
-                .Append(">)) is global::Valiant.Mapping.IMapper<")
+                .Append(">)) is global::StaticNorth.Valiant.Mapping.IMapper<")
                 .Append(mapper.SourceType)
                 .Append(", ")
                 .Append(mapper.TargetType)
@@ -610,7 +610,7 @@ public sealed partial class ValiantMappingGenerator
         if (mapping.HasConfigureMethod)
         {
             AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("if (GetEffectiveMappingMode() == global::Valiant.Mapping.ValiantMappingMode.Debuggable)");
+            builder.AppendLine("if (GetEffectiveMappingMode() == global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Debuggable)");
             AppendIndent(builder, 2, namespaceName);
             builder.AppendLine("{");
             AppendIndent(builder, 3, namespaceName);
@@ -689,11 +689,11 @@ public sealed partial class ValiantMappingGenerator
 
         builder.AppendLine();
         AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("private global::Valiant.Mapping.ValiantNullHandling GetEffectiveNullHandling()");
+        builder.AppendLine("private global::StaticNorth.Valiant.Mapping.ValiantNullHandling GetEffectiveNullHandling()");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return _valiantMappingOptions?.NullHandling ?? global::Valiant.Mapping.ValiantNullHandling.MapNulls;");
+        builder.AppendLine("return _valiantMappingOptions?.NullHandling ?? global::StaticNorth.Valiant.Mapping.ValiantNullHandling.MapNulls;");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
 
@@ -706,7 +706,7 @@ public sealed partial class ValiantMappingGenerator
     private static void AppendMappingOptionsMembers(StringBuilder builder, string? namespaceName, MapperDeclarationModel declaration, MappingModel mapping)
     {
         AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("private readonly global::Valiant.Mapping.ValiantMappingOptions? _valiantMappingOptions = null;");
+        builder.AppendLine("private readonly global::StaticNorth.Valiant.Mapping.ValiantMappingOptions? _valiantMappingOptions = null;");
         if (mapping.UsesServiceProviderMapper)
         {
             AppendIndent(builder, 1, namespaceName);
@@ -744,7 +744,7 @@ public sealed partial class ValiantMappingGenerator
             null,
             ("valiantMappingOptions", "The mapping options to use for this mapper instance."));
         AppendIndent(builder, 1, namespaceName);
-        builder.Append("public ").Append(declaration.Name).AppendLine("(global::Valiant.Mapping.ValiantMappingOptions valiantMappingOptions)");
+        builder.Append("public ").Append(declaration.Name).AppendLine("(global::StaticNorth.Valiant.Mapping.ValiantMappingOptions valiantMappingOptions)");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 2, namespaceName);
@@ -785,7 +785,7 @@ public sealed partial class ValiantMappingGenerator
             ("valiantMappingOptions", "The mapping options to use for this mapper instance."),
             ("valiantServiceProvider", "The service provider used to resolve child mappers."));
         AppendIndent(builder, 1, namespaceName);
-        builder.Append("public ").Append(declaration.Name).AppendLine("(global::Valiant.Mapping.ValiantMappingOptions valiantMappingOptions, global::System.IServiceProvider valiantServiceProvider)");
+        builder.Append("public ").Append(declaration.Name).AppendLine("(global::StaticNorth.Valiant.Mapping.ValiantMappingOptions valiantMappingOptions, global::System.IServiceProvider valiantServiceProvider)");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 2, namespaceName);
@@ -813,9 +813,9 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("}");
         builder.AppendLine();
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("var mapperType = typeof(global::Valiant.Mapping.IMapper<TSourceMember, TTargetMember>);");
+        builder.AppendLine("var mapperType = typeof(global::StaticNorth.Valiant.Mapping.IMapper<TSourceMember, TTargetMember>);");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("global::Valiant.Mapping.IMapper<TSourceMember, TTargetMember>? mapper = null;");
+        builder.AppendLine("global::StaticNorth.Valiant.Mapping.IMapper<TSourceMember, TTargetMember>? mapper = null;");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("lock (_valiantMapperCache)");
         AppendIndent(builder, 2, namespaceName);
@@ -825,11 +825,11 @@ public sealed partial class ValiantMappingGenerator
         AppendIndent(builder, 3, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 4, namespaceName);
-        builder.AppendLine("mapper = (global::Valiant.Mapping.IMapper<TSourceMember, TTargetMember>)cachedMapper;");
+        builder.AppendLine("mapper = (global::StaticNorth.Valiant.Mapping.IMapper<TSourceMember, TTargetMember>)cachedMapper;");
         AppendIndent(builder, 3, namespaceName);
         builder.AppendLine("}");
         AppendIndent(builder, 3, namespaceName);
-        builder.AppendLine("else if (_valiantServiceProvider?.GetService(mapperType) is global::Valiant.Mapping.IMapper<TSourceMember, TTargetMember> resolvedMapper)");
+        builder.AppendLine("else if (_valiantServiceProvider?.GetService(mapperType) is global::StaticNorth.Valiant.Mapping.IMapper<TSourceMember, TTargetMember> resolvedMapper)");
         AppendIndent(builder, 3, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 4, namespaceName);
@@ -857,7 +857,7 @@ public sealed partial class ValiantMappingGenerator
 
         builder.AppendLine();
         AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("private static TTargetMember MapWithDepthGuard<TSourceMember, TTargetMember>(global::Valiant.Mapping.IMapper<TSourceMember, TTargetMember> mapper, TSourceMember sourceMember)");
+        builder.AppendLine("private static TTargetMember MapWithDepthGuard<TSourceMember, TTargetMember>(global::StaticNorth.Valiant.Mapping.IMapper<TSourceMember, TTargetMember> mapper, TSourceMember sourceMember)");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 2, namespaceName);
@@ -896,14 +896,14 @@ public sealed partial class ValiantMappingGenerator
         var constructorSignatures = new HashSet<string>(declaration.ConstructorSignatures, StringComparer.Ordinal);
         foreach (var constructor in declaration.UserConstructors)
         {
-            if (!HasParameter(constructor, "global::Valiant.Mapping.ValiantMappingOptions"))
+            if (!HasParameter(constructor, "global::StaticNorth.Valiant.Mapping.ValiantMappingOptions"))
             {
                 AppendUserConstructorOverload(builder, namespaceName, declaration, constructor, includeOptions: true, includeServiceProvider: false, constructorSignatures);
             }
 
             if (includeServiceProvider &&
                 !HasParameter(constructor, "global::System.IServiceProvider") &&
-                !HasParameter(constructor, "global::Valiant.Mapping.ValiantMappingOptions"))
+                !HasParameter(constructor, "global::StaticNorth.Valiant.Mapping.ValiantMappingOptions"))
             {
                 AppendUserConstructorOverload(builder, namespaceName, declaration, constructor, includeOptions: false, includeServiceProvider: true, constructorSignatures);
                 AppendUserConstructorOverload(builder, namespaceName, declaration, constructor, includeOptions: true, includeServiceProvider: true, constructorSignatures);
@@ -974,7 +974,7 @@ public sealed partial class ValiantMappingGenerator
 
         if (includeOptions)
         {
-            builder.Append("global::Valiant.Mapping.ValiantMappingOptions __valiantMappingOptions");
+            builder.Append("global::StaticNorth.Valiant.Mapping.ValiantMappingOptions __valiantMappingOptions");
             if (includeServiceProvider)
             {
                 builder.Append(", ");
@@ -1050,7 +1050,7 @@ public sealed partial class ValiantMappingGenerator
         parameterTypes.AddRange(constructor.Parameters.Select(static parameter => parameter.TypeName));
         if (includeOptions)
         {
-            parameterTypes.Add("global::Valiant.Mapping.ValiantMappingOptions");
+            parameterTypes.Add("global::StaticNorth.Valiant.Mapping.ValiantMappingOptions");
         }
 
         if (includeServiceProvider)
@@ -1070,13 +1070,13 @@ public sealed partial class ValiantMappingGenerator
     {
         builder.AppendLine();
         AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("private global::Valiant.Mapping.ValiantMappingMode GetEffectiveMappingMode()");
+        builder.AppendLine("private global::StaticNorth.Valiant.Mapping.ValiantMappingMode GetEffectiveMappingMode()");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("var mode = _valiantMappingOptions?.Mode ?? global::Valiant.Mapping.ValiantMappingMode.Auto;");
+        builder.AppendLine("var mode = _valiantMappingOptions?.Mode ?? global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Auto;");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("if (mode != global::Valiant.Mapping.ValiantMappingMode.Auto)");
+        builder.AppendLine("if (mode != global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Auto)");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 3, namespaceName);
@@ -1085,10 +1085,10 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("}");
         builder.AppendLine("#if DEBUG");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return global::Valiant.Mapping.ValiantMappingMode.Debuggable;");
+        builder.AppendLine("return global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Debuggable;");
         builder.AppendLine("#else");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return global::Valiant.Mapping.ValiantMappingMode.Fast;");
+        builder.AppendLine("return global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Fast;");
         builder.AppendLine("#endif");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
@@ -1099,7 +1099,7 @@ public sealed partial class ValiantMappingGenerator
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 2, namespaceName);
-        builder.Append("var context = new global::Valiant.Mapping.MappingContext<")
+        builder.Append("var context = new global::StaticNorth.Valiant.Mapping.MappingContext<")
             .Append(mapping.SourceType)
             .Append(", ")
             .Append(mapping.TargetType)

@@ -5,11 +5,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Valiant.Endpoints.AspNetCore;
-using Valiant.Endpoints.AspNetCore.DependencyInjection;
-using Valiant.Endpoints.AspNetCore.Infrastructure;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
+using StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure;
 
-namespace Valiant.Endpoints.Tests.Runtime;
+namespace StaticNorth.Valiant.Endpoints.Tests.Runtime;
 
 public sealed partial class RuntimeEndpointTests
 {

@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
-using Valiant.SourceGeneration;
+using StaticNorth.Valiant.SourceGeneration;
 
-namespace Valiant.Endpoints.AspNetCore.SourceGeneration;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration;
 
 internal readonly struct QueryObjectBindingModel(
     QueryObjectBindingKind kind,

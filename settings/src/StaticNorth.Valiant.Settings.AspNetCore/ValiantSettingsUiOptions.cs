@@ -1,4 +1,4 @@
-namespace Valiant.Settings.AspNetCore;
+namespace StaticNorth.Valiant.Settings.AspNetCore;
 
 /// <summary>
 /// Configures the built-in Valiant settings UI endpoint.

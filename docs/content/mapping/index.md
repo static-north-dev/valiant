@@ -8,7 +8,7 @@ description: Compile-time object mapping with direct generated code, explicit ru
 Valiant Mapping turns a small mapper declaration into direct C# assignments. It handles conventional members, immutable targets, nested shapes, collections, enums, explicit transformations, conditional rules, and mapper composition—without runtime assembly scanning.
 
 ```csharp
-using Valiant.Mapping;
+using StaticNorth.Valiant.Mapping;
 
 [ValiantMapper]
 public sealed partial class UserMapper : MapperDefinition<User, UserDto>;

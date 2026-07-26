@@ -3,9 +3,9 @@ using System.Globalization;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Valiant.SourceGeneration;
+using StaticNorth.Valiant.SourceGeneration;
 
-namespace Valiant.Settings.SourceGeneration;
+namespace StaticNorth.Valiant.Settings.SourceGeneration;
 
 /// <summary>
 /// Generates schema metadata for Valiant settings models.
@@ -14,8 +14,8 @@ namespace Valiant.Settings.SourceGeneration;
 public sealed class ValiantSettingsGenerator : IIncrementalGenerator
 {
     private const int DictionaryLookupThreshold = 8;
-    private const string SettingsAttributeMetadataName = "Valiant.Settings.ValiantSettingsAttribute";
-    private const string SecretAttributeMetadataName = "Valiant.Settings.ValiantSecretAttribute";
+    private const string SettingsAttributeMetadataName = "StaticNorth.Valiant.Settings.ValiantSettingsAttribute";
+    private const string SecretAttributeMetadataName = "StaticNorth.Valiant.Settings.ValiantSecretAttribute";
 
     private static readonly SymbolDisplayFormat SourceTypeDisplayFormat = SymbolDisplayFormat.FullyQualifiedFormat;
 
@@ -30,7 +30,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         "VLS001",
         "Settings model must not be generic",
         "Settings model '{0}' must not be generic because Valiant generates concrete schema provider types",
-        "Valiant.Settings",
+        "StaticNorth.Valiant.Settings",
         DiagnosticSeverity.Error,
         true);
 
@@ -38,7 +38,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         "VLS002",
         "Settings model section path is required",
         "Settings model '{0}' must provide a non-empty configuration section path",
-        "Valiant.Settings",
+        "StaticNorth.Valiant.Settings",
         DiagnosticSeverity.Error,
         true);
 
@@ -142,11 +142,11 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         var builder = new StringBuilder();
         ValiantSourceBuilder.AppendGeneratedFileHeader(builder);
         builder.AppendLine();
-        builder.AppendLine("namespace Valiant.Settings.Generated");
+        builder.AppendLine("namespace StaticNorth.Valiant.Settings.Generated");
         builder.AppendLine("{");
         builder.Append("    internal sealed class ");
         builder.Append(model.ProviderTypeName);
-        builder.AppendLine(" : global::Valiant.Settings.IValiantSettingsSchemaProvider");
+        builder.AppendLine(" : global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider");
         builder.AppendLine("    {");
         builder.Append("        public global::System.Type SettingsType => typeof(");
         builder.Append(model.FullTypeName);
@@ -156,8 +156,8 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.Append(model.SectionPath is null ? "null" : ToLiteral(model.SectionPath));
         builder.AppendLine(";");
         builder.AppendLine();
-        builder.AppendLine("        public global::Valiant.Settings.ValiantSettingsSchema Schema { get; } =");
-        builder.AppendLine("            new global::Valiant.Settings.ValiantSettingsSchema(");
+        builder.AppendLine("        public global::StaticNorth.Valiant.Settings.ValiantSettingsSchema Schema { get; } =");
+        builder.AppendLine("            new global::StaticNorth.Valiant.Settings.ValiantSettingsSchema(");
         builder.Append("                typeof(");
         builder.Append(model.FullTypeName);
         builder.AppendLine("),");
@@ -192,7 +192,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         var builder = new StringBuilder();
         ValiantSourceBuilder.AppendGeneratedFileHeader(builder);
         builder.AppendLine();
-        builder.AppendLine("namespace Valiant.Settings");
+        builder.AppendLine("namespace StaticNorth.Valiant.Settings");
         builder.AppendLine("{");
         builder.AppendLine("    /// <summary>");
         builder.AppendLine("    /// Provides access to source-generated Valiant settings schemas in the current compilation.");
@@ -202,12 +202,12 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.AppendLine("        /// <summary>");
         builder.AppendLine("        /// Gets all generated Valiant settings schema providers in the current compilation.");
         builder.AppendLine("        /// </summary>");
-        builder.AppendLine("        public static global::System.Collections.Generic.IReadOnlyList<global::Valiant.Settings.IValiantSettingsSchemaProvider> All { get; } =");
-        builder.AppendLine("            new global::Valiant.Settings.IValiantSettingsSchemaProvider[]");
+        builder.AppendLine("        public static global::System.Collections.Generic.IReadOnlyList<global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider> All { get; } =");
+        builder.AppendLine("            new global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider[]");
         builder.AppendLine("            {");
         foreach (var model in orderedModels)
         {
-            builder.Append("                new global::Valiant.Settings.Generated.");
+            builder.Append("                new global::StaticNorth.Valiant.Settings.Generated.");
             builder.Append(model.ProviderTypeName);
             builder.AppendLine("(),");
         }
@@ -216,8 +216,8 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         if (orderedModels.Length > DictionaryLookupThreshold)
         {
             builder.AppendLine();
-            builder.AppendLine("        private static readonly global::System.Collections.Generic.IReadOnlyDictionary<global::System.Type, global::Valiant.Settings.IValiantSettingsSchemaProvider> ProvidersByType =");
-            builder.AppendLine("            new global::System.Collections.Generic.Dictionary<global::System.Type, global::Valiant.Settings.IValiantSettingsSchemaProvider>");
+            builder.AppendLine("        private static readonly global::System.Collections.Generic.IReadOnlyDictionary<global::System.Type, global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider> ProvidersByType =");
+            builder.AppendLine("            new global::System.Collections.Generic.Dictionary<global::System.Type, global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider>");
             builder.AppendLine("            {");
             for (var index = 0; index < orderedModels.Length; index++)
             {
@@ -235,7 +235,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.AppendLine("        /// <summary>");
         builder.AppendLine("        /// Gets the generated schema provider for the specified settings model type.");
         builder.AppendLine("        /// </summary>");
-        builder.AppendLine("        public static global::Valiant.Settings.IValiantSettingsSchemaProvider Get<TSettings>()");
+        builder.AppendLine("        public static global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider Get<TSettings>()");
         builder.AppendLine("        {");
         builder.AppendLine("            if (TryGet<TSettings>(out var provider))");
         builder.AppendLine("            {");
@@ -248,7 +248,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.AppendLine("        /// <summary>");
         builder.AppendLine("        /// Tries to get the generated schema provider for the specified settings model type.");
         builder.AppendLine("        /// </summary>");
-        builder.AppendLine("        public static bool TryGet<TSettings>(out global::Valiant.Settings.IValiantSettingsSchemaProvider? provider)");
+        builder.AppendLine("        public static bool TryGet<TSettings>(out global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider? provider)");
         builder.AppendLine("        {");
         if (orderedModels.Length > DictionaryLookupThreshold)
         {
@@ -317,8 +317,8 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             compilation.GetTypeByMetadataName("Microsoft.Extensions.Configuration.IConfiguration") is not null &&
             compilation.GetTypeByMetadataName("Microsoft.Extensions.DependencyInjection.OptionsConfigurationServiceCollectionExtensions") is not null;
 
-        var hasValidationIntegration = compilation.GetTypeByMetadataName("Valiant.Settings.Validation.ValiantSettingsValidationOptions") is not null &&
-            compilation.GetTypeByMetadataName("Valiant.Settings.Validation.ValiantSettingsValidationServiceCollectionExtensions") is not null;
+        var hasValidationIntegration = compilation.GetTypeByMetadataName("StaticNorth.Valiant.Settings.Validation.ValiantSettingsValidationOptions") is not null &&
+            compilation.GetTypeByMetadataName("StaticNorth.Valiant.Settings.Validation.ValiantSettingsValidationServiceCollectionExtensions") is not null;
 
         return new SettingsRegistrationFeatures(hasSettingsRegistration, hasValidationIntegration);
     }
@@ -344,7 +344,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         var builder = new StringBuilder();
         ValiantSourceBuilder.AppendGeneratedFileHeader(builder);
         builder.AppendLine();
-        builder.AppendLine("namespace Valiant.Settings.DependencyInjection");
+        builder.AppendLine("namespace StaticNorth.Valiant.Settings.DependencyInjection");
         builder.AppendLine("{");
         builder.AppendLine("    /// <summary>");
         builder.AppendLine("    /// Provides dependency injection registration for source-generated Valiant settings schemas.");
@@ -362,9 +362,9 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.AppendLine("        /// <summary>");
         builder.AppendLine("        /// Registers generated Valiant settings schema providers with configured options.");
         builder.AppendLine("        /// </summary>");
-        builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantSettings(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::System.Action<global::Valiant.Settings.ValiantSettingsOptions>? configure)");
+        builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantSettings(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::System.Action<global::StaticNorth.Valiant.Settings.ValiantSettingsOptions>? configure)");
         builder.AppendLine("        {");
-        builder.AppendLine("            var valiantSettingsOptions = new global::Valiant.Settings.ValiantSettingsOptions();");
+        builder.AppendLine("            var valiantSettingsOptions = new global::StaticNorth.Valiant.Settings.ValiantSettingsOptions();");
         builder.AppendLine("            configure?.Invoke(valiantSettingsOptions);");
         builder.AppendLine();
         builder.AppendLine("            AddValiantSettingsCore(services, valiantSettingsOptions);");
@@ -385,18 +385,18 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             builder.AppendLine("        /// <summary>");
             builder.AppendLine("        /// Registers generated Valiant settings schema providers, configures settings models that opt into binding, and optionally validates them with Valiant validators.");
             builder.AppendLine("        /// </summary>");
-            builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantSettings(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::Microsoft.Extensions.Configuration.IConfiguration configuration, global::System.Action<global::Valiant.Settings.Validation.ValiantSettingsValidationOptions>? configure)");
+            builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantSettings(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::Microsoft.Extensions.Configuration.IConfiguration configuration, global::System.Action<global::StaticNorth.Valiant.Settings.Validation.ValiantSettingsValidationOptions>? configure)");
             builder.AppendLine("        {");
             builder.AppendLine("            _ = configuration ?? throw new global::System.ArgumentNullException(nameof(configuration));");
             builder.AppendLine();
-            builder.AppendLine("            var valiantSettingsValidationOptions = new global::Valiant.Settings.Validation.ValiantSettingsValidationOptions();");
+            builder.AppendLine("            var valiantSettingsValidationOptions = new global::StaticNorth.Valiant.Settings.Validation.ValiantSettingsValidationOptions();");
             builder.AppendLine("            configure?.Invoke(valiantSettingsValidationOptions);");
             builder.AppendLine();
             builder.AppendLine("            AddValiantSettingsCore(services, valiantSettingsValidationOptions);");
             AppendSectionOptionsConfiguration(builder, sectionModels);
             foreach (var model in sectionModels)
             {
-                builder.Append("            global::Valiant.Settings.Validation.ValiantSettingsValidationServiceCollectionExtensions.AddValiantSettingsOptionsValidation<");
+                builder.Append("            global::StaticNorth.Valiant.Settings.Validation.ValiantSettingsValidationServiceCollectionExtensions.AddValiantSettingsOptionsValidation<");
                 builder.Append(model.FullTypeName);
                 builder.AppendLine(">(services, valiantSettingsValidationOptions);");
             }
@@ -411,11 +411,11 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             builder.AppendLine("        /// <summary>");
             builder.AppendLine("        /// Registers generated Valiant settings schema providers and configures settings models that opt into binding with configured options.");
             builder.AppendLine("        /// </summary>");
-            builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantSettings(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::Microsoft.Extensions.Configuration.IConfiguration configuration, global::System.Action<global::Valiant.Settings.ValiantSettingsOptions>? configure)");
+            builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantSettings(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::Microsoft.Extensions.Configuration.IConfiguration configuration, global::System.Action<global::StaticNorth.Valiant.Settings.ValiantSettingsOptions>? configure)");
             builder.AppendLine("        {");
             builder.AppendLine("            _ = configuration ?? throw new global::System.ArgumentNullException(nameof(configuration));");
             builder.AppendLine();
-            builder.AppendLine("            var valiantSettingsOptions = new global::Valiant.Settings.ValiantSettingsOptions();");
+            builder.AppendLine("            var valiantSettingsOptions = new global::StaticNorth.Valiant.Settings.ValiantSettingsOptions();");
             builder.AppendLine("            configure?.Invoke(valiantSettingsOptions);");
             builder.AppendLine();
             builder.AppendLine("            AddValiantSettingsCore(services, valiantSettingsOptions);");
@@ -426,7 +426,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         }
 
         builder.AppendLine();
-        builder.AppendLine("        private static void AddValiantSettingsCore(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::Valiant.Settings.ValiantSettingsOptions options)");
+        builder.AppendLine("        private static void AddValiantSettingsCore(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::StaticNorth.Valiant.Settings.ValiantSettingsOptions options)");
         builder.AppendLine("        {");
         builder.AppendLine("            _ = services ?? throw new global::System.ArgumentNullException(nameof(services));");
         builder.AppendLine("            _ = options ?? throw new global::System.ArgumentNullException(nameof(options));");
@@ -442,7 +442,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.AppendLine("    }");
         builder.AppendLine("}");
 
-        context.AddSource("Valiant.Settings.DependencyInjection.g.cs", builder.ToString());
+        context.AddSource("StaticNorth.Valiant.Settings.DependencyInjection.g.cs", builder.ToString());
     }
 
     private static void AppendSectionOptionsConfiguration(
@@ -465,7 +465,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
     {
         foreach (var model in models)
         {
-            builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::Valiant.Settings.IValiantSettingsSchemaProvider), typeof(global::Valiant.Settings.Generated.");
+            builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider), typeof(global::StaticNorth.Valiant.Settings.Generated.");
             builder.Append(model.ProviderTypeName);
             builder.AppendLine(")));");
         }
@@ -700,7 +700,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         ImmutableArray<SettingsPropertyModel> properties,
         string indent)
     {
-        builder.AppendLine("new global::Valiant.Settings.ValiantSettingsPropertySchema[]");
+        builder.AppendLine("new global::StaticNorth.Valiant.Settings.ValiantSettingsPropertySchema[]");
         builder.Append(indent);
         builder.AppendLine("{");
         foreach (var property in properties)
@@ -720,7 +720,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         SettingsPropertyModel property,
         string indent)
     {
-        builder.AppendLine("new global::Valiant.Settings.ValiantSettingsPropertySchema(");
+        builder.AppendLine("new global::StaticNorth.Valiant.Settings.ValiantSettingsPropertySchema(");
         builder.Append(indent);
         builder.Append("    ");
         builder.Append(ToLiteral(property.Name));
@@ -734,7 +734,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.Append(ToLiteral(property.TypeName));
         builder.AppendLine(",");
         builder.Append(indent);
-        builder.Append("    global::Valiant.Settings.ValiantSettingsPropertyKind.");
+        builder.Append("    global::StaticNorth.Valiant.Settings.ValiantSettingsPropertyKind.");
         builder.Append(property.Kind);
         builder.AppendLine(",");
         builder.Append(indent);

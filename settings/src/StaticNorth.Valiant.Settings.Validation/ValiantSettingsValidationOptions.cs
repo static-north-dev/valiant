@@ -1,6 +1,6 @@
-namespace Valiant.Settings.Validation;
+namespace StaticNorth.Valiant.Settings.Validation;
 
-using Valiant.Settings;
+using StaticNorth.Valiant.Settings;
 
 /// <summary>
 /// Configures Valiant validation integration for generated settings options.

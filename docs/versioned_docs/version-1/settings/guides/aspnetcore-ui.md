@@ -8,8 +8,8 @@ description: Map the built-in settings explorer, JSON schema endpoint, runtime v
 `StaticNorth.Valiant.Settings.AspNetCore` provides a compact settings explorer and a JSON document backed by generated schema providers.
 
 ```csharp
-using Valiant.Settings.AspNetCore;
-using Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Settings.AspNetCore;
+using StaticNorth.Valiant.Settings.DependencyInjection;
 
 builder.Services.AddValiantSettings(builder.Configuration);
 

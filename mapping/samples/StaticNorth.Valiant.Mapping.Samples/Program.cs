@@ -1,4 +1,4 @@
-using Samples = Valiant.Mapping.Samples;
+using Samples = StaticNorth.Valiant.Mapping.Samples;
 
 Action sample;
 

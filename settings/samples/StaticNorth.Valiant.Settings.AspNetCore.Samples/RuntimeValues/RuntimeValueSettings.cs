@@ -1,4 +1,4 @@
-namespace Valiant.Settings.AspNetCore.Samples.RuntimeValues;
+namespace StaticNorth.Valiant.Settings.AspNetCore.Samples.RuntimeValues;
 
 [ValiantSettings("Samples:AspNetCore:RuntimeValues", configure: true)]
 public sealed record RuntimeValueSettings

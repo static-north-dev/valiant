@@ -1,4 +1,4 @@
-namespace Valiant.Settings.Samples.SchemaMetadata;
+namespace StaticNorth.Valiant.Settings.Samples.SchemaMetadata;
 
 public sealed record ReplicaSettings
 {

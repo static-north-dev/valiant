@@ -1,6 +1,6 @@
-using Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Settings.DependencyInjection;
 
-namespace Valiant.Settings.AspNetCore.Samples.SecretReveal;
+namespace StaticNorth.Valiant.Settings.AspNetCore.Samples.SecretReveal;
 
 /// <summary>
 /// Demonstrates explicit secret reveal through the revealSecrets query parameter.

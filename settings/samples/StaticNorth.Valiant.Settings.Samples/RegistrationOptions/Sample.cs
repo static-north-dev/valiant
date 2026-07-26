@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Settings.DependencyInjection;
 
-namespace Valiant.Settings.Samples.RegistrationOptions;
+namespace StaticNorth.Valiant.Settings.Samples.RegistrationOptions;
 
 /// <summary>
 /// Demonstrates default schema-provider registration and binding without schema providers.

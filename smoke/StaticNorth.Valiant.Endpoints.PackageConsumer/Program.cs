@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Routing;
-using Valiant.Endpoints;
-using Valiant.Endpoints.AspNetCore;
-using Valiant.Endpoints.AspNetCore.DependencyInjection;
+using StaticNorth.Valiant.Endpoints;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddValiantEndpoints();
@@ -20,7 +20,7 @@ if (!routes.Contains("/package-smoke", StringComparer.Ordinal))
     throw new InvalidOperationException("The packaged endpoint generator did not map its generated route.");
 }
 
-Console.WriteLine("Valiant.Endpoints.AspNetCore package consumer passed.");
+Console.WriteLine("StaticNorth.Valiant.Endpoints.AspNetCore package consumer passed.");
 
 [ValiantEndpoint]
 public sealed class PackageSmokeEndpoint : IEndpoint

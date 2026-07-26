@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Valiant.Validation.AspNetCore;
+namespace StaticNorth.Valiant.Validation.AspNetCore;
 
 /// <summary>
 /// MVC validation extensions for Valiant validators.

@@ -4,11 +4,11 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using TUnit.Core.Interfaces;
-using Valiant.Endpoints.AspNetCore;
-using SampleStartup = Valiant.Endpoints.AspNetCore.Samples.QueryBinding.Startup;
-using TestApplicationMarker = Valiant.Endpoints.AspNetCore.TestApp.TestApplicationMarker;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+using SampleStartup = StaticNorth.Valiant.Endpoints.AspNetCore.Samples.QueryBinding.Startup;
+using TestApplicationMarker = StaticNorth.Valiant.Endpoints.AspNetCore.TestApp.TestApplicationMarker;
 
-namespace Valiant.Endpoints.Tests.QueryBinding;
+namespace StaticNorth.Valiant.Endpoints.Tests.QueryBinding;
 
 public sealed class QueryBindingSampleApplicationFactory :
     WebApplicationFactory<SampleStartup>,

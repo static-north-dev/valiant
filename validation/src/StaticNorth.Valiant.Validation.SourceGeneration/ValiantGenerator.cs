@@ -2,10 +2,10 @@ using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Valiant.SourceGeneration;
-using static Valiant.SourceGeneration.ValiantTypeDeclarations;
+using StaticNorth.Valiant.SourceGeneration;
+using static StaticNorth.Valiant.SourceGeneration.ValiantTypeDeclarations;
 
-namespace Valiant.Validation.SourceGeneration;
+namespace StaticNorth.Valiant.Validation.SourceGeneration;
 
 /// <summary>
 /// Generates Valiant validation implementations and dependency injection registration code.
@@ -124,10 +124,10 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
     {
         var nonGenericValiantTypes = CreateValiantTypeProvider(
             context,
-            "Valiant.Validation.ValiantValidatorAttribute");
+            "StaticNorth.Valiant.Validation.ValiantValidatorAttribute");
         var genericValiantTypes = CreateValiantTypeProvider(
             context,
-            "Valiant.Validation.ValiantValidatorAttribute`1");
+            "StaticNorth.Valiant.Validation.ValiantValidatorAttribute`1");
         var nonGenericValidators = nonGenericValiantTypes
             .Select(static (model, _) => model.Validator)
             .Where(static model => model is not null)
@@ -212,7 +212,7 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
             return false;
         }
 
-        return attributeClass.ContainingNamespace.ToDisplayString() == "Valiant.Validation" &&
+        return attributeClass.ContainingNamespace.ToDisplayString() == "StaticNorth.Valiant.Validation" &&
             attributeClass.MetadataName is "ValiantValidatorAttribute" or "ValiantValidatorAttribute`1";
     }
 
@@ -250,7 +250,7 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
     {
         foreach (var interfaceType in validatorSymbol.AllInterfaces)
         {
-            if (interfaceType.ContainingNamespace.ToDisplayString() == "Valiant.Validation" &&
+            if (interfaceType.ContainingNamespace.ToDisplayString() == "StaticNorth.Valiant.Validation" &&
                 interfaceType is { MetadataName: "IValidatorDefinition`1", TypeArguments.Length: 1 })
             {
                 return interfaceType.TypeArguments[0];
@@ -264,7 +264,7 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
     {
         for (var baseType = validatorSymbol.BaseType; baseType is not null; baseType = baseType.BaseType)
         {
-            if (baseType.ContainingNamespace.ToDisplayString() == "Valiant.Validation" &&
+            if (baseType.ContainingNamespace.ToDisplayString() == "StaticNorth.Valiant.Validation" &&
                 baseType is { MetadataName: "ValidatorDefinition`1", TypeArguments.Length: 1 })
             {
                 return baseType.TypeArguments[0];

@@ -1,8 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Valiant.Validation;
+using StaticNorth.Valiant.Validation;
 
-namespace Valiant.Settings.Validation;
+namespace StaticNorth.Valiant.Settings.Validation;
 
 /// <summary>
 /// Registers Valiant validators as ASP.NET Core options validators for settings models.

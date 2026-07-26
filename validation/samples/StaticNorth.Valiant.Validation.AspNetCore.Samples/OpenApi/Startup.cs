@@ -1,8 +1,8 @@
-using Valiant.Validation.AspNetCore.OpenApi;
-using Valiant.Validation.AspNetCore.Samples.Orders;
-using Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Validation.AspNetCore.OpenApi;
+using StaticNorth.Valiant.Validation.AspNetCore.Samples.Orders;
+using StaticNorth.Valiant.Validation.DependencyInjection;
 
-namespace Valiant.Validation.AspNetCore.Samples.OpenApi;
+namespace StaticNorth.Valiant.Validation.AspNetCore.Samples.OpenApi;
 
 /// <summary>
 /// Demonstrates projecting generated Valiant validation metadata into the

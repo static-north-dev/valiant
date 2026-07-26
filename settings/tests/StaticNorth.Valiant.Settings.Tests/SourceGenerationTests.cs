@@ -6,13 +6,13 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Valiant.Settings.AspNetCore;
-using Valiant.Settings.Validation;
-using Valiant.SourceGeneration.Testing;
-using Valiant.Validation;
-using Valiant.Settings.SourceGeneration;
+using StaticNorth.Valiant.Settings.AspNetCore;
+using StaticNorth.Valiant.Settings.Validation;
+using StaticNorth.Valiant.SourceGeneration.Testing;
+using StaticNorth.Valiant.Validation;
+using StaticNorth.Valiant.Settings.SourceGeneration;
 
-namespace Valiant.Settings.Tests;
+namespace StaticNorth.Valiant.Settings.Tests;
 
 public sealed class SourceGenerationTests
 {
@@ -30,7 +30,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Settings;
+            using StaticNorth.Valiant.Settings;
 
             [ValiantSettings("ConnectionStrings:Primary")]
             public sealed record DbSettings
@@ -42,7 +42,7 @@ public sealed class SourceGenerationTests
             }
             """);
 
-        var registry = assembly.GetType("Valiant.Settings.ValiantSettingsSchemas", throwOnError: true)!;
+        var registry = assembly.GetType("StaticNorth.Valiant.Settings.ValiantSettingsSchemas", throwOnError: true)!;
         var providers = (IReadOnlyList<IValiantSettingsSchemaProvider>)registry.GetProperty("All")!.GetValue(null)!;
         var provider = providers.Single();
         var schema = provider.Schema;
@@ -63,7 +63,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Settings;
+            using StaticNorth.Valiant.Settings;
 
             [ValiantSettings("Features:Search")]
             public sealed record SearchSettings
@@ -79,7 +79,7 @@ public sealed class SourceGenerationTests
             }
             """);
 
-        var registry = assembly.GetType("Valiant.Settings.ValiantSettingsSchemas", throwOnError: true)!;
+        var registry = assembly.GetType("StaticNorth.Valiant.Settings.ValiantSettingsSchemas", throwOnError: true)!;
         var provider = ((IReadOnlyList<IValiantSettingsSchemaProvider>)registry.GetProperty("All")!.GetValue(null)!).Single();
         var index = provider.Schema.Properties.Single(static property => property.Name == "Index");
 
@@ -94,7 +94,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Settings;
+            using StaticNorth.Valiant.Settings;
 
             [ValiantSettings("ConnectionStrings:Primary", configure: true)]
             public sealed class DbSettings
@@ -113,7 +113,7 @@ public sealed class SourceGenerationTests
             })
             .Build();
         var services = new ServiceCollection();
-        var extensionType = assembly.GetType("Valiant.Settings.DependencyInjection.ValiantSettingsServiceCollectionExtensions", throwOnError: true)!;
+        var extensionType = assembly.GetType("StaticNorth.Valiant.Settings.DependencyInjection.ValiantSettingsServiceCollectionExtensions", throwOnError: true)!;
         extensionType.GetMethod("AddValiantSettings", [typeof(IServiceCollection), typeof(IConfiguration)])!
             .Invoke(null, [services, configuration]);
 
@@ -135,7 +135,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Settings;
+            using StaticNorth.Valiant.Settings;
 
             [ValiantSettings("ConnectionStrings:Primary")]
             public sealed class DbSettings
@@ -144,7 +144,7 @@ public sealed class SourceGenerationTests
             }
             """);
 
-        var dependencyInjection = GetGeneratedSource(result, "Valiant.Settings.DependencyInjection.g.cs");
+        var dependencyInjection = GetGeneratedSource(result, "StaticNorth.Valiant.Settings.DependencyInjection.g.cs");
 
         await Assert.That(dependencyInjection).DoesNotContain("Configure<global::DbSettings>");
         await Assert.That(dependencyInjection).Contains("TryAddEnumerable");
@@ -155,7 +155,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Settings;
+            using StaticNorth.Valiant.Settings;
 
             [ValiantSettings("ConnectionStrings:Primary", configure: true)]
             public sealed class DbSettings
@@ -171,7 +171,7 @@ public sealed class SourceGenerationTests
             })
             .Build();
         var services = new ServiceCollection();
-        var extensionType = assembly.GetType("Valiant.Settings.DependencyInjection.ValiantSettingsServiceCollectionExtensions", throwOnError: true)!;
+        var extensionType = assembly.GetType("StaticNorth.Valiant.Settings.DependencyInjection.ValiantSettingsServiceCollectionExtensions", throwOnError: true)!;
         extensionType.GetMethod(
                 "AddValiantSettings",
                 [typeof(IServiceCollection), typeof(IConfiguration), typeof(Action<ValiantSettingsValidationOptions>)])!
@@ -201,8 +201,8 @@ public sealed class SourceGenerationTests
             """
             using System.Threading;
             using System.Threading.Tasks;
-            using Valiant.Settings;
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Settings;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantSettings("ConnectionStrings:Primary", configure: true)]
             public sealed class DbSettings
@@ -248,7 +248,7 @@ public sealed class SourceGenerationTests
         var validatorServiceType = typeof(IValidator<>).MakeGenericType(settingsType);
         services.AddSingleton(validatorServiceType, validatorType);
 
-        var extensionType = assembly.GetType("Valiant.Settings.DependencyInjection.ValiantSettingsServiceCollectionExtensions", throwOnError: true)!;
+        var extensionType = assembly.GetType("StaticNorth.Valiant.Settings.DependencyInjection.ValiantSettingsServiceCollectionExtensions", throwOnError: true)!;
         extensionType.GetMethod(
                 "AddValiantSettings",
                 [typeof(IServiceCollection), typeof(IConfiguration), typeof(Action<ValiantSettingsValidationOptions>)])!
@@ -416,7 +416,7 @@ public sealed class SourceGenerationTests
     {
         var before = RunGenerator(
             """
-            using Valiant.Settings;
+            using StaticNorth.Valiant.Settings;
 
             [ValiantSettings("ConnectionStrings:Primary", configure: true)]
             public sealed class DbSettings
@@ -426,7 +426,7 @@ public sealed class SourceGenerationTests
             """);
         var after = RunGenerator(
             """
-            using Valiant.Settings;
+            using StaticNorth.Valiant.Settings;
 
             [ValiantSettings("ConnectionStrings:Primary", configure: true)]
             public sealed class DbSettings
@@ -439,8 +439,8 @@ public sealed class SourceGenerationTests
 
         var beforeRegistry = GetGeneratedSource(before, "ValiantSettingsSchemas.g.cs");
         var afterRegistry = GetGeneratedSource(after, "ValiantSettingsSchemas.g.cs");
-        var beforeDependencyInjection = GetGeneratedSource(before, "Valiant.Settings.DependencyInjection.g.cs");
-        var afterDependencyInjection = GetGeneratedSource(after, "Valiant.Settings.DependencyInjection.g.cs");
+        var beforeDependencyInjection = GetGeneratedSource(before, "StaticNorth.Valiant.Settings.DependencyInjection.g.cs");
+        var afterDependencyInjection = GetGeneratedSource(after, "StaticNorth.Valiant.Settings.DependencyInjection.g.cs");
         var beforeProvider = before.GeneratedSources.Single(static source => source.HintName.EndsWith(".ValiantSettingsSchema.g.cs", StringComparison.Ordinal)).SourceText.ToString();
         var afterProvider = after.GeneratedSources.Single(static source => source.HintName.EndsWith(".ValiantSettingsSchema.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
@@ -454,7 +454,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Settings;
+            using StaticNorth.Valiant.Settings;
 
             [ValiantSettings("Generic")]
             public sealed record GenericSettings<T>
@@ -471,7 +471,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Settings;
+            using StaticNorth.Valiant.Settings;
 
             [ValiantSettings("")]
             public sealed record DbSettings
@@ -498,7 +498,7 @@ public sealed class SourceGenerationTests
     public async Task Unrelated_Edit_Leaves_Tracked_Settings_Step_Cached_Or_Unchanged()
     {
         const string settings = """
-            using Valiant.Settings;
+            using StaticNorth.Valiant.Settings;
 
             [ValiantSettings("Database")]
             public sealed class DatabaseSettings
@@ -518,7 +518,7 @@ public sealed class SourceGenerationTests
 
     private static string CreateSettingsSetSource(int count)
     {
-        var builder = new System.Text.StringBuilder("using Valiant.Settings;\n");
+        var builder = new System.Text.StringBuilder("using StaticNorth.Valiant.Settings;\n");
         for (var index = 0; index < count; index++)
         {
             builder.Append("[ValiantSettings(\"Section")
@@ -543,7 +543,7 @@ public sealed class SourceGenerationTests
             source,
             parseOptions,
             references,
-            "Valiant.Settings.SourceGeneration.Tests");
+            "StaticNorth.Valiant.Settings.SourceGeneration.Tests");
         var execution = GeneratorTestHarness.Run(new ValiantSettingsGenerator(), compilation, parseOptions);
 
         var diagnostics = execution.OutputCompilation.GetDiagnostics()
@@ -569,7 +569,7 @@ public sealed class SourceGenerationTests
             after,
             stepName,
             references,
-            "Valiant.Settings.Tracked.Tests");
+            "StaticNorth.Valiant.Settings.Tracked.Tests");
     }
 
     private static string GetGeneratedSource(SourceGenerationResult result, string hintName)
@@ -594,7 +594,7 @@ public sealed class SourceGenerationTests
             .Add(MetadataReference.CreateFromFile(typeof(IValidator<>).Assembly.Location));
 
         var compilation = CSharpCompilation.Create(
-            "Valiant.Settings.GeneratedSchema.Tests",
+            "StaticNorth.Valiant.Settings.GeneratedSchema.Tests",
             [syntaxTree],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));

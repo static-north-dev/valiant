@@ -1,6 +1,6 @@
-using Valiant.Validation;
+using StaticNorth.Valiant.Validation;
 
-namespace Valiant.Settings.AspNetCore.Samples.Validation;
+namespace StaticNorth.Valiant.Settings.AspNetCore.Samples.Validation;
 
 [ValiantSettings("Samples:AspNetCore:Validation:Validated", configure: true)]
 public sealed record ValidatedSettings

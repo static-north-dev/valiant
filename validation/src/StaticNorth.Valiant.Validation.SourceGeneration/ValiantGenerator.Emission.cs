@@ -5,9 +5,9 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
-using static Valiant.SourceGeneration.ValiantSourceBuilder;
+using static StaticNorth.Valiant.SourceGeneration.ValiantSourceBuilder;
 
-namespace Valiant.Validation.SourceGeneration;
+namespace StaticNorth.Valiant.Validation.SourceGeneration;
 
 /// <summary>
 /// Generates Valiant validation implementations and dependency injection registration code.
@@ -40,7 +40,7 @@ public sealed partial class ValiantGenerator
             return;
         }
 
-        context.AddSource("Valiant.Validation.DependencyInjection.g.cs", SourceText.From(GenerateDependencyInjection(validators, propertyValidators), Encoding.UTF8));
+        context.AddSource("StaticNorth.Valiant.Validation.DependencyInjection.g.cs", SourceText.From(GenerateDependencyInjection(validators, propertyValidators), Encoding.UTF8));
     }
 
     private static void ExecuteDuplicateValidatorModelDiagnostics(
@@ -118,7 +118,7 @@ public sealed partial class ValiantGenerator
         AppendXmlDocumentation(builder, namespaceName, 0, "Validates instances using the rules declared for this validator.");
         AppendIndent(builder, 0, namespaceName);
         builder.Append(modifier).Append("partial class ").Append(declaration.Name)
-            .Append(" : global::Valiant.Validation.IValidator<").Append(modelType).AppendLine(">");
+            .Append(" : global::StaticNorth.Valiant.Validation.IValidator<").Append(modelType).AppendLine(">");
         AppendIndent(builder, 0, namespaceName);
         builder.AppendLine("{");
 
@@ -137,7 +137,7 @@ public sealed partial class ValiantGenerator
             ("instance", "The instance to validate."));
         AppendIndent(builder, 1, namespaceName);
         builder.Append(GetGeneratedValidatorMethodModifier(validator))
-            .Append("global::Valiant.Validation.ValidationResult Validate(")
+            .Append("global::StaticNorth.Valiant.Validation.ValidationResult Validate(")
             .Append(modelType)
             .AppendLine(" instance)");
         AppendIndent(builder, 1, namespaceName);
@@ -145,7 +145,7 @@ public sealed partial class ValiantGenerator
         if (validator.HasConfigureMethod)
         {
             AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("if (GetEffectiveValidationMode() == global::Valiant.Validation.ValiantValidationMode.Debuggable)");
+            builder.AppendLine("if (GetEffectiveValidationMode() == global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable)");
             AppendIndent(builder, 2, namespaceName);
             builder.AppendLine("{");
             AppendIndent(builder, 3, namespaceName);
@@ -190,7 +190,7 @@ public sealed partial class ValiantGenerator
         }
 
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("global::System.Collections.Generic.List<global::Valiant.Validation.ValidationFailure>? failures = null;");
+        builder.AppendLine("global::System.Collections.Generic.List<global::StaticNorth.Valiant.Validation.ValidationFailure>? failures = null;");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("var validationFailureBehavior = GetEffectiveFailureBehavior();");
 
@@ -199,7 +199,7 @@ public sealed partial class ValiantGenerator
 
         builder.AppendLine();
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return failures is null ? global::Valiant.Validation.ValidationResult.Valid : new global::Valiant.Validation.ValidationResult(failures);");
+        builder.AppendLine("return failures is null ? global::StaticNorth.Valiant.Validation.ValidationResult.Valid : new global::StaticNorth.Valiant.Validation.ValidationResult(failures);");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
         AppendCommonMembers(builder, namespaceName, modelType, validator, totalChecks, requiresAsyncValidationBody);
@@ -239,7 +239,7 @@ public sealed partial class ValiantGenerator
         ValidatorModel validator)
     {
         AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("private readonly global::Valiant.Validation.ValiantValidationOptions? _valiantValidationOptions = null;");
+        builder.AppendLine("private readonly global::StaticNorth.Valiant.Validation.ValiantValidationOptions? _valiantValidationOptions = null;");
         builder.AppendLine();
 
         var declaration = validator.Declaration;
@@ -263,7 +263,7 @@ public sealed partial class ValiantGenerator
                 null,
                 ("valiantValidationOptions", "The validation options to use for this validator instance."));
             AppendIndent(builder, 1, namespaceName);
-            builder.Append("public ").Append(declaration.Name).AppendLine("(global::Valiant.Validation.ValiantValidationOptions valiantValidationOptions)");
+            builder.Append("public ").Append(declaration.Name).AppendLine("(global::StaticNorth.Valiant.Validation.ValiantValidationOptions valiantValidationOptions)");
             AppendIndent(builder, 1, namespaceName);
             builder.AppendLine("{");
             AppendIndent(builder, 2, namespaceName);
@@ -293,7 +293,7 @@ public sealed partial class ValiantGenerator
             builder.Append(", ");
         }
 
-        builder.Append("global::Valiant.Validation.ValiantValidationOptions valiantValidationOptions) : this(");
+        builder.Append("global::StaticNorth.Valiant.Validation.ValiantValidationOptions valiantValidationOptions) : this(");
         for (var index = 0; index < constructor.Parameters.Length; index++)
         {
             if (index > 0)
@@ -321,9 +321,9 @@ public sealed partial class ValiantGenerator
         ValidatorModel validator)
     {
         AppendIndent(builder, 1, namespaceName);
-        builder.Append("void global::Valiant.Validation.IValidatorDefinition<")
+        builder.Append("void global::StaticNorth.Valiant.Validation.IValidatorDefinition<")
             .Append(modelType)
-            .Append(">.Configure(global::Valiant.Validation.ValidationContext<")
+            .Append(">.Configure(global::StaticNorth.Valiant.Validation.ValidationContext<")
             .Append(modelType)
             .AppendLine("> context)");
         AppendIndent(builder, 1, namespaceName);
@@ -420,7 +420,7 @@ public sealed partial class ValiantGenerator
                 ("cancellationToken", "A cancellation token used to cancel asynchronous validation."));
             AppendIndent(builder, 1, namespaceName);
             builder.Append(GetGeneratedValidatorMethodModifier(validator))
-                .Append("global::System.Threading.Tasks.ValueTask<global::Valiant.Validation.ValidationResult> ValidateAsync(")
+                .Append("global::System.Threading.Tasks.ValueTask<global::StaticNorth.Valiant.Validation.ValidationResult> ValidateAsync(")
                 .Append(modelType)
                 .AppendLine(" instance, global::System.Threading.CancellationToken cancellationToken = default)");
             AppendIndent(builder, 1, namespaceName);
@@ -428,7 +428,7 @@ public sealed partial class ValiantGenerator
             if (validator.HasConfigureMethod)
             {
                 AppendIndent(builder, 2, namespaceName);
-                builder.AppendLine("if (GetEffectiveValidationMode() == global::Valiant.Validation.ValiantValidationMode.Debuggable)");
+                builder.AppendLine("if (GetEffectiveValidationMode() == global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable)");
                 AppendIndent(builder, 2, namespaceName);
                 builder.AppendLine("{");
                 AppendIndent(builder, 3, namespaceName);
@@ -441,7 +441,7 @@ public sealed partial class ValiantGenerator
             AppendIndent(builder, 2, namespaceName);
             builder.AppendLine("_ = cancellationToken;");
             AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("return new global::System.Threading.Tasks.ValueTask<global::Valiant.Validation.ValidationResult>(Validate(instance));");
+            builder.AppendLine("return new global::System.Threading.Tasks.ValueTask<global::StaticNorth.Valiant.Validation.ValidationResult>(Validate(instance));");
             AppendIndent(builder, 1, namespaceName);
             builder.AppendLine("}");
 
@@ -473,11 +473,11 @@ public sealed partial class ValiantGenerator
     private static void AppendEffectiveFailureBehaviorMember(StringBuilder builder, string? namespaceName)
     {
         AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("private global::Valiant.Validation.ValiantFailureBehavior GetEffectiveFailureBehavior()");
+        builder.AppendLine("private global::StaticNorth.Valiant.Validation.ValiantFailureBehavior GetEffectiveFailureBehavior()");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return _valiantValidationOptions?.FailureBehavior ?? global::Valiant.Validation.ValiantFailureBehavior.ValidateAll;");
+        builder.AppendLine("return _valiantValidationOptions?.FailureBehavior ?? global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.ValidateAll;");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
     }
@@ -489,13 +489,13 @@ public sealed partial class ValiantGenerator
         ValidatorModel validator)
     {
         AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("private global::Valiant.Validation.ValiantValidationMode GetEffectiveValidationMode()");
+        builder.AppendLine("private global::StaticNorth.Valiant.Validation.ValiantValidationMode GetEffectiveValidationMode()");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("var mode = _valiantValidationOptions?.Mode ?? global::Valiant.Validation.ValiantValidationMode.Auto;");
+        builder.AppendLine("var mode = _valiantValidationOptions?.Mode ?? global::StaticNorth.Valiant.Validation.ValiantValidationMode.Auto;");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("if (mode != global::Valiant.Validation.ValiantValidationMode.Auto)");
+        builder.AppendLine("if (mode != global::StaticNorth.Valiant.Validation.ValiantValidationMode.Auto)");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 3, namespaceName);
@@ -504,26 +504,26 @@ public sealed partial class ValiantGenerator
         builder.AppendLine("}");
         builder.AppendLine("#if DEBUG");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return global::Valiant.Validation.ValiantValidationMode.Debuggable;");
+        builder.AppendLine("return global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable;");
         builder.AppendLine("#else");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return global::Valiant.Validation.ValiantValidationMode.Fast;");
+        builder.AppendLine("return global::StaticNorth.Valiant.Validation.ValiantValidationMode.Fast;");
         builder.AppendLine("#endif");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
 
         builder.AppendLine();
         AppendIndent(builder, 1, namespaceName);
-        builder.Append("private global::Valiant.Validation.ValidationResult ValidateRuntime(").Append(modelType).AppendLine(" instance)");
+        builder.Append("private global::StaticNorth.Valiant.Validation.ValidationResult ValidateRuntime(").Append(modelType).AppendLine(" instance)");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendRuntimeNullCheck(builder, namespaceName, validator);
         AppendIndent(builder, 2, namespaceName);
-        builder.Append("var context = new global::Valiant.Validation.ValidationContext<").Append(modelType).AppendLine(">(instance);");
+        builder.Append("var context = new global::StaticNorth.Valiant.Validation.ValidationContext<").Append(modelType).AppendLine(">(instance);");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("context.ValidateAll();");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("if (GetEffectiveFailureBehavior() == global::Valiant.Validation.ValiantFailureBehavior.FailFast)");
+        builder.AppendLine("if (GetEffectiveFailureBehavior() == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast)");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 3, namespaceName);
@@ -539,7 +539,7 @@ public sealed partial class ValiantGenerator
 
         builder.AppendLine();
         AppendIndent(builder, 1, namespaceName);
-        builder.Append("private async global::System.Threading.Tasks.ValueTask<global::Valiant.Validation.ValidationResult> ValidateRuntimeAsync(")
+        builder.Append("private async global::System.Threading.Tasks.ValueTask<global::StaticNorth.Valiant.Validation.ValidationResult> ValidateRuntimeAsync(")
             .Append(modelType)
             .AppendLine(" instance, global::System.Threading.CancellationToken cancellationToken = default)");
         AppendIndent(builder, 1, namespaceName);
@@ -548,11 +548,11 @@ public sealed partial class ValiantGenerator
         builder.AppendLine("cancellationToken.ThrowIfCancellationRequested();");
         AppendRuntimeNullCheck(builder, namespaceName, validator);
         AppendIndent(builder, 2, namespaceName);
-        builder.Append("var context = new global::Valiant.Validation.ValidationContext<").Append(modelType).AppendLine(">(instance);");
+        builder.Append("var context = new global::StaticNorth.Valiant.Validation.ValidationContext<").Append(modelType).AppendLine(">(instance);");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("context.ValidateAll();");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("if (GetEffectiveFailureBehavior() == global::Valiant.Validation.ValiantFailureBehavior.FailFast)");
+        builder.AppendLine("if (GetEffectiveFailureBehavior() == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast)");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 3, namespaceName);
@@ -575,7 +575,7 @@ public sealed partial class ValiantGenerator
     {
         if (validator.ImplementsValidatorDefinition && !validator.InheritsValidatorBase)
         {
-            builder.Append("((global::Valiant.Validation.IValidatorDefinition<")
+            builder.Append("((global::StaticNorth.Valiant.Validation.IValidatorDefinition<")
                 .Append(modelType)
                 .AppendLine(">)this).Configure(context);");
             return;
@@ -610,7 +610,7 @@ public sealed partial class ValiantGenerator
         builder.AppendLine();
         AppendIndent(builder, 0, namespaceName);
         builder.Append("internal sealed class ").Append(GetMetadataProviderTypeName(validator.Declaration.Type))
-            .AppendLine(" : global::Valiant.Validation.IValiantValidationMetadataProvider");
+            .AppendLine(" : global::StaticNorth.Valiant.Validation.IValiantValidationMetadataProvider");
         AppendIndent(builder, 0, namespaceName);
         builder.AppendLine("{");
 
@@ -621,7 +621,7 @@ public sealed partial class ValiantGenerator
         builder.AppendLine();
 
         AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("public global::System.Collections.Generic.IReadOnlyList<global::Valiant.Validation.ValiantPropertyValidationMetadata> Properties { get; } = new global::Valiant.Validation.ValiantPropertyValidationMetadata[]");
+        builder.AppendLine("public global::System.Collections.Generic.IReadOnlyList<global::StaticNorth.Valiant.Validation.ValiantPropertyValidationMetadata> Properties { get; } = new global::StaticNorth.Valiant.Validation.ValiantPropertyValidationMetadata[]");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendValidationMetadataNodes(builder, namespaceName, 2, validator.Nodes, isConditional: false);
@@ -693,13 +693,13 @@ public sealed partial class ValiantGenerator
         bool isConditional)
     {
         AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append("new global::Valiant.Validation.ValiantPropertyValidationMetadata(")
+        builder.Append("new global::StaticNorth.Valiant.Validation.ValiantPropertyValidationMetadata(")
             .Append(ToLiteral(rule.PropertyName))
             .Append(", typeof(")
             .Append(rule.MetadataPropertyType)
             .Append("), ")
             .Append(isConditional ? "true" : "false")
-            .AppendLine(", new global::Valiant.Validation.ValiantValidationCheckMetadata[]");
+            .AppendLine(", new global::StaticNorth.Valiant.Validation.ValiantValidationCheckMetadata[]");
         AppendIndent(builder, indentLevel, namespaceName);
         builder.AppendLine("{");
 
@@ -720,7 +720,7 @@ public sealed partial class ValiantGenerator
         bool isConditional)
     {
         AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append("new global::Valiant.Validation.ValiantValidationCheckMetadata(")
+        builder.Append("new global::StaticNorth.Valiant.Validation.ValiantValidationCheckMetadata(")
             .Append(ToLiteral(check.Kind))
             .Append(", ")
             .Append(ToStringArrayExpression(check.Arguments))
@@ -828,7 +828,7 @@ public sealed partial class ValiantGenerator
             ("cancellationToken", "A cancellation token used to cancel asynchronous validation."));
         AppendIndent(builder, 1, namespaceName);
         builder.Append(GetGeneratedValidatorMethodModifier(validator))
-            .Append("async global::System.Threading.Tasks.ValueTask<global::Valiant.Validation.ValidationResult> ValidateAsync(")
+            .Append("async global::System.Threading.Tasks.ValueTask<global::StaticNorth.Valiant.Validation.ValidationResult> ValidateAsync(")
             .Append(modelType)
             .AppendLine(" instance, global::System.Threading.CancellationToken cancellationToken = default)");
         AppendIndent(builder, 1, namespaceName);
@@ -836,7 +836,7 @@ public sealed partial class ValiantGenerator
         if (validator.HasConfigureMethod)
         {
             AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("if (GetEffectiveValidationMode() == global::Valiant.Validation.ValiantValidationMode.Debuggable)");
+            builder.AppendLine("if (GetEffectiveValidationMode() == global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable)");
             AppendIndent(builder, 2, namespaceName);
             builder.AppendLine("{");
             AppendIndent(builder, 3, namespaceName);
@@ -864,7 +864,7 @@ public sealed partial class ValiantGenerator
 
         builder.AppendLine();
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("global::System.Collections.Generic.List<global::Valiant.Validation.ValidationFailure>? failures = null;");
+        builder.AppendLine("global::System.Collections.Generic.List<global::StaticNorth.Valiant.Validation.ValidationFailure>? failures = null;");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("var validationFailureBehavior = GetEffectiveFailureBehavior();");
 
@@ -873,7 +873,7 @@ public sealed partial class ValiantGenerator
 
         builder.AppendLine();
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return failures is null ? global::Valiant.Validation.ValidationResult.Valid : new global::Valiant.Validation.ValidationResult(failures);");
+        builder.AppendLine("return failures is null ? global::StaticNorth.Valiant.Validation.ValidationResult.Valid : new global::StaticNorth.Valiant.Validation.ValidationResult(failures);");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
 
@@ -916,7 +916,7 @@ public sealed partial class ValiantGenerator
     {
         var builder = new StringBuilder();
         AppendGeneratedFileHeader(builder);
-        builder.AppendLine("namespace Valiant.Validation.DependencyInjection");
+        builder.AppendLine("namespace StaticNorth.Valiant.Validation.DependencyInjection");
         builder.AppendLine("{");
         builder.AppendLine("    /// <summary>");
         builder.AppendLine("    /// Provides dependency injection registration helpers for Valiant validators discovered by the source generator.");
@@ -929,16 +929,16 @@ public sealed partial class ValiantGenerator
         builder.AppendLine("        /// <param name=\"services\">The service collection to add validators to.</param>");
         builder.AppendLine("        /// <param name=\"configure\">An optional callback used to configure Valiant validation options.</param>");
         builder.AppendLine("        /// <returns>The same service collection instance so calls can be chained.</returns>");
-        builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantValidators(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::System.Action<global::Valiant.Validation.ValiantValidationOptions>? configure = null)");
+        builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantValidators(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::System.Action<global::StaticNorth.Valiant.Validation.ValiantValidationOptions>? configure = null)");
         builder.AppendLine("        {");
         builder.AppendLine("            if (services is null)");
         builder.AppendLine("            {");
         builder.AppendLine("                throw new global::System.ArgumentNullException(nameof(services));");
         builder.AppendLine("            }");
         builder.AppendLine();
-        builder.AppendLine("            var valiantValidationOptions = new global::Valiant.Validation.ValiantValidationOptions();");
+        builder.AppendLine("            var valiantValidationOptions = new global::StaticNorth.Valiant.Validation.ValiantValidationOptions();");
         builder.AppendLine("            configure?.Invoke(valiantValidationOptions);");
-        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::Valiant.Validation.ValiantValidationOptions), valiantValidationOptions));");
+        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Validation.ValiantValidationOptions), valiantValidationOptions));");
         builder.AppendLine();
 
         foreach (var validator in validators)
@@ -951,13 +951,13 @@ public sealed partial class ValiantGenerator
 
             if (validator.RegisterAsDefault)
             {
-                builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, CreateValidatorDescriptor(typeof(global::Valiant.Validation.IValidator<")
+                builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, CreateValidatorDescriptor(typeof(global::StaticNorth.Valiant.Validation.IValidator<")
                     .Append(validator.ModelType)
                     .Append(">), typeof(")
                     .Append(validator.ValidatorType)
                     .AppendLine("), valiantValidationOptions.Lifetime));");
 
-                builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton<global::Valiant.Validation.IValiantValidationMetadataProvider, ")
+                builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton<global::StaticNorth.Valiant.Validation.IValiantValidationMetadataProvider, ")
                     .Append(validator.MetadataProviderType)
                     .AppendLine(">());");
             }
@@ -973,7 +973,7 @@ public sealed partial class ValiantGenerator
 
             foreach (var propertyType in propertyValidator.PropertyTypes)
             {
-                builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, CreateValidatorDescriptor(typeof(global::Valiant.Validation.IPropertyValidator<")
+                builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, CreateValidatorDescriptor(typeof(global::StaticNorth.Valiant.Validation.IPropertyValidator<")
                     .Append(propertyType)
                     .Append(">), typeof(")
                     .Append(propertyValidator.ValidatorType)
@@ -985,13 +985,13 @@ public sealed partial class ValiantGenerator
         builder.AppendLine("            return services;");
         builder.AppendLine("        }");
         builder.AppendLine();
-        builder.AppendLine("        private static global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor CreateValidatorDescriptor(global::System.Type serviceType, global::System.Type implementationType, global::Valiant.Validation.ValiantValidatorLifetime lifetime)");
+        builder.AppendLine("        private static global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor CreateValidatorDescriptor(global::System.Type serviceType, global::System.Type implementationType, global::StaticNorth.Valiant.Validation.ValiantValidatorLifetime lifetime)");
         builder.AppendLine("        {");
         builder.AppendLine("            switch (lifetime)");
         builder.AppendLine("            {");
-        builder.AppendLine("                case global::Valiant.Validation.ValiantValidatorLifetime.Scoped:");
+        builder.AppendLine("                case global::StaticNorth.Valiant.Validation.ValiantValidatorLifetime.Scoped:");
         builder.AppendLine("                    return global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Scoped(serviceType, implementationType);");
-        builder.AppendLine("                case global::Valiant.Validation.ValiantValidatorLifetime.Transient:");
+        builder.AppendLine("                case global::StaticNorth.Valiant.Validation.ValiantValidatorLifetime.Transient:");
         builder.AppendLine("                    return global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Transient(serviceType, implementationType);");
         builder.AppendLine("                default:");
         builder.AppendLine("                    return global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(serviceType, implementationType);");
@@ -1228,7 +1228,7 @@ public sealed partial class ValiantGenerator
         bool emitAsync)
     {
         var localName = "value" + ruleIndex.ToString(CultureInfo.InvariantCulture);
-        var ruleFailedName = rule.FailureBehaviorExpression == "global::Valiant.Validation.ValiantFailureBehavior.FailFast"
+        var ruleFailedName = rule.FailureBehaviorExpression == "global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast"
             ? "ruleFailed" + ruleIndex.ToString(CultureInfo.InvariantCulture)
             : null;
         ruleIndex++;
@@ -1342,7 +1342,7 @@ public sealed partial class ValiantGenerator
         if (node.PropertyPathPrefixExpression is null)
         {
             AppendIndent(builder, indentLevel + 1, namespaceName);
-            builder.Append("(failures ??= new global::System.Collections.Generic.List<global::Valiant.Validation.ValidationFailure>(validationFailureBehavior == global::Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
+            builder.Append("(failures ??= new global::System.Collections.Generic.List<global::StaticNorth.Valiant.Validation.ValidationFailure>(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
                 .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
                 .Append(")).AddRange(")
                 .Append(resultName)
@@ -1359,9 +1359,9 @@ public sealed partial class ValiantGenerator
             AppendIndent(builder, indentLevel + 2, namespaceName);
             builder.Append("var ").Append(propertyName).Append(" = ").Append(failureName).AppendLine(".PropertyName;");
             AppendIndent(builder, indentLevel + 2, namespaceName);
-            builder.Append("(failures ??= new global::System.Collections.Generic.List<global::Valiant.Validation.ValidationFailure>(validationFailureBehavior == global::Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
+            builder.Append("(failures ??= new global::System.Collections.Generic.List<global::StaticNorth.Valiant.Validation.ValidationFailure>(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
                 .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
-                .Append(")).Add(new global::Valiant.Validation.ValidationFailure(global::System.String.IsNullOrEmpty(")
+                .Append(")).Add(new global::StaticNorth.Valiant.Validation.ValidationFailure(global::System.String.IsNullOrEmpty(")
                 .Append(propertyName)
                 .Append(") ? (")
                 .Append(node.PropertyPathPrefixExpression)
@@ -1642,9 +1642,9 @@ public sealed partial class ValiantGenerator
         }
 
         AppendIndent(builder, indentLevel + 1, namespaceName);
-        builder.Append("(failures ??= new global::System.Collections.Generic.List<global::Valiant.Validation.ValidationFailure>(validationFailureBehavior == global::Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
+        builder.Append("(failures ??= new global::System.Collections.Generic.List<global::StaticNorth.Valiant.Validation.ValidationFailure>(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
             .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
-            .Append(")).Add(new global::Valiant.Validation.ValidationFailure(")
+            .Append(")).Add(new global::StaticNorth.Valiant.Validation.ValidationFailure(")
             .Append(rule.PropertyNameExpression)
             .Append(", ")
             .Append(GetFailureCodeExpression(check))
@@ -1656,18 +1656,18 @@ public sealed partial class ValiantGenerator
         AppendIndent(builder, indentLevel + 1, namespaceName);
         if (check.Severity is null)
         {
-            builder.AppendLine("if (validationFailureBehavior == global::Valiant.Validation.ValiantFailureBehavior.FailFast)");
+            builder.AppendLine("if (validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast)");
         }
         else
         {
-            builder.Append("if (validationFailureBehavior == global::Valiant.Validation.ValiantFailureBehavior.FailFast && ")
+            builder.Append("if (validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast && ")
                 .Append(GetFailureSeverityExpression(check))
-                .AppendLine(" == global::Valiant.Validation.ValiantSeverity.Error)");
+                .AppendLine(" == global::StaticNorth.Valiant.Validation.ValiantSeverity.Error)");
         }
         AppendIndent(builder, indentLevel + 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, indentLevel + 2, namespaceName);
-        builder.AppendLine("return new global::Valiant.Validation.ValidationResult(failures);");
+        builder.AppendLine("return new global::StaticNorth.Valiant.Validation.ValidationResult(failures);");
         AppendIndent(builder, indentLevel + 1, namespaceName);
         builder.AppendLine("}");
         AppendIndent(builder, indentLevel, namespaceName);
@@ -1725,9 +1725,9 @@ public sealed partial class ValiantGenerator
         AppendIndent(builder, indentLevel + 2, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, indentLevel + 3, namespaceName);
-        builder.Append("(failures ??= new global::System.Collections.Generic.List<global::Valiant.Validation.ValidationFailure>(validationFailureBehavior == global::Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
+        builder.Append("(failures ??= new global::System.Collections.Generic.List<global::StaticNorth.Valiant.Validation.ValidationFailure>(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
             .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
-            .Append(")).Add(new global::Valiant.Validation.ValidationFailure(CombinePropertyPath(")
+            .Append(")).Add(new global::StaticNorth.Valiant.Validation.ValidationFailure(CombinePropertyPath(")
             .Append(rule.PropertyNameExpression)
             .Append(", ")
             .Append(failureName)
@@ -1739,11 +1739,11 @@ public sealed partial class ValiantGenerator
             .Append(failureName)
             .AppendLine(".Severity));");
         AppendIndent(builder, indentLevel + 3, namespaceName);
-        builder.AppendLine("if (validationFailureBehavior == global::Valiant.Validation.ValiantFailureBehavior.FailFast && " + failureName + ".Severity == global::Valiant.Validation.ValiantSeverity.Error)");
+        builder.AppendLine("if (validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast && " + failureName + ".Severity == global::StaticNorth.Valiant.Validation.ValiantSeverity.Error)");
         AppendIndent(builder, indentLevel + 3, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, indentLevel + 4, namespaceName);
-        builder.AppendLine("return new global::Valiant.Validation.ValidationResult(failures);");
+        builder.AppendLine("return new global::StaticNorth.Valiant.Validation.ValidationResult(failures);");
         AppendIndent(builder, indentLevel + 3, namespaceName);
         builder.AppendLine("}");
         AppendIndent(builder, indentLevel + 2, namespaceName);
@@ -1771,7 +1771,7 @@ public sealed partial class ValiantGenerator
 
     private static string GetFailureSeverityExpression(RuleCheck check)
     {
-        return check.Severity ?? "global::Valiant.Validation.ValiantSeverity.Error";
+        return check.Severity ?? "global::StaticNorth.Valiant.Validation.ValiantSeverity.Error";
     }
 
     private static string GetFailureCondition(string localName, string instanceName, RuleModel rule, RuleCheck check, bool emitAsync)
@@ -1790,43 +1790,43 @@ public sealed partial class ValiantGenerator
 
                 return "global::System.Collections.Generic.EqualityComparer<" + rule.PropertyType + ">.Default.Equals(" + localName + ", default!)";
             case "NotEmpty":
-                return "global::Valiant.Validation.ValidationChecks.IsEmpty(" + localName + ")";
+                return "global::StaticNorth.Valiant.Validation.ValidationChecks.IsEmpty(" + localName + ")";
             case "Empty":
-                return "!global::Valiant.Validation.ValidationChecks.IsEmpty(" + localName + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.IsEmpty(" + localName + ")";
             case "DefinedEnum":
-                return "!global::Valiant.Validation.ValidationChecks.IsDefinedEnum(" + localName + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.IsDefinedEnum(" + localName + ")";
             case "EnumName":
-                return "!global::Valiant.Validation.ValidationChecks.IsEnumName(" + check.Arguments[0] + ", " + localName + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.IsEnumName(" + check.Arguments[0] + ", " + localName + ")";
             case "EnumValue":
-                return "!global::Valiant.Validation.ValidationChecks.IsEnumValue(" + check.Arguments[0] + ", " + localName + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.IsEnumValue(" + check.Arguments[0] + ", " + localName + ")";
             case "Count":
-                return "!global::Valiant.Validation.ValidationChecks.HasCount(" + localName + ", " + check.Arguments[0] + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.HasCount(" + localName + ", " + check.Arguments[0] + ")";
             case "CountBetween":
-                return "!global::Valiant.Validation.ValidationChecks.HasCountBetween(" + localName + ", " + check.Arguments[0] + ", " + check.Arguments[1] + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.HasCountBetween(" + localName + ", " + check.Arguments[0] + ", " + check.Arguments[1] + ")";
             case "MinCount":
-                return "!global::Valiant.Validation.ValidationChecks.HasMinCount(" + localName + ", " + check.Arguments[0] + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.HasMinCount(" + localName + ", " + check.Arguments[0] + ")";
             case "MaxCount":
-                return "!global::Valiant.Validation.ValidationChecks.HasMaxCount(" + localName + ", " + check.Arguments[0] + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.HasMaxCount(" + localName + ", " + check.Arguments[0] + ")";
             case "Contains":
-                return "!global::Valiant.Validation.ValidationChecks.Contains(" + localName + ", " + check.Arguments[0] + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.Contains(" + localName + ", " + check.Arguments[0] + ")";
             case "Excludes":
-                return "global::Valiant.Validation.ValidationChecks.Contains(" + localName + ", " + check.Arguments[0] + ")";
+                return "global::StaticNorth.Valiant.Validation.ValidationChecks.Contains(" + localName + ", " + check.Arguments[0] + ")";
             case "HasKey":
-                return "!global::Valiant.Validation.ValidationChecks.HasKey(" + localName + ", " + check.Arguments[0] + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.HasKey(" + localName + ", " + check.Arguments[0] + ")";
             case "HasValue":
-                return "!global::Valiant.Validation.ValidationChecks.HasValue(" + localName + ", " + check.Arguments[0] + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.HasValue(" + localName + ", " + check.Arguments[0] + ")";
             case "All":
-                return "!global::Valiant.Validation.ValidationChecks.All(" + localName + ", (" + check.DelegateType + ")(" + GetCustomPredicateExpression(check) + "))";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.All(" + localName + ", (" + check.DelegateType + ")(" + GetCustomPredicateExpression(check) + "))";
             case "Any":
-                return "!global::Valiant.Validation.ValidationChecks.Any(" + localName + ", (" + check.DelegateType + ")(" + GetCustomPredicateExpression(check) + "))";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.Any(" + localName + ", (" + check.DelegateType + ")(" + GetCustomPredicateExpression(check) + "))";
             case "None":
-                return "!global::Valiant.Validation.ValidationChecks.None(" + localName + ", (" + check.DelegateType + ")(" + GetCustomPredicateExpression(check) + "))";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.None(" + localName + ", (" + check.DelegateType + ")(" + GetCustomPredicateExpression(check) + "))";
             case "LengthBetween":
-                return "!global::Valiant.Validation.ValidationChecks.HasLengthBetween(" + localName + ", " + check.Arguments[0] + ", " + check.Arguments[1] + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.HasLengthBetween(" + localName + ", " + check.Arguments[0] + ", " + check.Arguments[1] + ")";
             case "MinLength":
-                return "!global::Valiant.Validation.ValidationChecks.HasMinLength(" + localName + ", " + check.Arguments[0] + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.HasMinLength(" + localName + ", " + check.Arguments[0] + ")";
             case "MaxLength":
-                return "!global::Valiant.Validation.ValidationChecks.HasMaxLength(" + localName + ", " + check.Arguments[0] + ")";
+                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.HasMaxLength(" + localName + ", " + check.Arguments[0] + ")";
             case "GreaterThan":
                 return GetComparisonFailureCondition(rule, localName, check.Arguments[0], "<= 0");
             case "GreaterThanOrEqualTo":

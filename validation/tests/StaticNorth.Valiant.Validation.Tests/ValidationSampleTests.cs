@@ -1,11 +1,11 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
-using Valiant.Validation.Samples.AttributeValidation;
-using Valiant.Validation.Samples.Basic;
-using Valiant.Validation.Samples.Catalog;
-using SampleAddressPropertyValidator = Valiant.Validation.Samples.Catalog.AddressPropertyValidator;
+using StaticNorth.Valiant.Validation.Samples.AttributeValidation;
+using StaticNorth.Valiant.Validation.Samples.Basic;
+using StaticNorth.Valiant.Validation.Samples.Catalog;
+using SampleAddressPropertyValidator = StaticNorth.Valiant.Validation.Samples.Catalog.AddressPropertyValidator;
 
-namespace Valiant.Validation.Tests;
+namespace StaticNorth.Valiant.Validation.Tests;
 
 public sealed class ValidationSampleTests
 {
@@ -203,7 +203,7 @@ internal static class SampleServiceRegistration
         Action<ValiantValidationOptions>? configure = null)
     {
         var extensionType = typeof(CatalogItemValidator).Assembly.GetType(
-            "Valiant.Validation.DependencyInjection.ValiantServiceCollectionExtensions",
+            "StaticNorth.Valiant.Validation.DependencyInjection.ValiantServiceCollectionExtensions",
             throwOnError: true)!;
         var method = extensionType.GetMethod(
             "AddValiantValidators",

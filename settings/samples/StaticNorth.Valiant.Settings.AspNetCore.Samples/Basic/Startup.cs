@@ -1,6 +1,6 @@
-using Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Settings.DependencyInjection;
 
-namespace Valiant.Settings.AspNetCore.Samples.Basic;
+namespace StaticNorth.Valiant.Settings.AspNetCore.Samples.Basic;
 
 /// <summary>
 /// Demonstrates the settings explorer and schema endpoint at the default path.

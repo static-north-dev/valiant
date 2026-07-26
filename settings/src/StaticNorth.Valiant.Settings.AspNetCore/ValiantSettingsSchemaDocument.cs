@@ -1,4 +1,4 @@
-namespace Valiant.Settings.AspNetCore;
+namespace StaticNorth.Valiant.Settings.AspNetCore;
 
 /// <summary>
 /// Describes generated Valiant settings schemas for UI and JSON consumers.

@@ -3,11 +3,11 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Valiant.SourceGeneration;
-using static Valiant.SourceGeneration.ValiantSourceBuilder;
-using static Valiant.SourceGeneration.ValiantTypeDeclarations;
+using StaticNorth.Valiant.SourceGeneration;
+using static StaticNorth.Valiant.SourceGeneration.ValiantSourceBuilder;
+using static StaticNorth.Valiant.SourceGeneration.ValiantTypeDeclarations;
 
-namespace Valiant.Validation.SourceGeneration;
+namespace StaticNorth.Valiant.Validation.SourceGeneration;
 
 /// <summary>
 /// Generates Valiant validation implementations and dependency injection registration code.

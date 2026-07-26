@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.AspNetCore.Samples.Basic;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Samples.Basic;
 
 [ValiantEndpointGroup]
 public class PrivateEndpointGroup : IEndpointGroup

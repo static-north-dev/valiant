@@ -1,4 +1,4 @@
-namespace Valiant.Settings.AspNetCore.Samples.Configuration;
+namespace StaticNorth.Valiant.Settings.AspNetCore.Samples.Configuration;
 
 [ValiantSettings("Samples:AspNetCore:Configuration")]
 public sealed record ConfigurationSettings

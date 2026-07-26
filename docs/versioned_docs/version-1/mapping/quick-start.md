@@ -16,7 +16,7 @@ dotnet add package StaticNorth.Valiant.Mapping
 ## 2. Declare the models and mapper
 
 ```csharp
-using Valiant.Mapping;
+using StaticNorth.Valiant.Mapping;
 
 public sealed class User
 {
@@ -51,7 +51,7 @@ UserDto dto = mapper.Map(user);
 When the project references Microsoft dependency-injection abstractions, Valiant generates `AddValiantMappers`:
 
 ```csharp
-using Valiant.Mapping.DependencyInjection;
+using StaticNorth.Valiant.Mapping.DependencyInjection;
 
 builder.Services.AddValiantMappers(options =>
 {

@@ -1,7 +1,7 @@
-using Valiant.Settings.DependencyInjection;
-using Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Validation.DependencyInjection;
 
-namespace Valiant.Settings.AspNetCore.Samples.Validation;
+namespace StaticNorth.Valiant.Settings.AspNetCore.Samples.Validation;
 
 /// <summary>
 /// Demonstrates required validator enforcement for configured settings models.

@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
-namespace Valiant.SourceGeneration.Testing;
+namespace StaticNorth.Valiant.SourceGeneration.Testing;
 
 internal static class GeneratorTestHarness
 {

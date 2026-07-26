@@ -1,8 +1,8 @@
-using Valiant.Validation.AspNetCore;
-using Valiant.Validation.AspNetCore.Samples.Orders;
-using Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Validation.AspNetCore;
+using StaticNorth.Valiant.Validation.AspNetCore.Samples.Orders;
+using StaticNorth.Valiant.Validation.DependencyInjection;
 
-namespace Valiant.Validation.AspNetCore.Samples.ProblemDetails;
+namespace StaticNorth.Valiant.Validation.AspNetCore.Samples.ProblemDetails;
 
 /// <summary>
 /// Demonstrates manual validation and conversion of the same validation result

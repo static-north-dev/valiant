@@ -1,4 +1,4 @@
-using Samples = Valiant.Settings.AspNetCore.Samples;
+using Samples = StaticNorth.Valiant.Settings.AspNetCore.Samples;
 
 Type startup;
 

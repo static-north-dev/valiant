@@ -1,0 +1,2315 @@
+# StaticNorth.Valiant — Full Documentation
+
+> Complete current documentation for StaticNorth.Valiant, source-generated .NET building blocks for validation, endpoint registration, mapping, and settings.
+
+This generated file contains the current documentation only. It intentionally excludes historical Docusaurus snapshots so a single context never mixes incompatible versions. Regenerate it with `npm run docs:generate-llms` whenever `docs/content` or `sidebars.js` changes.
+
+## Validation
+
+### Validation you can step through
+
+Valiant Validation generates direct validators from compact, strongly typed rules. Author rules with fluent C#, model attributes, native branches, nested contexts, and reusable validators; then connect them to ASP.NET Core, OpenAPI, MediatR, or source-generated Mediator.
+
+```csharp
+using StaticNorth.Valiant.Validation;
+
+[ValiantValidator]
+public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser>
+{
+    public override void Configure(ValidationContext<CreateUser> context)
+    {
+        context.Property(user => user.Name)
+            .Required()
+            .MaxLength(64);
+
+        context.Property(user => user.Age)
+            .GreaterThanOrEqualTo(18);
+    }
+}
+```
+
+#### One rule model, several hosts
+
+| Layer | Integration |
+| --- | --- |
+| Domain/application | Inject `IValidator<T>` and call sync or async validation APIs |
+| Minimal APIs | Add `.WithValiantValidation()` to a route |
+| MVC | Register Valiant model validation globally |
+| OpenAPI | Project generated rule metadata into schema constraints and `x-valiant-rules` |
+| Messaging | Add a MediatR or Mediator pipeline behavior |
+
+Validation results preserve property paths, codes, messages, and severity. Errors invalidate the result; warnings and information remain available without making it invalid.
+
+#### Documentation map
+
+- [Quick start](https://valiant.staticnorth.dev/validation/quick-start/)
+- [Runnable samples](https://valiant.staticnorth.dev/validation/samples/)
+- [Authoring rules](https://valiant.staticnorth.dev/validation/guides/authoring-rules/)
+- [Composition and control flow](https://valiant.staticnorth.dev/validation/guides/composition-control-flow/)
+- [ASP.NET Core and OpenAPI](https://valiant.staticnorth.dev/validation/guides/aspnetcore-openapi/)
+- [Mediator pipelines](https://valiant.staticnorth.dev/validation/guides/mediator-pipelines/)
+- [Validation check catalog](https://valiant.staticnorth.dev/validation/reference/validation-checks/)
+- [Runtime and generation](https://valiant.staticnorth.dev/validation/reference/runtime-generation/)
+- [Package guide](https://valiant.staticnorth.dev/validation/reference/packages/)
+
+The [sample catalog](https://valiant.staticnorth.dev/validation/samples/) covers every selectable core and ASP.NET
+Core scenario. The same behaviors are covered by sample-focused tests,
+including `WebApplicationFactory` tests for every web sample.
+### Quick start
+
+#### 1. Install
+
+```bash
+dotnet add package StaticNorth.Valiant.Validation
+```
+
+For an application integration, install the most specific package instead. For example, `StaticNorth.Valiant.Validation.AspNetCore` carries the core runtime, build, and analyzer assets needed to generate validators.
+
+#### 2. Declare a validator
+
+```csharp
+using StaticNorth.Valiant.Validation;
+
+public sealed record RegisterUser(string? Name, int Age);
+
+[ValiantValidator]
+public sealed partial class RegisterUserValidator
+    : ValidatorDefinition<RegisterUser>
+{
+    public override void Configure(ValidationContext<RegisterUser> context)
+    {
+        context.Property(request => request.Name)
+            .Required("NameRequired", "Enter a name.")
+            .MaxLength(64);
+
+        context.Property(request => request.Age)
+            .GreaterThanOrEqualTo(18);
+    }
+}
+```
+
+The declaration must be `partial` and marked with `[ValiantValidator]`. The generator emits `IValidator<RegisterUser>` directly on the class.
+
+#### 3. Validate
+
+```csharp
+IValidator<RegisterUser> validator = new RegisterUserValidator();
+ValidationResult result = validator.Validate(new RegisterUser(null, 16));
+
+if (!result.IsValid)
+{
+    foreach (var failure in result.Errors)
+    {
+        Console.WriteLine($"{failure.PropertyName}: {failure.ErrorMessage}");
+    }
+}
+```
+
+Use `ValidateAsync` for validators that contain async rules. Convenience APIs include `IsValid`, `IsValidAsync`, and `ThrowIfFailed` on the result.
+
+#### 4. Register generated validators
+
+```csharp
+using StaticNorth.Valiant.Validation.DependencyInjection;
+
+builder.Services.AddValiantValidators(options =>
+{
+    options.Mode = ValiantValidationMode.Auto;
+    options.FailureBehavior = ValiantFailureBehavior.ValidateAll;
+    options.Lifetime = ValiantValidatorLifetime.Scoped;
+});
+```
+
+Inject `IValidator<RegisterUser>` wherever the request is handled.
+
+:::tip Async rule safety
+Call `ValidateAsync` when a validator or reused property validator may perform asynchronous work. The synchronous API does not silently block on async validation.
+:::
+### Validation samples
+
+Validation has separate console and ASP.NET Core sample projects. Each runnable
+choice owns its description on its `Sample` or `Startup` class; `Program.cs`
+only selects which one to execute.
+
+#### Core validation
+
+Run the console project:
+
+```bash
+dotnet run --project validation/samples/StaticNorth.Valiant.Validation.Samples
+```
+
+Select one delegate in
+[`Program.cs`](https://github.com/static-north-dev/valiant/blob/main/validation/samples/StaticNorth.Valiant.Validation.Samples/Program.cs):
+
+| Delegate | Demonstrates | Source |
+| --- | --- | --- |
+| `Basic.Sample.RunAsync` | A minimal fluent validator, generated registration, validation, and failure output | [`Basic`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.Samples/Basic) |
+| `AttributeValidation.Sample.RunAsync` | Validation attributes on the model with the generated validator contract | [`AttributeValidation`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.Samples/AttributeValidation) |
+| `DependencyInjection.Sample.RunAsync` | Generated registrations, configurable lifetime and defaults, concrete non-default validators, property validators, and metadata providers | [`DependencyInjection`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.Samples/DependencyInjection) |
+| `SyncAndAsyncValidation.Sample.RunAsync` | Sync and async APIs, boolean helpers, and the guard against synchronously invoking an asynchronous validator | [`SyncAndAsyncValidation`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.Samples/SyncAndAsyncValidation) |
+| `Severity.Sample.RunAsync` | Error, warning, and information severities, including valid warning-only and information-only results | [`Severity`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.Samples/Severity) |
+| `CompositionAndPaths.Sample.RunAsync` | Whole-model composition, reusable property validators, child contexts, collection items, and nested/indexed paths | [`CompositionAndPaths`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.Samples/CompositionAndPaths) |
+| `FailureHandling.Sample.RunAsync` | Per-property fail-fast behavior, result helpers, and `ThrowIfFailed()` | [`FailureHandling`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.Samples/FailureHandling) |
+| `ControlFlowAndCollections.Sample.RunAsync` | Collection and dictionary rules, conditions, switches, indexed validation, and native loops | [`ControlFlowAndCollections`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.Samples/ControlFlowAndCollections) |
+
+The
+[`Catalog`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.Samples/Catalog)
+folder is shared support code for the advanced scenarios, not an additional
+selectable sample.
+
+#### ASP.NET Core validation
+
+Run the web project:
+
+```bash
+dotnet run --project validation/samples/StaticNorth.Valiant.Validation.AspNetCore.Samples
+```
+
+Select one startup in
+[`Program.cs`](https://github.com/static-north-dev/valiant/blob/main/validation/samples/StaticNorth.Valiant.Validation.AspNetCore.Samples/Program.cs):
+
+| Startup | Demonstrates | Source |
+| --- | --- | --- |
+| `MinimalApi.Startup` | Typed and all-parameter Minimal API filters that reject invalid requests before the handler runs | [`MinimalApi`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.AspNetCore.Samples/MinimalApi) |
+| `Mvc.Startup` | Automatic MVC validation without a validator dependency or manual validation branch in the controller | [`Mvc`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.AspNetCore.Samples/Mvc) |
+| `ProblemDetails.Startup` | Manual validation converted to HTTP and MVC validation problem-details responses | [`ProblemDetails`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.AspNetCore.Samples/ProblemDetails) |
+| `OpenApi.Startup` | Generated Valiant validation metadata projected into the application's OpenAPI document | [`OpenApi`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.AspNetCore.Samples/OpenApi) |
+
+The
+[`Orders`](https://github.com/static-north-dev/valiant/tree/main/validation/samples/StaticNorth.Valiant.Validation.AspNetCore.Samples/Orders)
+folder contains the shared request models and validator; it is not a startup
+choice.
+
+The web scenarios are also exercised through `WebApplicationFactory`, so the
+sampled registration and HTTP behavior stay covered by the validation test
+project. See [ASP.NET Core and OpenAPI](https://valiant.staticnorth.dev/validation/guides/aspnetcore-openapi/) for
+consumer setup.
+### Authoring rules
+
+#### Fluent definitions
+
+Inherit `ValidatorDefinition<T>` and override `Configure`:
+
+```csharp
+[ValiantValidator]
+public sealed partial class ProductValidator : ValidatorDefinition<Product>
+{
+    public override void Configure(ValidationContext<Product> context)
+    {
+        context.Property(product => product.Name)
+            .Required()
+            .LengthBetween(3, 80);
+
+        context.Property(product => product.Price)
+            .GreaterThan(0m);
+    }
+}
+```
+
+The instance method also works naturally with constructor-injected dependencies and reusable validators.
+
+#### Attribute definitions
+
+Derive from `ValidatorDefinition<T>` to read Valiant validation attributes from the model:
+
+```csharp
+[ValiantValidator]
+public sealed partial class ProductValidator : ValidatorDefinition<Product>;
+
+public sealed class Product
+{
+    [Required("NameRequired", "Enter a product name.")]
+    [LengthBetween(3, 80)]
+    public string? Name { get; init; }
+
+    [GreaterThan(0)]
+    public decimal Price { get; init; }
+}
+```
+
+These are attributes from `StaticNorth.Valiant.Validation`, not Data Annotations. Fluent and attribute rules use the same generated checks and metadata.
+
+#### Custom predicates
+
+Use `Satisfies` for a rule that is clearer as code:
+
+```csharp
+context.Property(order => order.Reference)
+    .Satisfies(
+        value => value is null || value.StartsWith("ORD-", StringComparison.Ordinal),
+        code: "ReferenceFormat",
+        message: "Reference must start with ORD-.");
+```
+
+Async predicate overloads are available for work that accepts a cancellation token.
+
+#### Conditions
+
+Apply a condition to a property chain:
+
+```csharp
+context.Property(request => request.InviteCode)
+    .Required()
+    .When(request => request.RequiresInvite);
+```
+
+For larger branches, use normal C# control flow. See [Composition and control flow](https://valiant.staticnorth.dev/validation/guides/composition-control-flow/).
+
+#### Codes, messages, and severity
+
+Every built-in check accepts optional `code`, `message`, and `severity` arguments:
+
+```csharp
+context.Property(user => user.DisplayName)
+    .MaxLength(
+        40,
+        code: "DisplayNameLong",
+        message: "Display name is longer than 40 characters.",
+        severity: ValiantSeverity.Warning);
+```
+
+`ValidationResult.Errors` determine `IsValid`. `Warnings` and `Infos` are preserved separately for callers that want non-blocking feedback.
+### Composition and control flow
+
+#### Write normal C# branches
+
+Validator configuration supports native `if`/`else`, `switch`, loops, and `foreach`:
+
+```csharp
+public void Configure(ValidationContext<CreateOrder> context)
+{
+    if (context.Instance.RequiresApproval)
+    {
+        context.Property(order => order.ApproverId).Required();
+    }
+
+    switch (context.Instance.Channel)
+    {
+        case SalesChannel.Store:
+            context.Property(order => order.StoreId).Required();
+            break;
+        case SalesChannel.Web:
+            context.Property(order => order.SessionId).Required();
+            break;
+    }
+}
+```
+
+In `Debuggable` mode this method executes at runtime, so ordinary breakpoints and step-through debugging work.
+
+#### Nested objects
+
+Use `Children` to validate a nested context and retain the complete property path:
+
+```csharp
+context.Property(order => order.Customer)
+    .Required()
+    .Children(customer =>
+    {
+        customer.Property(value => value.Name).Required();
+        customer.Property(value => value.Email).MaxLength(200);
+    });
+```
+
+#### Collections
+
+Use `ForEach` for element rules. `context.Item` is the current item inside the nested validation context:
+
+```csharp
+context.Property(order => order.Lines)
+    .MinCount(1)
+    .ForEach(line =>
+    {
+        line.Property(item => item.Sku).Required();
+        line.Property(item => item.Quantity).GreaterThan(0);
+    });
+```
+
+Failures include indexed paths such as `Lines[0].Sku`.
+
+#### Reuse a root validator
+
+```csharp
+public sealed partial class CheckoutValidator(AddressValidator addressValidator)
+    : ValidatorDefinition<Checkout>
+{
+    public override void Configure(ValidationContext<Checkout> context)
+    {
+        context.UseValidator(addressValidator);
+        context.Property(value => value.AcceptedTerms).Equal(true);
+    }
+}
+```
+
+#### Reuse a property validator
+
+Create a reusable `PropertyValidatorDefinition<TProperty>` and attach it to a property:
+
+```csharp
+context.Property(order => order.ShippingAddress)
+    .Required()
+    .UseValidator(addressPropertyValidator);
+```
+
+Property validators skip null values. Add `Required()` or `NotNull()` when absence itself is invalid. Attribute-authored models can use `[UseValidator<TValidator>]`.
+
+#### Failure behavior
+
+Configure collection globally, then override it at validator or property-chain scope:
+
+```csharp
+services.AddValiantValidators(options =>
+    options.FailureBehavior = ValiantFailureBehavior.ValidateAll);
+```
+
+Use `FailFast` to stop within the configured scope after the first failure; use `ValidateAll` to collect all applicable failures. Narrower configuration overrides the global option.
+### ASP.NET Core and OpenAPI
+
+Install the integrations you use:
+
+```bash
+dotnet add package StaticNorth.Valiant.Validation.AspNetCore
+dotnet add package StaticNorth.Valiant.Validation.AspNetCore.OpenApi
+```
+
+#### Minimal APIs
+
+Register validators and attach validation to a route:
+
+```csharp
+builder.Services.AddValiantValidators();
+
+app.MapPost("/users", (CreateUser request) => Results.Created())
+    .WithValiantValidation();
+```
+
+The non-generic overload validates every eligible handler argument with a registered validator. Use the typed overload to select one request type explicitly:
+
+```csharp
+app.MapPost("/users", (CreateUser request, CancellationToken cancellationToken) =>
+        Results.Created())
+    .WithValiantValidation<CreateUser>();
+```
+
+Failures return HTTP validation problem details before the handler runs.
+
+#### MVC
+
+Register the global model-validation filter directly or through MVC builders:
+
+```csharp
+builder.Services.AddValiantValidators();
+builder.Services.AddValiantMvcValidation();
+
+// Equivalent integration point:
+builder.Services.AddControllers().AddValiantValidation();
+```
+
+#### Problem details helpers
+
+Use `ValiantProblemDetails` when your endpoint or controller validates manually:
+
+```csharp
+var result = await validator.ValidateAsync(request, cancellationToken);
+if (!result.IsValid)
+{
+    return Results.ValidationProblem(result.ToValidationProblemDictionary());
+}
+```
+
+Helpers are available for Minimal API `HttpValidationProblemDetails`, MVC `ValidationProblemDetails`, and property-to-message dictionaries.
+
+#### OpenAPI
+
+```csharp
+builder.Services.AddOpenApi();
+builder.Services.AddValiantOpenApi();
+```
+
+Or attach the transformer to a specific OpenAPI document:
+
+```csharp
+builder.Services.AddOpenApi(options =>
+    options.AddValiantValidationRules());
+```
+
+Valiant projects generated metadata into native constraints where possible—such as required, length, count, and comparison bounds—and preserves richer details in `x-valiant-rules` extensions.
+
+:::info Package references
+Each integration package forwards the core Valiant runtime and generator assets. Add both ASP.NET Core packages when you need request validation and OpenAPI; do not add a redundant direct `StaticNorth.Valiant.Validation` reference.
+:::
+
+The [Validation sample catalog](https://valiant.staticnorth.dev/validation/samples/#aspnet-core-validation) links the
+Minimal API, MVC, problem-details, and OpenAPI startup implementations.
+### Mediator pipelines
+
+#### MediatR
+
+Install `StaticNorth.Valiant.Validation.MediatR`, register generated validators, and add the behavior through MediatR configuration:
+
+```csharp
+builder.Services.AddValiantValidators();
+
+builder.Services.AddMediatR(configuration =>
+{
+    configuration.RegisterServicesFromAssemblyContaining<CreateUserCommand>();
+    configuration.AddValiantValidation();
+});
+```
+
+The package targets MediatR 12.5.0, the final free MediatR release.
+
+#### Source-generated Mediator
+
+Install `StaticNorth.Valiant.Validation.Mediator`:
+
+```csharp
+builder.Services.AddValiantValidators();
+builder.Services.AddMediator(options =>
+{
+    options.Assemblies = [typeof(CreateUserCommand).Assembly];
+});
+builder.Services.AddValiantMediatorValidation();
+```
+
+For Native AOT, list the behavior in the source-generated pipeline:
+
+```csharp
+builder.Services.AddMediator(options =>
+{
+    options.Assemblies = [typeof(CreateUserCommand).Assembly];
+    options.PipelineBehaviors = [typeof(ValiantValidationBehavior<,>)];
+});
+```
+
+:::warning Choose one Mediator registration path
+Do not call `AddValiantMediatorValidation()` when `ValiantValidationBehavior<,>` is already present in `PipelineBehaviors`.
+:::
+
+Both integrations resolve all registered `IValidator<TRequest>` instances, run them before the next handler, and surface validation failure instead of invoking the handler.
+### Validation check catalog
+
+All checks accept optional `code`, `message`, and `severity`. Nullable value checks generally skip `null`; combine them with `Required()` or `NotNull()` when null is invalid.
+
+#### General values
+
+| Check | Purpose |
+| --- | --- |
+| `NotNull()` / `Null()` | Require presence or absence |
+| `Required()` | Require a non-null value and, for strings/collections, non-empty content |
+| `NotEmpty()` / `Empty()` | Require content or emptiness |
+| `Equal(value)` / `NotEqual(value)` | Compare with an expected value |
+| `Satisfies(predicate)` | Apply a custom sync or async predicate |
+| `UseValidator(validator)` | Delegate to a reusable property validator |
+
+#### Comparable values
+
+`GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`, `InclusiveBetween`, and `ExclusiveBetween` support compatible comparable values and nullable counterparts.
+
+```csharp
+context.Property(product => product.Price)
+    .GreaterThan(0m)
+    .LessThanOrEqualTo(10_000m);
+```
+
+#### Strings and length-bearing values
+
+| Check | Purpose |
+| --- | --- |
+| `LengthBetween(min, max)` | Inclusive length range |
+| `MinLength(min)` | Minimum length |
+| `MaxLength(max)` | Maximum length |
+
+#### Collections
+
+| Check | Purpose |
+| --- | --- |
+| `Count(count)` | Exact item count |
+| `CountBetween(min, max)` | Inclusive item-count range |
+| `MinCount(min)` / `MaxCount(max)` | Count bounds |
+| `Contains(item)` / `Excludes(item)` | Membership |
+| `All(predicate)` / `Any(predicate)` / `None(predicate)` | Element predicates |
+| `ForEach(configure)` | Validate every item with a nested context |
+
+#### Dictionaries
+
+`HasKey(key)` and `HasValue(value)` validate dictionary membership.
+
+#### Enums
+
+| Check | Input |
+| --- | --- |
+| `DefinedEnum()` | Enum or nullable enum value |
+| `EnumName(enumType)` | String name |
+| `EnumValue(enumType)` | Supported integral value or nullable counterpart |
+
+#### Attribute equivalents
+
+Attribute-authored validators support the corresponding Valiant attributes for declarative checks, including required/nullability, equality, enum, length/count, collection membership, dictionary, and comparison rules. Rules that require executable delegates—custom predicates, native control flow, and inline `ForEach` contexts—belong in a fluent `ValidatorDefinition<T>`.
+### Runtime and generation
+
+#### Validator API
+
+Generated validators implement `IValidator<T>`:
+
+```csharp
+ValidationResult Validate(T instance);
+ValueTask<ValidationResult> ValidateAsync(T instance, CancellationToken cancellationToken = default);
+bool IsValid(T instance);
+ValueTask<bool> IsValidAsync(T instance, CancellationToken cancellationToken = default);
+```
+
+Use async APIs whenever a validator graph can contain async predicates or async property validators.
+
+#### Options
+
+| Option | Values | Default |
+| --- | --- | --- |
+| `Mode` | `Auto`, `Debuggable`, `Fast` | `Auto` |
+| `FailureBehavior` | `ValidateAll`, `FailFast` | `ValidateAll` |
+| `Lifetime` | `Scoped`, `Transient`, `Singleton` | `Scoped` |
+
+`Auto` uses the runtime, debuggable backend in Debug builds and generated fast code otherwise. `Debuggable` lets you step through `Configure`; `Fast` always uses direct generated checks.
+
+Choose validator lifetime based on constructor dependencies. A singleton validator must not capture scoped services.
+
+#### Result model
+
+`ValidationResult` exposes all failures as well as `Errors`, `Warnings`, and `Infos`. Only error severity makes `IsValid` false. Each `ValidationFailure` includes `PropertyName`, `ErrorCode`, `ErrorMessage`, and `Severity`.
+
+#### Generator scope
+
+`[ValiantValidator]` is the discovery hook. Only marked validator declarations enter the incremental pipeline. Generated output can include:
+
+- direct sync/async `IValidator<T>` methods;
+- metadata used by OpenAPI and integrations;
+- generated DI registration through `AddValiantValidators`;
+- composition code for root and property validators.
+
+The marker accepts generic and `typeof(...)` compatibility forms. Prefer an ordinary `[ValiantValidator]` declaration that inherits `ValidatorDefinition<T>`; it is the recommended authoring surface for both fluent and attribute-based validation.
+
+#### Authoring constraints
+
+- Validator and generated containing types must be `partial`.
+- Attribute rules must be Valiant validation attributes.
+- Generator-readable expressions produce direct fast-path code; unsupported declaration shapes are compile-time diagnostics rather than runtime surprises.
+- Property validators skip null property values unless presence is checked separately.
+### Package guide
+
+:::caution Breaking migration from Valiant
+Replace each former `Valiant.*` package reference and `using Valiant...`
+directive with its `StaticNorth.Valiant.*` counterpart. Public C# namespaces
+now use `StaticNorth.Valiant.*`, so application source must be updated too.
+:::
+
+Install the most specific package for each integration you use. Integration packages carry the core validation runtime, build, and analyzer assets, so a separate `StaticNorth.Valiant.Validation` reference is unnecessary.
+
+| Package | Use it for | Target |
+| --- | --- | --- |
+| `StaticNorth.Valiant.Validation` | Core validators without a host integration | .NET 8 and .NET Standard 2.0 |
+| `StaticNorth.Valiant.Validation.AspNetCore` | Minimal APIs, MVC, and problem details | .NET 8 |
+| `StaticNorth.Valiant.Validation.AspNetCore.OpenApi` | Native ASP.NET Core OpenAPI schema rules | .NET 10 |
+| `StaticNorth.Valiant.Validation.MediatR` | MediatR 12.5 pipeline validation | .NET 8 |
+| `StaticNorth.Valiant.Validation.Mediator` | Source-generated Mediator pipeline validation | .NET 8 |
+
+#### Common combinations
+
+```xml
+<!-- Minimal API validation only -->
+<PackageReference Include="StaticNorth.Valiant.Validation.AspNetCore" Version="..." />
+```
+
+```xml
+<!-- Minimal API validation plus OpenAPI rule metadata -->
+<PackageReference Include="StaticNorth.Valiant.Validation.AspNetCore" Version="..." />
+<PackageReference Include="StaticNorth.Valiant.Validation.AspNetCore.OpenApi" Version="..." />
+```
+
+```xml
+<!-- Application-layer validation with MediatR -->
+<PackageReference Include="StaticNorth.Valiant.Validation.MediatR" Version="..." />
+```
+
+Reference more than one integration package when the application uses more than one integration. Do not add the core package solely to make source generation work.
+
+## Endpoints
+
+### Minimal APIs, organized by feature
+
+Valiant Endpoints gives every ASP.NET Core Minimal API endpoint a small class and generates deterministic route registration. Group vertical slices, apply conventions once, exclude features at startup, and bind query shapes that ASP.NET Core does not handle by default.
+
+```csharp
+using StaticNorth.Valiant.Endpoints;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+[ValiantEndpoint<TodosEndpointGroup>]
+internal sealed class ListTodosEndpoint : IEndpoint
+{
+    public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) =>
+        builder.MapGet("/", () => Results.Ok());
+}
+```
+
+```csharp
+builder.Services.AddValiantEndpoints();
+
+var app = builder.Build();
+app.MapValiantEndpoints();
+```
+
+#### What it covers
+
+| Capability | API |
+| --- | --- |
+| Generated discovery | `[ValiantEndpoint]`, `[ValiantEndpoint<TGroup>]`, `[ValiantEndpointGroup]` |
+| Route organization | `IEndpoint`, `IEndpointGroup`, standalone and grouped routes |
+| Shared policy | Group and endpoint configuration hooks over the returned route builders |
+| Feature switches | Separate startup predicates for generated groups and endpoints |
+| Multiple assemblies | Explicit registration and mapping overloads |
+| Query compatibility | Arrays, nested objects, JSON opt-in, parser, serializer, and structured errors |
+| Request binding | Opt-in generated `BindAsync`, `[AsParameters]` repair, and complex `[FromQuery]` shims; native ASP.NET Core binding by default |
+
+#### Documentation map
+
+- [Quick start](https://valiant.staticnorth.dev/endpoints/quick-start/)
+- [Runnable samples](https://valiant.staticnorth.dev/endpoints/samples/)
+- [Groups and conventions](https://valiant.staticnorth.dev/endpoints/guides/groups-conventions/)
+- [Conditional registration](https://valiant.staticnorth.dev/endpoints/guides/conditional-registration/)
+- [Request binding](https://valiant.staticnorth.dev/endpoints/guides/request-binding/)
+- [Query parameter reference](https://valiant.staticnorth.dev/endpoints/reference/query-parameters/)
+- [Registration, generation, and diagnostics](https://valiant.staticnorth.dev/endpoints/reference/registration-generation/)
+
+The [sample catalog](https://valiant.staticnorth.dev/endpoints/samples/) covers every selectable startup in the
+runnable endpoint-per-class host, including generated binding and intentional
+conditional exclusions.
+### Quick start
+
+#### 1. Install
+
+```bash
+dotnet add package StaticNorth.Valiant.Endpoints.AspNetCore
+```
+
+This is the consumer package. It includes the shared endpoint contracts and bundles the source generator; do not add separate `StaticNorth.Valiant.Endpoints` or generator references.
+
+#### 2. Create an endpoint
+
+```csharp
+using StaticNorth.Valiant.Endpoints;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+[ValiantEndpoint]
+internal sealed class HealthEndpoint : IEndpoint
+{
+    public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder)
+    {
+        return builder.MapGet("/health", () => Results.Ok(new { status = "ready" }));
+    }
+}
+```
+
+`[ValiantEndpoint]` makes it a standalone endpoint on the root route builder.
+
+#### 3. Register and map
+
+```csharp
+using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
+
+builder.Services.AddValiantEndpoints();
+
+var app = builder.Build();
+app.MapValiantEndpoints();
+app.Run();
+```
+
+Registration discovers generated registrar metadata from the calling and entry assemblies. Mapping resolves those registrars and invokes each generated route plan.
+
+#### 4. Put endpoints in a group
+
+```csharp
+[ValiantEndpointGroup]
+internal sealed class TodosEndpointGroup : IEndpointGroup
+{
+    public static RouteGroupBuilder CreateGroup(IEndpointRouteBuilder builder) =>
+        builder.MapGroup("/api/todos").WithTags("Todos");
+}
+
+[ValiantEndpoint<TodosEndpointGroup>]
+internal sealed class GetTodoEndpoint : IEndpoint
+{
+    public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) =>
+        builder.MapGet("/{id:guid}", (Guid id) => Results.Ok(id));
+}
+```
+
+Every endpoint group must implement `CreateGroup`; Valiant does not derive group routes from type names.
+
+Next: centralize tags, filters, OpenAPI, and naming in [Groups and conventions](https://valiant.staticnorth.dev/endpoints/guides/groups-conventions/).
+### Endpoint samples
+
+The runnable host has four startup choices. Select one near the top of
+[`Program.cs`](https://github.com/static-north-dev/valiant/blob/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/Program.cs),
+then run:
+
+```bash
+dotnet run --project endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples
+```
+
+```csharp
+Type? startup;
+
+//startup = typeof(Samples.Basic.Startup);
+//startup = typeof(Samples.Configuration.Startup);
+//startup = typeof(Samples.ConditionalRegistration.Startup);
+startup = typeof(Samples.QueryBinding.Startup);
+```
+
+Endpoint discovery is assembly-wide. Every attributed endpoint in the sample
+project contributes generated registration code; the selected startup controls
+the global options and conventions applied when those registrations are mapped.
+
+#### Available startups
+
+| Startup | Demonstrates | Source |
+| --- | --- | --- |
+| `Basic.Startup` | Default discovery and mapping for a standalone endpoint and an endpoint group | [`Basic`](https://github.com/static-north-dev/valiant/tree/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/Basic) |
+| `Configuration.Startup` | `ConfigureEndpointGroup`, `ConfigureEndpoint`, and descriptor-based guards using group and endpoint metadata | [`Configuration`](https://github.com/static-north-dev/valiant/tree/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/Configuration) |
+| `ConditionalRegistration.Startup` | Independent `MapEndpointGroupsWhen` and `MapEndpointWhen` policies, including allowed and rejected registrations | [`ConditionalRegistration`](https://github.com/static-north-dev/valiant/tree/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/ConditionalRegistration) |
+| `QueryBinding.Startup` | Generated query binding for arrays, objects, JSON values, and supported query formats | [`QueryBinding`](https://github.com/static-north-dev/valiant/tree/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/QueryBinding) |
+
+Every startup registers and maps the generated route plan through
+`AddValiantEndpoints()` and `MapValiantEndpoints()`.
+
+#### Configuration hooks
+
+The configuration startup applies one convention to both endpoints in its group
+and a second convention only to `SelectedEndpoint`:
+
+| Route | `X-Valiant-Group` | `X-Valiant-Endpoint` |
+| --- | --- | --- |
+| `/configuration/selected` | `ConfigurationEndpointGroup` | `SelectedEndpoint` |
+| `/configuration/group-only` | `ConfigurationEndpointGroup` | not present |
+
+The hook receives the builder returned by the user-authored mapping method and
+its generated registration descriptor. See
+[Groups and conventions](https://valiant.staticnorth.dev/endpoints/guides/groups-conventions/) for the complete
+mapping sequence.
+
+#### Conditional registration
+
+The conditional startup exercises positive and negative cases for both
+predicates:
+
+| Route | Status | Policy demonstrated |
+| --- | --- | --- |
+| `/conditional/groups/allowed/hello` | `200` | group allowed |
+| `/conditional/groups/blocked/hello` | `404` | group rejected |
+| `/conditional/endpoints/allowed` | `200` | standalone endpoint allowed |
+| `/conditional/endpoints/blocked` | `404` | standalone endpoint rejected |
+
+Rejecting a group skips its child registrations, so `MapEndpointWhen` is not
+evaluated for those children. These are startup-time registration decisions,
+not request-time feature checks. See
+[Conditional registration](https://valiant.staticnorth.dev/endpoints/guides/conditional-registration/) for descriptor
+details and precedence.
+
+#### Query binding
+
+The query-binding startup opts the compilation into generated binding:
+
+```csharp
+services.AddValiantEndpoints(options =>
+{
+    options.QueryParameters.EnableBinding = true;
+});
+```
+
+Its `/query/*` routes cover array and object formats, direct JSON query values,
+and an endpoint that explicitly disables JSON parsing. See
+[Request binding](https://valiant.staticnorth.dev/endpoints/guides/request-binding/) and the
+[query parameter reference](https://valiant.staticnorth.dev/endpoints/reference/query-parameters/) before choosing a
+binding shape.
+### Groups and conventions
+
+#### Create groups
+
+Every endpoint group implements `CreateGroup` and explicitly chooses its route and group-level metadata:
+
+```csharp
+[ValiantEndpointGroup(Order = 10)]
+internal sealed class OrdersEndpointGroup : IEndpointGroup
+{
+    public static RouteGroupBuilder CreateGroup(IEndpointRouteBuilder builder) =>
+        builder
+            .MapGroup("/api/orders")
+            .WithTags("Orders")
+            .RequireAuthorization();
+}
+```
+
+#### Global conventions
+
+```csharp
+builder.Services.AddValiantEndpoints(options =>
+{
+    options.ConfigureEndpointGroup = (group, registration) =>
+    {
+        group.AddEndpointFilter<ExceptionHandlingFilter>();
+        group.WithOpenApi();
+    };
+
+    options.ConfigureEndpoint = (endpoint, registration) =>
+        endpoint.WithName(registration.EndpointType.Name);
+});
+```
+
+The generated sequence is:
+
+1. Create the group through its required `CreateGroup` implementation.
+2. Associate its `EndpointGroupRegistration`.
+3. Run `ConfigureEndpointGroup`.
+4. Map each included endpoint and apply Valiant binding and parsing conventions.
+5. Run `ConfigureEndpoint` with that endpoint's `EndpointRegistration`.
+
+Both hooks are actions over the builders returned by `IEndpointGroup.CreateGroup(...)` and `IEndpoint.Map(...)`. The group hook cannot replace the returned builder. Put route prefixes and nested `MapGroup(...)` calls in the group's `CreateGroup` implementation.
+
+`EndpointGroupRegistration` exposes the group type and generated order. `EndpointRegistration` exposes the endpoint type, containing group, generated order, and query-binding snapshot, so global conventions can branch without repeating reflection-based discovery.
+
+See the
+[runnable configuration sample](https://valiant.staticnorth.dev/endpoints/samples/#configuration-hooks)
+for two grouped routes where a group hook adds a shared response header and an endpoint hook adds a second header only to the selected endpoint.
+
+#### Migrating the earlier preview hooks
+
+The earlier preview exposed three callbacks. Consolidate them as follows:
+
+- Move both `ConfigureAllEndpointGroupsBeforeMapping` and `ConfigureAllEndpointGroupsAfterMapping` conventions into `ConfigureEndpointGroup`.
+- Replace `ConfigureAllEndpointsAfterMapping` with `ConfigureEndpoint`.
+- Replace callback `Type` parameters with `registration.GroupType` or `registration.EndpointType`.
+- Move any callback that returned `group.MapGroup(...)` into `IEndpointGroup.CreateGroup(...)`.
+
+#### Ordering
+
+Set `Order` on endpoint and group marker attributes when one generated mapping must precede another:
+
+```csharp
+[ValiantEndpoint<OrdersEndpointGroup>(Order = -100)]
+internal sealed class SearchOrdersEndpoint : IEndpoint { /* ... */ }
+```
+
+Types with the same order are sorted by type name, keeping generated output deterministic.
+
+#### Standalone endpoints
+
+`[ValiantEndpoint]` without a group maps directly on the supplied root route builder. The same `ConfigureEndpoint` hook and `MapEndpointWhen` registration policy apply; its registration has `Group == null`.
+### Conditional registration
+
+Configure generated groups and endpoints independently:
+
+```csharp
+builder.Services.AddValiantEndpoints(options =>
+{
+    options.MapEndpointGroupsWhen = group =>
+        group.GroupType != typeof(ExperimentalEndpointGroup) ||
+        builder.Environment.IsDevelopment();
+
+    options.MapEndpointWhen = endpoint =>
+        endpoint.EndpointType != typeof(DeprecatedEndpoint);
+});
+```
+
+Each predicate receives generated registration metadata while `MapValiantEndpoints()` runs at startup. Both policies allow every generated registration by default. Assigning either property again replaces its previously configured predicate.
+
+See the
+[runnable conditional-registration sample](https://valiant.staticnorth.dev/endpoints/samples/#conditional-registration)
+for allowed and rejected group and standalone endpoint routes.
+
+`EndpointGroupRegistration` exposes:
+
+- `GroupType`;
+- generated mapping `Order`.
+
+`EndpointRegistration` exposes:
+
+- `EndpointType`;
+- the optional containing `Group`;
+- generated mapping `Order`;
+- `IsGrouped`;
+- the pre-mapping `QueryParameters` snapshot.
+
+The query snapshot reports whether binding support was generated, whether runtime binding filters are enabled, and the parsing options known before `IEndpoint.Map(...)` executes. It cannot include route patterns, HTTP methods, tags, authorization, or endpoint-authored `.WithQueryParsingOptions(...)` metadata because those are created during mapping.
+
+For a group inferred from referenced generated endpoints, `Order` is the lowest generated child order used to place that group. Previously compiled generated registrars did not carry order metadata, so the compatibility bridge reports `0` for those legacy registrations.
+
+#### Exclude a whole group
+
+```csharp
+options.MapEndpointGroupsWhen = group =>
+    group.GroupType != typeof(AdminEndpointGroup);
+```
+
+Returning `false` for a group skips:
+
+- group creation;
+- all generated endpoints assigned to that group;
+- the `ConfigureEndpointGroup` hook.
+
+The endpoint predicate is not evaluated for endpoints in an excluded group.
+
+#### Exclude individual endpoints
+
+```csharp
+options.MapEndpointWhen = endpoint =>
+    endpoint.EndpointType != typeof(DeleteAccountEndpoint);
+```
+
+Returning `false` for an endpoint excludes only that grouped or standalone endpoint. Other endpoints in its group still map normally.
+
+#### Combine feature flags, environment, and metadata
+
+```csharp
+var disabled = new HashSet<Type>
+{
+    typeof(LegacyReportsEndpoint),
+    typeof(PreviewEndpointGroup)
+};
+
+builder.Services.AddValiantEndpoints(options =>
+{
+    options.MapEndpointGroupsWhen = group =>
+        !disabled.Contains(group.GroupType) &&
+        (!group.GroupType.Name.StartsWith("Internal", StringComparison.Ordinal) ||
+         builder.Environment.IsDevelopment());
+
+    options.MapEndpointWhen = endpoint =>
+        !disabled.Contains(endpoint.EndpointType) &&
+        (!endpoint.EndpointType.Name.StartsWith("Internal", StringComparison.Ordinal) ||
+         builder.Environment.IsDevelopment());
+});
+```
+
+You can also inspect custom attributes on each `Type`, configuration, license state, or a precomputed feature snapshot. Keep the predicates fast and deterministic because they run synchronously during route construction.
+
+#### Configure parsing conditionally
+
+Use a separate rule when selected endpoint registrations need different parsing:
+
+```csharp
+options.ConfigureEndpointWhen(
+    endpoint => endpoint.Group?.GroupType == typeof(SearchEndpointGroup),
+    endpointOptions => endpointOptions.QueryParameters.Parsing =
+        new QueryParsingOptions
+        {
+            SupportedArrayFormats = [QueryArrayFormat.CommaSeparated],
+            SupportedObjectFormats = [QueryObjectFormat.Flat]
+        });
+```
+
+All rule predicates observe the same initial pre-mapping snapshot. Matching actions run in registration order before `MapEndpointWhen` evaluates the final descriptor. Parsing precedence is:
+
+1. Explicit `[ValiantQueryParsing]` properties.
+2. Endpoint-authored `.WithQueryParsingOptions(...)`.
+3. Conditional registration configuration.
+4. Global `ValiantEndpointOptions.QueryParameters.Parsing`.
+
+`EnableBinding` remains a compilation-wide generator decision. Set `options.QueryParameters.EnableBinding = true` directly in the `AddValiantEndpoints` setup lambda when generated binding is required. Conditional parsing rules cannot generate or remove `BindAsync` and direct `TryParse` members.
+
+#### Migrate from `ShouldMap`
+
+Split the old shared predicate by registration kind:
+
+```csharp
+// Before
+options.ShouldMap = type => !disabled.Contains(type);
+
+// After
+options.MapEndpointGroupsWhen = group => !disabled.Contains(group.GroupType);
+options.MapEndpointWhen = endpoint => !disabled.Contains(endpoint.EndpointType);
+```
+
+:::warning Startup decision, not request routing
+The predicates are evaluated once when endpoints are mapped. They do not change routes after startup and are not a substitute for authorization or per-request feature evaluation.
+:::
+
+:::info Generated registrations only
+Routes mapped directly with ASP.NET Core are outside Valiant's generated mapping policy. Apply application-specific conditions to those routes directly.
+:::
+### Request binding
+
+Valiant query binding is disabled by default, leaving request parameters to native ASP.NET Core binding. Enable generated binding in the same project as the endpoint declarations with a direct assignment:
+
+```csharp
+builder.Services.AddValiantEndpoints(options =>
+{
+    options.QueryParameters.EnableBinding = true;
+});
+```
+
+Changing the literal between `true` and `false` adds or removes generated query binding during the normal rebuild. Helper methods, runtime variables, and a host configuration in another assembly are not compile-time opt-ins.
+
+:::caution Compile-time boundary
+
+`EnableBinding` is not a fully dynamic runtime switch. Whole-request `BindAsync` and `[AsParameters]` processing can read runtime options, but a generated direct `TryParse(string, out T)` has no `HttpContext`. If the endpoint compilation contains a recognized literal `true`, another host or later runtime override to `false` cannot remove or neutralize that direct parser. Compile the endpoint project with no recognized `true` assignment when `[ValiantQueryParsing]` must be ignored.
+
+:::
+
+When enabled, Valiant connects its configurable query parser to generated endpoints in three binding shapes.
+
+#### Whole request binding
+
+Make the request `partial` and place `[FromQuery]` on query members:
+
+```csharp
+return builder.MapGet("/cars", static (ListCarsRequest request) =>
+    Results.Ok(request.Filter));
+
+public sealed partial record ListCarsRequest
+{
+    [FromQuery]
+    public CarFilter? Filter { get; init; }
+}
+
+public sealed record CarFilter(int? Year, string? Brand);
+```
+
+Valiant emits `BindAsync(HttpContext, ParameterInfo)` on `ListCarsRequest` and parses the full query through the configured policy.
+If the request is nested inside an endpoint or another type, every containing declaration must also be `partial` so generated code can reopen the complete declaration chain.
+
+#### `[AsParameters]`
+
+ASP.NET Core first constructs the request; a Valiant endpoint filter then reparses the full query and copies `[FromQuery]` values back:
+
+```csharp
+return builder.MapGet("/cars", static ([AsParameters] ListCarsRequest request) =>
+    Results.Ok(request.Filter));
+
+public sealed record ListCarsRequest
+{
+    [FromQuery]
+    public CarFilter? Filter { get; init; }
+}
+
+public sealed partial record CarFilter(int? Year, string? Brand);
+```
+
+The complex `[FromQuery]` type must be `partial` in this shape. Valiant generates a `TryParse(string, out T)` shim because ASP.NET Core checks property bindability before endpoint filters run.
+The same containing-type rule applies when that complex type is nested.
+
+The Valiant filter runs after native property binding, so it cannot recover from a format that makes ASP.NET Core fail the initial property conversion. For example, comma-separated `?ids=1,2,3` fails before the filter for an `int[] Ids` property. Use generated whole-request binding when every configured format must work without native `[AsParameters]` constraints.
+
+#### Direct complex `[FromQuery]`
+
+Complex query types used directly also need to be source-declared and `partial` so the generator can add the compatibility parser.
+
+```csharp
+return builder.MapGet("/cars", static ([FromQuery] CarFilter filter) =>
+    Results.Ok(filter));
+
+public sealed partial record CarFilter(int? Year, string? Brand);
+```
+
+ASP.NET Core calls the generated `TryParse` method to bind the value. Configure its JSON policy on the endpoint:
+
+```csharp
+[ValiantEndpoint]
+[ValiantQueryParsing(JsonValues = JsonQueryValues.Disabled)]
+public sealed class CarsEndpoint : IEndpoint
+{
+    public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) =>
+        builder.MapGet("/cars", static ([FromQuery] CarFilter filter) => Results.Ok(filter));
+}
+```
+
+The policy is compiled into the generated method, so direct binding does not use an endpoint filter. When the endpoint project is compiled with `options.QueryParameters.EnableBinding = false`, the attribute is ignored and no Valiant query parser is emitted. A later runtime-only override cannot change an already-generated direct parser; see the compile-time boundary above. When binding is enabled, JSON remains enabled when the attribute is absent or parameterless. Explicit `Disabled` returns HTTP 400. `SupportedArrayFormats` and `SupportedObjectFormats` on the attribute do not affect direct parameters. The attribute does not change a user-authored `TryParse`. Conflicting policies for the same generated parser type report `VLE011`.
+
+#### Failure response
+
+Generated binders and the Valiant query-binding filter return HTTP 400 with structured `QueryError` entries when values cannot be converted or a client uses a disabled format. Each entry identifies a `Path`, stable `Code`, human-readable `Message`, and `Kind` (`Validation` or `Configuration`).
+
+#### Configure accepted formats
+
+```csharp
+builder.Services.AddValiantEndpoints(options =>
+{
+    options.QueryParameters.EnableBinding = true;
+    options.QueryParameters.Parsing = new QueryParsingOptions
+    {
+        SupportedArrayFormats =
+        [
+            QueryArrayFormat.RepeatedKeys,
+            QueryArrayFormat.CommaSeparated
+        ],
+        SupportedObjectFormats =
+        [
+            QueryObjectFormat.Flat,
+            QueryObjectFormat.DotNotation
+        ]
+    };
+});
+```
+
+Replace the global parsing rules for whole-request and `[AsParameters]` binding on one endpoint when needed:
+
+```csharp
+return builder.MapGet("/search", Handle)
+    .WithQueryParsingOptions(new QueryParsingOptions
+    {
+        SupportedObjectFormats = [QueryObjectFormat.Flat],
+        EnableJsonQueryValues = true
+    });
+```
+
+This is a full replacement, not a merge. Other endpoints continue using the global parsing options.
+
+When only selected settings differ, use a partial attribute override:
+
+```csharp
+[ValiantEndpoint]
+[ValiantQueryParsing(
+    SupportedArrayFormats =
+    [
+        QueryArrayFormat.RepeatedKeys,
+        QueryArrayFormat.CommaSeparated
+    ],
+    SupportedObjectFormats =
+    [
+        QueryObjectFormat.Flat,
+        QueryObjectFormat.DotNotation
+    ],
+    JsonValues = JsonQueryValues.Disabled)]
+public sealed partial class SearchEndpoint : IEndpoint
+{
+    // ...
+}
+```
+
+Explicit attribute properties win over `.WithQueryParsingOptions(...)`, which wins over global parsing options and then defaults. Omitted or `null` array properties inherit; `[]` disables every format in that category. The array and object properties affect full-query binding only. Explicit `JsonValues` affects full-query binding and generated direct complex `[FromQuery]`; when omitted, full-query binding inherits while direct JSON remains enabled.
+
+See the [query parameter reference](https://valiant.staticnorth.dev/endpoints/reference/query-parameters/) for all formats and direct parser/serializer APIs.
+### Query parameter parsing and serialization
+
+Inbound parsing and outbound serialization use separate options. An API can accept several client conventions while emitting one stable format.
+
+Generated endpoint binding is opt-in and disabled by default:
+
+```csharp
+builder.Services.AddValiantEndpoints(options =>
+{
+    options.QueryParameters.EnableBinding = true;
+});
+```
+
+The direct literal assignment must be in the same compilation as the endpoints so the source generator can add the binding members. Direct calls to `QueryStringParser` and `QueryStringSerializer` do not require endpoint binding to be enabled.
+
+`EnableBinding` is a compile-time opt-in, not a fully dynamic runtime switch. Whole-request `BindAsync` and `[AsParameters]` processing can resolve runtime options, but a generated direct `TryParse(string, out T)` has no `HttpContext`. Once a recognized literal `true` causes that parser to be compiled, another host or runtime override to `false` cannot remove or neutralize it. Compile the endpoint project with no recognized `true` assignment when `[ValiantQueryParsing]` must be ignored.
+
+#### Defaults
+
+```csharp
+var parsing = new QueryParsingOptions
+{
+    SupportedArrayFormats = [QueryArrayFormat.RepeatedKeys],
+    SupportedObjectFormats = [QueryObjectFormat.Flat],
+    EnableJsonQueryValues = false
+};
+
+var serialization = new QuerySerializationOptions
+{
+    ArrayFormat = QueryArrayFormat.RepeatedKeys,
+    ObjectFormat = QueryObjectFormat.Flat
+};
+```
+
+#### Array formats
+
+| Value | Example |
+| --- | --- |
+| `RepeatedKeys` | `?ids=1&ids=2&ids=3` |
+| `CommaSeparated` | `?ids=1,2,3` |
+| `Brackets` | `?ids[]=1&ids[]=2&ids[]=3` |
+| `IndexedBrackets` | `?ids[0]=1&ids[1]=2&ids[2]=3` |
+
+Enable every accepted inbound format explicitly:
+
+```csharp
+new QueryParsingOptions
+{
+    SupportedArrayFormats =
+    [
+        QueryArrayFormat.RepeatedKeys,
+        QueryArrayFormat.CommaSeparated,
+        QueryArrayFormat.Brackets,
+        QueryArrayFormat.IndexedBrackets
+    ]
+};
+```
+
+Repeated and bracket values preserve query order; indexed brackets sort by numeric index. Empty items and disabled formats return structured errors.
+
+#### Object formats
+
+| Value | Example |
+| --- | --- |
+| `Flat` | `?brand=tesla&year=2025` |
+| `DotNotation` | `?filter.brand=tesla&filter.year=2025` |
+| `DeepObject` | `?filter[brand]=tesla&filter[year]=2025` |
+
+Duplicate scalar values use the last value. Flat output cannot preserve nested paths; choose dot notation, deep object, or explicitly enabled JSON for nested serialization.
+
+#### JSON query values
+
+`QueryStringParser` and generated whole-request binding disable JSON by default. Opt in only for endpoints that intentionally accept URL-encoded JSON objects:
+
+```csharp
+new QueryParsingOptions { EnableJsonQueryValues = true };
+```
+
+For a single mapped endpoint using generated whole-request or `[AsParameters]` binding, replace the global parsing policy:
+
+```csharp
+return builder.MapGet("/search", Handle)
+    .WithQueryParsingOptions(new QueryParsingOptions
+    {
+        SupportedObjectFormats = [QueryObjectFormat.Flat],
+        EnableJsonQueryValues = true
+    });
+```
+
+For `[AsParameters]`, the policy is applied after ASP.NET Core has performed native property binding. Formats that fail that initial conversion, such as comma-separated input for an `int[]` property, require generated whole-request binding instead.
+
+For a partial source-generated override, place `[ValiantQueryParsing]` on the endpoint class:
+
+```csharp
+[ValiantEndpoint]
+[ValiantQueryParsing(
+    SupportedArrayFormats =
+    [
+        QueryArrayFormat.RepeatedKeys,
+        QueryArrayFormat.CommaSeparated
+    ],
+    SupportedObjectFormats =
+    [
+        QueryObjectFormat.Flat,
+        QueryObjectFormat.DotNotation
+    ],
+    JsonValues = JsonQueryValues.Disabled)]
+public sealed partial class SearchEndpoint : IEndpoint
+{
+    // ...
+}
+```
+
+Precedence is explicit attribute properties, then the last `.WithQueryParsingOptions(...)` call, then global `QueryParameters.Parsing`, then defaults. Omitted or `null` array properties inherit; `[]` accepts no formats in that category. `SupportedArrayFormats` and `SupportedObjectFormats` affect full-query binding only. `JsonValues` affects full-query binding when explicitly named and always controls generated direct complex `[FromQuery]` parsers.
+
+For example, direct complex `[FromQuery]` parameters can disable their generated JSON parser with the same attribute:
+
+```csharp
+[ValiantEndpoint]
+[ValiantQueryParsing(JsonValues = JsonQueryValues.Disabled)]
+public sealed class SearchEndpoint : IEndpoint
+{
+    public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) =>
+        builder.MapGet("/search", static ([FromQuery] SearchRequest request) => Results.Ok(request));
+}
+```
+
+When the endpoint project is compiled with `options.QueryParameters.EnableBinding = false`, the whole attribute is ignored and no Valiant query parser is generated. A later runtime-only override cannot change an already-generated direct parser. When binding is enabled, no attribute and `[ValiantQueryParsing]` both leave JSON enabled for the generated direct parser. Explicit `Disabled` returns HTTP 400 without a Valiant direct-query filter. Array and object format properties do not affect direct parameters. User-authored `TryParse` methods remain user-controlled, and conflicting policies for the same generated parser type report `VLE011`.
+
+```http
+?filter=%7B%22brand%22%3A%22tesla%22%2C%22year%22%3A2025%7D
+```
+
+#### Direct parsing
+
+```csharp
+var result = QueryStringParser.Parse<SearchQuery>(
+    "?ids=1,2,3&filter.brand=tesla",
+    new QueryParsingOptions
+    {
+        SupportedArrayFormats =
+        [
+            QueryArrayFormat.RepeatedKeys,
+            QueryArrayFormat.CommaSeparated
+        ],
+        SupportedObjectFormats =
+        [
+            QueryObjectFormat.Flat,
+            QueryObjectFormat.DotNotation
+        ]
+    });
+
+if (!result.IsSuccess)
+{
+    foreach (var error in result.Errors)
+    {
+        Console.WriteLine($"{error.Path} [{error.Code}] {error.Message}");
+    }
+}
+```
+
+Primitive arrays and `List<T>` support `string`, `int`, `long`, `Guid`, `bool`, `decimal`, and `DateTime`; nullable primitive scalars are supported. Nested object binding supports at least one level.
+
+#### Direct serialization
+
+```csharp
+var result = QueryStringSerializer.Serialize(
+    new
+    {
+        ids = new[] { 1, 2, 3 },
+        filter = new { brand = "tesla", year = 2025 }
+    },
+    new QuerySerializationOptions
+    {
+        ArrayFormat = QueryArrayFormat.CommaSeparated,
+        ObjectFormat = QueryObjectFormat.DotNotation
+    });
+
+// ?ids=1,2,3&filter.brand=tesla&filter.year=2025
+```
+
+The serializer URL-encodes keys and values, preserves array order, and skips null values. It never negotiates an output format: one array and one object format are selected explicitly.
+
+#### Structured errors
+
+`QueryErrorKind.Validation` means the supplied value or target shape is invalid—for example, an invalid `Guid`, empty array element, or unsupported type. `QueryErrorKind.Configuration` means the request used a disabled format or serialization options could not represent the requested shape.
+
+```csharp
+public sealed class QueryError
+{
+    public string Path { get; }
+    public string Code { get; }
+    public string Message { get; }
+    public QueryErrorKind Kind { get; }
+}
+```
+### Registration, generation, and diagnostics
+
+#### Default discovery
+
+`AddValiantEndpoints()` registers generated route registrars from the calling and entry assemblies. `MapValiantEndpoints()` resolves every registered registrar.
+
+#### Explicit assemblies
+
+Use explicit overloads when endpoints live in feature libraries:
+
+```csharp
+builder.Services.AddValiantEndpoints(
+    typeof(OrdersEndpoint).Assembly,
+    typeof(BillingEndpoint).Assembly);
+
+app.MapValiantEndpoints();
+```
+
+Explicit assembly selection changes registration only. Endpoint mapping always uses the same `MapValiantEndpoints()` entry point, so generated mapping policy and conventions have one consistent execution path.
+
+#### Generator scope
+
+The incremental generator starts from marker attributes—not an assembly-wide interface scan:
+
+- `[ValiantEndpoint]` or `[ValiantEndpoint<TGroup>]` generates endpoint registration;
+- `[ValiantEndpointGroup]` generates group registration;
+- partial query request/type declarations receive binders only when query binding is explicitly enabled and they are referenced from generated endpoint methods.
+
+The companion analyzer checks only direct `IEndpoint` and `IEndpointGroup` declarations for missing markers. It intentionally avoids indirect and aliased implementation scans to keep IDE analysis bounded.
+
+`IEndpointGroup.CreateGroup` is a static abstract interface member. The C# compiler requires every endpoint group type to provide a public static implementation.
+
+#### Diagnostics
+
+| ID | Meaning |
+| --- | --- |
+| `VLE001` | Marked endpoint does not implement `IEndpoint` |
+| `VLE002` | A declaration implements both endpoint interfaces |
+| `VLE003` | Endpoint marker was applied to a group |
+| `VLE004` | Declared group type does not implement `IEndpointGroup` |
+| `VLE005` | Marked group does not implement `IEndpointGroup` |
+| `VLE006` | Direct endpoint declaration is missing `[ValiantEndpoint]` |
+| `VLE007` | Direct group declaration is missing `[ValiantEndpointGroup]` |
+| `VLE008` | Group marker was applied to an endpoint |
+| `VLE009` | An endpoint uses more than one endpoint marker form |
+| `VLE010` | A query type cannot receive the generated binder |
+
+`VLE010` covers shapes such as non-partial source types, static types, open generics, or containing types that cannot receive generated members.
+
+## Mapping
+
+### Mapping that stays visible
+
+Valiant Mapping turns a small mapper declaration into direct C# assignments. It handles conventional members, immutable targets, nested shapes, collections, enums, explicit transformations, conditional rules, and mapper composition—without runtime assembly scanning.
+
+```csharp
+using StaticNorth.Valiant.Mapping;
+
+[ValiantMapper]
+public sealed partial class UserMapper : MapperDefinition<User, UserDto>;
+
+var dto = new UserMapper().Map(user);
+```
+
+The generated partial class implements `IMapper<User, UserDto>` and exposes a strongly typed `Map(User source)` method.
+
+#### Why use it?
+
+| Capability | What Valiant generates |
+| --- | --- |
+| Convention mapping | Direct reads and assignments for compatible public fields and properties |
+| Immutable targets | Constructor arguments for records and constructor-only models |
+| Shape changes | Flattening, unflattening, enum conversion, and reusable nested/collection mappers |
+| Explicit ownership | `Map`, `Ignore`, conditions, fallbacks, and null policy in `Configure` |
+| Runtime selection | Typed mapper, `IMapper` facade, and `IMapperFactory` through generated DI registration |
+| Deployment | A fast generated backend suited to trimming and Native AOT, plus a debuggable backend |
+
+:::tip Start with conventions
+Declare the mapper and compile. Add `Configure` only when the source and target shapes intentionally differ. Once `Configure` is present, list every target mapping you own explicitly.
+:::
+
+#### Documentation map
+
+- [Quick start](https://valiant.staticnorth.dev/mapping/quick-start/) — install, declare, register, and call a mapper.
+- [Runnable samples](https://valiant.staticnorth.dev/mapping/samples/) — select and run every maintained Mapping scenario.
+- [Convention mapping](https://valiant.staticnorth.dev/mapping/guides/conventions/) — records, constructors, flattening, collections, and enums.
+- [Explicit mapping](https://valiant.staticnorth.dev/mapping/guides/explicit-mapping/) — transformations, conditions, ignores, fallbacks, and nulls.
+- [Composition and DI](https://valiant.staticnorth.dev/mapping/guides/composition-dependency-injection/) — nested mappers, facade, and factory.
+- [Runtime and diagnostics](https://valiant.staticnorth.dev/mapping/reference/) — modes, generated scope, warnings, and limitations.
+
+The [sample catalog](https://valiant.staticnorth.dev/mapping/samples/) covers every executable Mapping scenario and
+links each one to its self-contained source folder.
+### Quick start
+
+#### 1. Install
+
+```bash
+dotnet add package StaticNorth.Valiant.Mapping
+```
+
+`StaticNorth.Valiant.Mapping` contains the runtime API and delivers its source generator as an analyzer. No separate generator package is needed.
+
+#### 2. Declare the models and mapper
+
+```csharp
+using StaticNorth.Valiant.Mapping;
+
+public sealed class User
+{
+    public required string Name { get; init; }
+    public int Age { get; init; }
+}
+
+public sealed record UserDto(string Name, int Age);
+
+[ValiantMapper]
+public sealed partial class UserMapper : MapperDefinition<User, UserDto>;
+```
+
+The mapper must be `partial`. `MapperDefinition<TSource, TTarget>` identifies the pair and the generator fills in the implementation.
+
+#### 3. Map
+
+```csharp
+var mapper = new UserMapper();
+var dto = mapper.Map(new User { Name = "Ada", Age = 36 });
+```
+
+The mapper can also be consumed through its interface:
+
+```csharp
+IMapper<User, UserDto> mapper = new UserMapper();
+UserDto dto = mapper.Map(user);
+```
+
+#### 4. Register with dependency injection
+
+When the project references Microsoft dependency-injection abstractions, Valiant generates `AddValiantMappers`:
+
+```csharp
+using StaticNorth.Valiant.Mapping.DependencyInjection;
+
+builder.Services.AddValiantMappers(options =>
+{
+    options.Mode = ValiantMappingMode.Auto;
+    options.NullHandling = ValiantNullHandling.MapNulls;
+});
+```
+
+Then inject the concrete mapper, `IMapper<User, UserDto>`, the non-generic `IMapper`, or `IMapperFactory`.
+
+:::info Generated discovery
+Only declarations marked with `[ValiantMapper]` enter the generator pipeline. Valiant does not scan every type in your compilation looking for mapping definitions.
+:::
+
+Next: learn what maps automatically in [Convention mapping](https://valiant.staticnorth.dev/mapping/guides/conventions/).
+### Mapping samples
+
+Select one delegate near the top of
+[`Program.cs`](https://github.com/static-north-dev/valiant/blob/main/mapping/samples/StaticNorth.Valiant.Mapping.Samples/Program.cs),
+then run:
+
+```bash
+dotnet run --project mapping/samples/StaticNorth.Valiant.Mapping.Samples
+```
+
+`Program.cs` is intentionally only a selector. Each folder is self-contained,
+and the `Sample` class owns the explanation of the behavior it invokes.
+
+| Delegate | Demonstrates | Source |
+| --- | --- | --- |
+| `Basic.Sample.Run` | The smallest useful mapper: matching members mapped by convention into an immutable constructor target | [`Basic`](https://github.com/static-north-dev/valiant/tree/main/mapping/samples/StaticNorth.Valiant.Mapping.Samples/Basic) |
+| `ExplicitMapping.Sample.Run` | A custom source transform, a renamed target member, and an intentionally ignored target member | [`ExplicitMapping`](https://github.com/static-north-dev/valiant/tree/main/mapping/samples/StaticNorth.Valiant.Mapping.Samples/ExplicitMapping) |
+| `ConditionalMapping.Sample.Run` | Native `if`/`else`, a chained `When` condition, and the equivalent `Fallback` and `Default` APIs | [`ConditionalMapping`](https://github.com/static-north-dev/valiant/tree/main/mapping/samples/StaticNorth.Valiant.Mapping.Samples/ConditionalMapping) |
+| `NullHandling.Sample.Run` | Mapper-wide null policy, `IgnoreNull`, `MapNull`, `AllowNull`, and a fallback for an ignored null | [`NullHandling`](https://github.com/static-north-dev/valiant/tree/main/mapping/samples/StaticNorth.Valiant.Mapping.Samples/NullHandling) |
+| `FlatteningAndEnums.Sample.Run` | Convention-based flattening, unflattening, and compatible enum conversion | [`FlatteningAndEnums`](https://github.com/static-north-dev/valiant/tree/main/mapping/samples/StaticNorth.Valiant.Mapping.Samples/FlatteningAndEnums) |
+| `Composition.Sample.Run` | Constructor-injected mapper reuse for a nested object and collection elements | [`Composition`](https://github.com/static-north-dev/valiant/tree/main/mapping/samples/StaticNorth.Valiant.Mapping.Samples/Composition) |
+| `DependencyInjection.Sample.Run` | Generated registration; typed mapper, non-generic facade, and factory; successful and missing `Try` APIs | [`DependencyInjection`](https://github.com/static-north-dev/valiant/tree/main/mapping/samples/StaticNorth.Valiant.Mapping.Samples/DependencyInjection) |
+
+The basic and convention samples show what the generator can infer. Samples
+with a `Configure` override demonstrate behavior supported by both the
+debuggable runtime backend and the fast generated backend. The dependency
+injection sample leaves `ValiantMappingMode.Auto` selected, so Debug builds use
+the debuggable backend and Release builds use generated fast mapping.
+
+Continue with [Convention mapping](https://valiant.staticnorth.dev/mapping/guides/conventions/),
+[Explicit mapping](https://valiant.staticnorth.dev/mapping/guides/explicit-mapping/), or
+[Composition and dependency injection](https://valiant.staticnorth.dev/mapping/guides/composition-dependency-injection/)
+for the complete contracts and constraints.
+### Convention mapping
+
+With no `Configure` override, Valiant maps public readable source fields and properties to public writable target fields, properties, or constructor parameters.
+
+#### Matching members
+
+Names are matched case-insensitively. Compatible values are assigned directly:
+
+```csharp
+public sealed class Order
+{
+    public Guid Id { get; init; }
+    public decimal Total { get; init; }
+}
+
+public sealed class OrderDto
+{
+    public Guid Id { get; init; }
+    public decimal Total { get; init; }
+}
+
+[ValiantMapper]
+public sealed partial class OrderMapper : MapperDefinition<Order, OrderDto>;
+```
+
+#### Records and constructors
+
+Constructor parameters are mapped before writable members, so immutable targets work naturally:
+
+```csharp
+public sealed record OrderDto(Guid Id, decimal Total);
+```
+
+Valiant chooses a usable public constructor and reports a compile-time diagnostic when the target cannot be constructed or a required member cannot be supplied.
+
+#### Flattening and unflattening
+
+Concatenated member paths can bridge nested and flat shapes:
+
+```csharp
+public sealed class User
+{
+    public required Address Address { get; init; }
+}
+
+public sealed class Address
+{
+    public required string City { get; init; }
+}
+
+public sealed class UserDto
+{
+    public required string AddressCity { get; init; }
+}
+```
+
+The reverse shape is supported when a flat source member can populate a nested target path. Prefer explicit mapping when concatenated names could be ambiguous.
+
+#### Enums
+
+Enums with compatible values map between enum types. Treat cross-domain enum contracts carefully: an explicit transformation is clearer when numeric values can drift independently.
+
+#### Nested objects and collections
+
+Register a mapper for the element or nested pair, then reuse it from the parent mapper:
+
+```csharp
+[ValiantMapper]
+public sealed partial class LineMapper : MapperDefinition<OrderLine, OrderLineDto>;
+
+[ValiantMapper]
+public sealed partial class OrderMapper(LineMapper lineMapper)
+    : MapperDefinition<Order, OrderDto>
+{
+    public override void Configure(MappingContext<Order, OrderDto> context)
+    {
+        context.Map(source => source.Lines, target => target.Lines)
+            .UseMapper(lineMapper);
+    }
+}
+```
+
+Valiant can apply the reusable mapper to compatible nested values and collection elements. See [Composition and dependency injection](https://valiant.staticnorth.dev/mapping/guides/composition-dependency-injection/) for registration details.
+
+:::warning Explicit mode changes ownership
+Declaring `Configure` disables convention mapping for that mapper. Map or ignore every target member intentionally; diagnostics will identify missing or incompatible targets.
+:::
+### Explicit mapping
+
+Override `Configure` when names differ or a target value needs business-specific shaping:
+
+```csharp
+[ValiantMapper]
+public sealed partial class UserMapper : MapperDefinition<User, UserDto>
+{
+    public override void Configure(MappingContext<User, UserDto> context)
+    {
+        context
+            .Map(source => source.EmailAddress, target => target.Email)
+            .Map(source => $"{source.FirstName} {source.LastName}", target => target.DisplayName)
+            .Ignore(target => target.InternalNote);
+    }
+}
+```
+
+#### Conditional chains
+
+`When` applies to every declaration in the same fluent chain:
+
+```csharp
+context
+    .Map(source => source.EmailAddress, target => target.Email)
+    .Map(source => source.Phone, target => target.Phone)
+    .When(source => source.IncludeContactDetails);
+```
+
+Start a new statement when rules need different conditions.
+
+#### Defaults and fallbacks
+
+`Default` and `Fallback` are aliases. The value is used when a rule is skipped by its condition or ignores a null source value:
+
+```csharp
+context.Map(source => source.DisplayName, target => target.DisplayName)
+    .When(source => source.IsVisible)
+    .Fallback("Hidden user");
+```
+
+#### Null handling
+
+The mapper-wide default comes from `ValiantMappingOptions.NullHandling`:
+
+```csharp
+services.AddValiantMappers(options =>
+    options.NullHandling = ValiantNullHandling.IgnoreSourceNulls);
+```
+
+Override it per rule:
+
+```csharp
+context.Map(source => source.Nickname, target => target.Nickname)
+    .IgnoreNull();
+
+context.Map(source => source.AvatarUrl, target => target.AvatarUrl)
+    .MapNull(); // AllowNull() is an alias.
+```
+
+| API | Effect |
+| --- | --- |
+| `IgnoreNull()` | Leave the target value unchanged when the source expression returns `null` |
+| `MapNull()` | Assign `null`, even when mapper options ignore source nulls |
+| `AllowNull()` | Alias for `MapNull()` |
+| `Default(value)` | Use a value when the rule is skipped or a null is ignored |
+| `Fallback(value)` | Alias for `Default(value)` |
+
+#### Intentional omissions
+
+Use `Ignore` to document that a writable or required target member is intentionally not populated:
+
+```csharp
+context.Ignore(target => target.AuditStamp);
+```
+
+This is preferable to suppressing an unmapped-member warning because the decision remains beside the rest of the mapping contract.
+
+Run the conditional and null-policy variants from the
+[Mapping sample catalog](https://valiant.staticnorth.dev/mapping/samples/).
+### Composition and dependency injection
+
+#### Reuse another mapper
+
+Constructor-inject the generated mapper and attach it to a member mapping:
+
+```csharp
+[ValiantMapper]
+public sealed partial class AddressMapper
+    : MapperDefinition<Address, AddressDto>;
+
+[ValiantMapper]
+public sealed partial class UserMapper(AddressMapper addressMapper)
+    : MapperDefinition<User, UserDto>
+{
+    public override void Configure(MappingContext<User, UserDto> context)
+    {
+        context.Map(source => source.Address, target => target.Address)
+            .UseMapper(addressMapper);
+    }
+}
+```
+
+`UseMapper` can be called on the context or in a fluent mapping chain. It makes nested object and collection-element conversion explicit and keeps each pair independently testable.
+
+#### Generated registration
+
+```csharp
+using StaticNorth.Valiant.Mapping.DependencyInjection;
+
+builder.Services.AddValiantMappers();
+```
+
+Valiant registers each mapper as its concrete type and as `IMapper<TSource, TTarget>`. It also registers `IMapper` and `IMapperFactory`. Mapper registrations are transient; the facade, factory, and options are singleton services.
+
+#### Choose an API
+
+##### Typed mapper
+
+Use the typed interface when the pair is known at compile time:
+
+```csharp
+public sealed class UserHandler(IMapper<User, UserDto> mapper)
+{
+    public UserDto Handle(User user) => mapper.Map(user);
+}
+```
+
+##### Non-generic facade
+
+Use `IMapper` when the source arrives as `object` but the target is known or supplied dynamically:
+
+```csharp
+UserDto dto = mapper.Map<UserDto>(source);
+
+if (mapper.TryMap(source, typeof(UserDto), out var value))
+{
+    // value is the mapped object.
+}
+```
+
+##### Factory
+
+Use `IMapperFactory` when you need the mapper instance itself:
+
+```csharp
+var typed = factory.CreateMapper<User, UserDto>();
+
+if (factory.TryCreateMapper(typeof(User), typeof(UserDto), out var mapper))
+{
+    // mapper is the registered IMapper<User, UserDto> instance.
+}
+```
+
+Calls to `CreateMapper`/`Map` for a statically knowable unregistered pair produce analyzer diagnostics. Use the `Try...` APIs when absence is expected.
+### Runtime, generation, and diagnostics
+
+#### Runtime options
+
+```csharp
+services.AddValiantMappers(options =>
+{
+    options.Mode = ValiantMappingMode.Auto;
+    options.NullHandling = ValiantNullHandling.MapNulls;
+});
+```
+
+| Option | Values | Default |
+| --- | --- | --- |
+| `Mode` | `Auto`, `Debuggable`, `Fast` | `Auto` |
+| `NullHandling` | `MapNulls`, `IgnoreSourceNulls` | `MapNulls` |
+
+`Auto` uses the debuggable runtime backend in Debug builds and direct generated mapping in other builds. `Debuggable` executes your `Configure` method at runtime, so breakpoints work; this path uses expression compilation and reflection. `Fast` always uses generated direct mapping code and is the preferred deployment path for trimming and Native AOT.
+
+#### Generator scope
+
+`[ValiantMapper]` is the discovery boundary. The incremental generator processes only marked declarations and emits:
+
+- the typed `Map` implementation and `IMapper<TSource, TTarget>` contract;
+- direct member/constructor mapping for the fast backend;
+- mapper registration metadata;
+- `AddValiantMappers` when dependency-injection abstractions are present.
+
+A separate narrowly scoped analyzer checks statically knowable `IMapper` and `IMapperFactory` calls for missing pairs without putting ordinary invocations into the generator graph.
+
+#### Diagnostics
+
+| ID | Meaning |
+| --- | --- |
+| `VLM001` | Mapper must be partial |
+| `VLM002` | Mapper shape is unsupported |
+| `VLM003` | Source/target pair cannot be determined |
+| `VLM004` | Mapping declaration syntax is unsupported |
+| `VLM005` | Target cannot be constructed |
+| `VLM006` | Required target member is not mapped |
+| `VLM101` | A target member is not mapped |
+| `VLM102` | A source member exists but its type is incompatible |
+| `VLM104` | More than one default mapper owns the same pair |
+| `VLM105` | `IMapperFactory` call requests an unregistered pair |
+| `VLM106` | `IMapper` facade call requests an unregistered pair |
+
+#### Constraints
+
+- Mapper and containing declarations that receive generated members must be `partial`.
+- Each source/target pair has one default generated mapper.
+- Targets need a usable public construction path.
+- `Configure` is intentionally generator-readable; unsupported expression shapes produce `VLM004` instead of silently changing behavior.
+- Use `TryMap` or `TryCreateMapper` for pairs that are optional at runtime.
+
+## Settings
+
+### Settings with a generated contract
+
+Valiant Settings turns strongly typed configuration models into deterministic schemas. Use the same generated metadata for Options binding, validation, documentation, tooling, or the built-in ASP.NET Core settings explorer—without reflection-based assembly scanning.
+
+```csharp
+using StaticNorth.Valiant.Settings;
+
+[ValiantSettings("Payments", configure: true)]
+public sealed record PaymentSettings
+{
+    public Uri? Endpoint { get; init; }
+
+    [ValiantSecret]
+    public string? ApiKey { get; init; }
+}
+```
+
+#### One declaration, several uses
+
+| Capability | Result |
+| --- | --- |
+| Schema | Model, property, nesting, collection, default, nullability, required, and secret metadata |
+| Options | Generated section-aware `Configure<TSettings>` registration on opt-in models |
+| Validation | `IValidateOptions<TSettings>` backed by a generated Valiant validator |
+| UI | Built-in schema explorer and JSON endpoint with safe secret masking |
+| Tooling | `IValiantSettingsSchemaProvider` for custom consumers |
+
+#### Documentation map
+
+- [Quick start](https://valiant.staticnorth.dev/settings/quick-start/)
+- [Runnable samples](https://valiant.staticnorth.dev/settings/samples/)
+- [Schema generation](https://valiant.staticnorth.dev/settings/guides/schema-generation/)
+- [Binding and validation](https://valiant.staticnorth.dev/settings/guides/binding-validation/)
+- [ASP.NET Core UI](https://valiant.staticnorth.dev/settings/guides/aspnetcore-ui/)
+- [Schema API, generation, and diagnostics](https://valiant.staticnorth.dev/settings/reference/schema-api/)
+
+The [sample catalog](https://valiant.staticnorth.dev/settings/samples/) covers every selectable core and ASP.NET
+Core scenario for schema metadata, binding, validation, and the safe-by-default
+UI.
+### Quick start
+
+#### 1. Choose a package
+
+```bash
+# Schema generation and optional Options binding
+dotnet add package StaticNorth.Valiant.Settings
+
+# Or install a specific integration
+dotnet add package StaticNorth.Valiant.Settings.AspNetCore
+dotnet add package StaticNorth.Valiant.Settings.Validation
+```
+
+Specific integration packages forward the core runtime, build, and generator assets they depend on. Add multiple integration packages only when the application uses multiple integrations.
+
+#### 2. Mark a settings model
+
+```csharp
+using StaticNorth.Valiant.Settings;
+
+[ValiantSettings("Mail", configure: true)]
+public sealed record MailSettings
+{
+    public required string Host { get; init; }
+    public int Port { get; init; } = 587;
+
+    [ValiantSecret]
+    public string? Password { get; init; }
+}
+```
+
+The section path is required. `configure: true` opts this model into generated Options binding; omit it for schema-only metadata.
+
+#### 3. Register generated settings
+
+```csharp
+using StaticNorth.Valiant.Settings.DependencyInjection;
+
+builder.Services.AddValiantSettings(builder.Configuration);
+```
+
+The generated extension binds opted-in models and registers every generated schema provider.
+
+#### 4. Consume the options
+
+```csharp
+public sealed class MailSender(IOptions<MailSettings> options)
+{
+    private readonly MailSettings _settings = options.Value;
+}
+```
+
+Or enumerate schemas:
+
+```csharp
+IEnumerable<IValiantSettingsSchemaProvider> schemas =
+    provider.GetServices<IValiantSettingsSchemaProvider>();
+```
+
+Next: learn how nested models and collections appear in [Schema generation](https://valiant.staticnorth.dev/settings/guides/schema-generation/).
+### Settings samples
+
+Settings has separate console and ASP.NET Core sample projects. In each project,
+select one delegate or startup near the top of `Program.cs`.
+
+Settings source generation is assembly-wide. Selecting one scenario changes
+which code runs, but every `[ValiantSettings]` model in that project contributes
+to `ValiantSettingsSchemas` and the generated `AddValiantSettings` method. The
+samples therefore use distinct section paths.
+
+#### Core settings
+
+Run the console project:
+
+```bash
+dotnet run --project settings/samples/StaticNorth.Valiant.Settings.Samples
+```
+
+Select one delegate in
+[`Program.cs`](https://github.com/static-north-dev/valiant/blob/main/settings/samples/StaticNorth.Valiant.Settings.Samples/Program.cs):
+
+| Delegate | Demonstrates | Source |
+| --- | --- | --- |
+| `Basic.Sample.Run` | The normal configured-settings flow: `[ValiantSettings(..., configure: true)]`, `AddValiantSettings(configuration)`, and `IOptions<TSettings>` consumption | [`Basic`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.Samples/Basic) |
+| `RegistrationOptions.Sample.Run` | Default schema-provider registration compared with `RegisterSchemaProviders = false`, while configured Options still bind | [`RegistrationOptions`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.Samples/RegistrationOptions) |
+| `SchemaRegistry.Sample.Run` | `ValiantSettingsSchemas.All`, `Get<TSettings>`, and successful and unsuccessful `TryGet<TSettings>` lookups | [`SchemaRegistry`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.Samples/SchemaRegistry) |
+| `SchemaMetadata.Sample.Run` | Property kinds, nested objects, collections, nullability, required members, and secret metadata | [`SchemaMetadata`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.Samples/SchemaMetadata) |
+
+`SchemaMetadata` also shows that a runtime property initializer is not emitted
+as schema `DefaultValue` metadata.
+
+#### ASP.NET Core settings
+
+Run the web project:
+
+```bash
+dotnet run --project settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples
+```
+
+Select one startup type in
+[`Program.cs`](https://github.com/static-north-dev/valiant/blob/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Program.cs):
+
+| Startup | Demonstrates | Source |
+| --- | --- | --- |
+| `Basic.Startup` | `AddValiantSettings()` and the default `/_valiant/settings` explorer and schema routes | [`Basic`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Basic) |
+| `Configuration.Startup` | A custom `/admin/settings` path and authorization conventions on the returned `RouteGroupBuilder` | [`Configuration`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Configuration) |
+| `RuntimeValues.Startup` | `ShowRuntimeValues = true`, explicit secret masking, defensive name-based masking, and reveal disabled | [`RuntimeValues`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/RuntimeValues) |
+| `SecretReveal.Startup` | `AllowSecretReveal = true` with explicit `?revealSecrets=true` opt-in | [`SecretReveal`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/SecretReveal) |
+| `Validation.Startup` | `ValidateWithValiant = true` with permissive behavior when a configured model has no validator | [`Validation`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Validation) |
+| `Validation.InvalidStartup` | Valiant failures translated into `OptionsValidationException` failures | [`Validation`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Validation) |
+| `Validation.RequiredStartup` | `RequireValidators = true` failing when a configured settings model has no matching validator | [`Validation`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Validation) |
+
+The three validation startups intentionally share one folder because they use
+the same settings models and validators while exercising different registration
+policies.
+
+#### Try the web scenarios
+
+With the HTTP launch profile running on port `5194`:
+
+```bash
+curl -i http://localhost:5194/_valiant/settings
+curl -i -H "X-Settings-Admin: true" http://localhost:5194/admin/settings
+curl -s http://localhost:5194/runtime-values/schemas
+curl -s "http://localhost:5194/secret-reveal/schemas?revealSecrets=true"
+curl -i http://localhost:5194/validation/invalid
+```
+
+The configuration sample uses a deliberately small header-based demo
+authentication handler. Replace it with the host application's real
+authentication and authorization policy.
+
+Runtime values and secret reveal are administrative capabilities. Protect the
+returned route group before enabling either outside local development. See
+[ASP.NET Core UI](https://valiant.staticnorth.dev/settings/guides/aspnetcore-ui/) and
+[Binding and validation](https://valiant.staticnorth.dev/settings/guides/binding-validation/) for the production
+configuration.
+### Schema generation
+
+`[ValiantSettings]` is the generator discovery boundary. It produces a deterministic `ValiantSettingsSchema` for the marked type.
+
+```csharp
+[ValiantSettings("Search")]
+public sealed record SearchSettings
+{
+    public required Uri Endpoint { get; init; }
+    public SearchRetrySettings Retry { get; init; } = new();
+    public string[] Indexes { get; init; } = [];
+}
+
+public sealed record SearchRetrySettings
+{
+    public int Attempts { get; init; } = 3;
+    public TimeSpan Delay { get; init; } = TimeSpan.FromSeconds(1);
+}
+```
+
+The model schema contains its CLR type, display name, section path, and ordered property schemas. Each property records:
+
+- CLR name and configuration key;
+- type display name and normalized kind;
+- required and nullable flags;
+- secret flag and known default value;
+- nested object properties or collection item schema.
+
+#### Property kinds
+
+| Kind | Represents |
+| --- | --- |
+| `String` | Text and string-like configuration values |
+| `Boolean` | Boolean values |
+| `Integer` | Integral numeric values |
+| `Number` | Floating-point and decimal values |
+| `Enum` | Enum values |
+| `Object` | Nested settings object |
+| `Array` | Array or collection with an item schema |
+| `Unknown` | A type without a more specific schema classification |
+
+#### Schema-only or configured
+
+Schema generation always occurs. Binding is opt-in:
+
+```csharp
+[ValiantSettings("Features")]
+public sealed record FeatureCatalog; // schema only
+
+[ValiantSettings("Features", configure: true)]
+public sealed record BoundFeatureCatalog; // schema + Options binding
+```
+
+This lets libraries publish metadata without changing the host's service graph.
+
+#### Secret metadata
+
+```csharp
+[ValiantSecret]
+public string? ClientSecret { get; init; }
+```
+
+`ValiantSecret` tells schema consumers that runtime values must be hidden. The ASP.NET Core UI also masks common sensitive names defensively, but explicit attributes are the durable contract for custom tools.
+
+:::info Deterministic output
+Generated schemas are stable enough for tooling to sort, diff, cache, and render. No runtime type scan is required to discover marked settings models.
+:::
+### Binding and validation
+
+#### Generated Options binding
+
+Set `configure: true` and register settings once:
+
+```csharp
+[ValiantSettings("Storage:S3", configure: true)]
+public sealed record S3Settings
+{
+    public required string Bucket { get; init; }
+    public string? Region { get; init; }
+}
+
+builder.Services.AddValiantSettings(builder.Configuration);
+```
+
+Valiant emits the equivalent section-aware `services.Configure<S3Settings>(configuration.GetSection("Storage:S3"))` registration.
+
+Schema providers register by default. Disable them when the application only needs binding and validation:
+
+```csharp
+builder.Services.AddValiantSettings(builder.Configuration, options =>
+{
+    options.RegisterSchemaProviders = false;
+});
+```
+
+#### Validate Options with Valiant
+
+Reference `StaticNorth.Valiant.Settings.Validation` and declare the matching validator:
+
+```csharp
+[ValiantValidator]
+public sealed partial class S3SettingsValidator
+    : ValidatorDefinition<S3Settings>
+{
+    public override void Configure(ValidationContext<S3Settings> context)
+    {
+        context.Property(settings => settings.Bucket).Required();
+        context.Property(settings => settings.Region).MaxLength(32);
+    }
+}
+```
+
+Register validators and enable the adapter:
+
+```csharp
+builder.Services.AddValiantValidators();
+builder.Services.AddValiantSettings(builder.Configuration, options =>
+{
+    options.ValidateWithValiant = true;
+});
+```
+
+Generated settings registration adds `IValidateOptions<S3Settings>` for configured settings models. It resolves a matching `IValidator<S3Settings>` from DI and translates Valiant errors to normal Options validation failures.
+
+#### Require matching validators
+
+By default, validation succeeds when no validator is registered. Make missing validators a configuration error:
+
+```csharp
+builder.Services.AddValiantSettings(builder.Configuration, options =>
+{
+    options.ValidateWithValiant = true;
+    options.RequireValidators = true;
+});
+```
+
+Only models with `configure: true` receive Options binding and validation adapters. Schema-only models remain metadata contracts.
+### ASP.NET Core UI
+
+`StaticNorth.Valiant.Settings.AspNetCore` provides a compact settings explorer and a JSON document backed by generated schema providers.
+
+```csharp
+using StaticNorth.Valiant.Settings.AspNetCore;
+using StaticNorth.Valiant.Settings.DependencyInjection;
+
+builder.Services.AddValiantSettings(builder.Configuration);
+
+var app = builder.Build();
+app.MapValiantSettingsUi();
+```
+
+The default routes are:
+
+| Route | Purpose |
+| --- | --- |
+| `/_valiant/settings` | Interactive schema explorer |
+| `/_valiant/settings/schemas` | Generated schema JSON document |
+
+#### Change the route
+
+```csharp
+app.MapValiantSettingsUi(options =>
+    options.Path = "/admin/settings");
+```
+
+The JSON endpoint follows the prefix at `/admin/settings/schemas`.
+
+#### Show current runtime values
+
+```csharp
+app.MapValiantSettingsUi(options =>
+{
+    options.ShowRuntimeValues = true;
+});
+```
+
+Runtime values are resolved dynamically from `IOptions<TSettings>` for registered schemas only. If schema-provider registration is disabled, the UI has no generated catalog to display.
+
+#### Protect secrets
+
+`[ValiantSecret]` properties are masked. Valiant also masks common sensitive names such as `Password`, `Secret`, `Token`, `ApiKey`, `ClientSecret`, and `ConnectionString`.
+
+Explicitly permit reveal only when endpoint authorization and hosting policy make it acceptable:
+
+```csharp
+RouteGroupBuilder settings = app.MapValiantSettingsUi(options =>
+{
+    options.ShowRuntimeValues = true;
+    options.AllowSecretReveal = true;
+});
+
+settings.RequireAuthorization("SettingsAdministrators");
+```
+
+Secret values remain masked until a user selects reveal. The JSON endpoint accepts `?revealSecrets=true` only when `AllowSecretReveal` is enabled.
+
+:::danger Treat the explorer as an administrative endpoint
+The package does not decide your authorization policy. Protect the returned `RouteGroupBuilder`, especially when runtime values or secret reveal are enabled.
+:::
+
+Run the default UI, custom authorization, runtime-value masking, and explicit
+secret-reveal variants from the [Settings sample catalog](https://valiant.staticnorth.dev/settings/samples/#aspnet-core-settings).
+### Schema API, generation, and diagnostics
+
+#### Provider contract
+
+Each generated provider implements:
+
+```csharp
+public interface IValiantSettingsSchemaProvider
+{
+    Type SettingsType { get; }
+    string? SectionPath { get; }
+    ValiantSettingsSchema Schema { get; }
+}
+```
+
+Resolve all providers to build custom documentation, editors, configuration audits, or deployment tooling:
+
+```csharp
+foreach (var provider in services.GetServices<IValiantSettingsSchemaProvider>())
+{
+    Console.WriteLine($"{provider.Schema.Name}: {provider.SectionPath}");
+
+    foreach (var property in provider.Schema.Properties)
+    {
+        Console.WriteLine($"  {property.ConfigurationKey} ({property.Kind})");
+    }
+}
+```
+
+#### Model schema
+
+`ValiantSettingsSchema` exposes `SettingsType`, `Name`, `SectionPath`, and `Properties`.
+
+`ValiantSettingsPropertySchema` exposes:
+
+- `Name`, `ConfigurationKey`, and `TypeName`;
+- `Kind`, `IsRequired`, `IsNullable`, and `IsSecret`;
+- `DefaultValue` when it is known at generation time;
+- `Item` for arrays/collections;
+- `Properties` for nested objects.
+
+#### ASP.NET Core document
+
+The UI JSON endpoint returns `ValiantSettingsSchemaDocument`. It contains ordered `ValiantSettingsSchemaEntry` values and indicates whether secrets can be revealed and whether the current response contains revealed values. Each entry can include masked runtime values or a runtime-value resolution error.
+
+#### Packages
+
+| Package | Use it for | Target |
+| --- | --- | --- |
+| `StaticNorth.Valiant.Settings` | Schema generation and optional Options binding | .NET 8 and .NET Standard 2.0 |
+| `StaticNorth.Valiant.Settings.AspNetCore` | Built-in explorer and JSON schema endpoint | .NET 8 |
+| `StaticNorth.Valiant.Settings.Validation` | Options validation through Valiant validators | .NET 8 |
+
+Integration packages forward their parent runtime and generator assets. `StaticNorth.Valiant.Settings.Validation` also carries the core Valiant Validation assets it integrates with.
+
+#### Generator scope and diagnostics
+
+Only types marked with `[ValiantSettings]` enter the incremental generator pipeline. Generated output includes the schema provider and, when the required Microsoft configuration/DI APIs are referenced, the aggregated `AddValiantSettings` registration surface.
+
+| ID | Meaning |
+| --- | --- |
+| `VLS001` | Generic settings model types are not supported |
+| `VLS002` | The settings section path is empty |
+
+The section path is deliberately required so generated binding and external tooling share one unambiguous configuration identity.

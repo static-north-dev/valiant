@@ -31,7 +31,7 @@ public sealed partial class UserMapper(AddressMapper addressMapper)
 ## Generated registration
 
 ```csharp
-using Valiant.Mapping.DependencyInjection;
+using StaticNorth.Valiant.Mapping.DependencyInjection;
 
 builder.Services.AddValiantMappers();
 ```

@@ -1,4 +1,4 @@
-namespace Valiant.Mapping.Samples.NullHandling;
+namespace StaticNorth.Valiant.Mapping.Samples.NullHandling;
 
 /// <summary>
 /// Demonstrates mapper options for null source values and the per-rule

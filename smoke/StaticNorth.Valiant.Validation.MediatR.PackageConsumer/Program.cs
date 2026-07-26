@@ -1,8 +1,8 @@
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
-using Valiant.Validation;
-using Valiant.Validation.DependencyInjection;
-using Valiant.Validation.MediatR;
+using StaticNorth.Valiant.Validation;
+using StaticNorth.Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Validation.MediatR;
 
 var services = new ServiceCollection();
 services.AddValiantValidators();
@@ -19,7 +19,7 @@ if (provider.GetServices<IPipelineBehavior<MediatRSmokeRequest, string>>()
     throw new InvalidOperationException("The packaged MediatR build-transitive registration was not applied.");
 }
 
-Console.WriteLine("Valiant.Validation.MediatR package consumer passed.");
+Console.WriteLine("StaticNorth.Valiant.Validation.MediatR package consumer passed.");
 
 public sealed record MediatRSmokeRequest(string? Name) : IRequest<string>;
 

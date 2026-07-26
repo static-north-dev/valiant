@@ -1,4 +1,4 @@
-namespace Valiant.Settings;
+namespace StaticNorth.Valiant.Settings;
 
 /// <summary>
 /// Describes the schema kind of a settings property.

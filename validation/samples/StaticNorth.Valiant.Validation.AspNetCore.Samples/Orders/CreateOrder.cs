@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Valiant.Validation.AspNetCore.Samples.Orders;
+namespace StaticNorth.Valiant.Validation.AspNetCore.Samples.Orders;
 
 /// <summary>
 /// Represents a sample order creation request.

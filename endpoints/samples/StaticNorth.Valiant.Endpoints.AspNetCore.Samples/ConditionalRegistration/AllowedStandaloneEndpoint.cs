@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.AspNetCore.Samples.ConditionalRegistration;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Samples.ConditionalRegistration;
 
 [ValiantEndpoint]
 public sealed class AllowedStandaloneEndpoint : IEndpoint

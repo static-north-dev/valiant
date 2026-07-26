@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Options;
 
-namespace Valiant.Settings.AspNetCore.Samples.Validation;
+namespace StaticNorth.Valiant.Settings.AspNetCore.Samples.Validation;
 
 internal static class ValidationEndpoints
 {

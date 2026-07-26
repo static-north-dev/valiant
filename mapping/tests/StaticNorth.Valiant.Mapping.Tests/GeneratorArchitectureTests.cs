@@ -1,4 +1,4 @@
-namespace Valiant.Mapping.Tests;
+namespace StaticNorth.Valiant.Mapping.Tests;
 
 public sealed class GeneratorArchitectureTests
 {

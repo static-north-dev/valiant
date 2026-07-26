@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace Valiant.Endpoints.AspNetCore.TestApp;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.TestApp;
 
 internal static class TestQueryParsingOptions
 {

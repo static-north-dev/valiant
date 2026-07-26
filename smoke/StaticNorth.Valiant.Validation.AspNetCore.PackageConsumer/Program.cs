@@ -1,6 +1,6 @@
-using Valiant.Validation;
-using Valiant.Validation.AspNetCore;
-using Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Validation;
+using StaticNorth.Valiant.Validation.AspNetCore;
+using StaticNorth.Valiant.Validation.DependencyInjection;
 
 var result = new SmokeRequestValidator(new ValiantValidationOptions
 {
@@ -19,7 +19,7 @@ var app = builder.Build();
 app.MapPost("/validate", static (SmokeRequest request) => Results.Ok(request))
     .WithValiantValidation<SmokeRequest>();
 
-Console.WriteLine("Valiant.Validation.AspNetCore package consumer passed.");
+Console.WriteLine("StaticNorth.Valiant.Validation.AspNetCore package consumer passed.");
 
 public sealed record SmokeRequest(string? Name);
 

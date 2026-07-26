@@ -1,4 +1,4 @@
-namespace Valiant.Validation.Samples.Basic;
+namespace StaticNorth.Valiant.Validation.Samples.Basic;
 
 /// <summary>
 /// Demonstrates the smallest useful Valiant validator: define fluent rules,

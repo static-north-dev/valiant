@@ -1,4 +1,4 @@
-namespace Valiant.Validation.Samples.Catalog;
+namespace StaticNorth.Valiant.Validation.Samples.Catalog;
 
 /// <summary>
 /// Demonstrates reusable property validation for sample addresses.

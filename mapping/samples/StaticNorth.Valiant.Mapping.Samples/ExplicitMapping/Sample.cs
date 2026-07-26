@@ -1,4 +1,4 @@
-namespace Valiant.Mapping.Samples.ExplicitMapping;
+namespace StaticNorth.Valiant.Mapping.Samples.ExplicitMapping;
 
 /// <summary>
 /// Demonstrates explicit member ownership with a custom source transform, a

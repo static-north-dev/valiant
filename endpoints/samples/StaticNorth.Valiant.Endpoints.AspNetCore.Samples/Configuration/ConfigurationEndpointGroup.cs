@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.AspNetCore.Samples.Configuration;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Samples.Configuration;
 
 [ValiantEndpointGroup]
 public sealed class ConfigurationEndpointGroup : IEndpointGroup

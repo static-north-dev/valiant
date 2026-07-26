@@ -2,10 +2,10 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Valiant.Endpoints.AspNetCore;
-using Valiant.Endpoints.AspNetCore.Infrastructure;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+using StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure;
 
-namespace Valiant.Endpoints.AspNetCore.DependencyInjection;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 
 /// <summary>
 /// Provides dependency injection registration helpers for Valiant endpoints.

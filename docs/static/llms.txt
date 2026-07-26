@@ -1,0 +1,22 @@
+# StaticNorth.Valiant
+
+> StaticNorth.Valiant is a family of source-generated .NET libraries for validation, endpoint-per-class Minimal APIs, object mapping, and strongly typed settings.
+
+Use the current documentation for the `StaticNorth.Valiant.*` package and C# namespace family. This is a breaking migration from the historical `Valiant.*` packages and namespaces: update both package references and `using Valiant...` directives. Generated code is designed for explicit startup registration, trimming, and Native AOT rather than runtime assembly scanning.
+
+## Documentation
+
+- [Documentation home](https://valiant.staticnorth.dev/): Current Valiant documentation.
+- [Validation](https://valiant.staticnorth.dev/validation/): Validator authoring, rules, ASP.NET Core, OpenAPI, and mediator integrations.
+- [Endpoints](https://valiant.staticnorth.dev/endpoints/): Endpoint-per-class Minimal APIs, groups, registration, and query binding.
+- [Mapping](https://valiant.staticnorth.dev/mapping/): Compile-time object mapping, explicit rules, composition, and dependency injection.
+- [Settings](https://valiant.staticnorth.dev/settings/): Generated schemas, Options binding, validation, and the ASP.NET Core settings explorer.
+
+## Packages and source
+
+- [NuGet package family](https://www.nuget.org/packages/StaticNorth.Valiant.Validation/): Start with the core package and select the required `StaticNorth.Valiant.*` integration packages.
+- [Source repository](https://github.com/static-north-dev/valiant): Source, samples, issues, and release history.
+
+## Optional
+
+- [Full current documentation](https://valiant.staticnorth.dev/llms-full.txt): Complete current documentation in one generated Markdown context; excludes historical version snapshots.
