@@ -6,7 +6,7 @@ description: Run the endpoint-per-class, configuration, conditional registration
 # Endpoint samples
 
 The runnable host has four startup choices. Select one near the top of
-[`Program.cs`](https://github.com/ignitea-dev/valiant/blob/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/Program.cs),
+[`Program.cs`](https://github.com/static-north-dev/valiant/blob/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/Program.cs),
 then run:
 
 ```bash
@@ -30,10 +30,10 @@ the global options and conventions applied when those registrations are mapped.
 
 | Startup | Demonstrates | Source |
 | --- | --- | --- |
-| `Basic.Startup` | Default discovery and mapping for a standalone endpoint and an endpoint group | [`Basic`](https://github.com/ignitea-dev/valiant/tree/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/Basic) |
-| `Configuration.Startup` | `ConfigureEndpointGroup`, `ConfigureEndpoint`, and descriptor-based guards using group and endpoint metadata | [`Configuration`](https://github.com/ignitea-dev/valiant/tree/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/Configuration) |
-| `ConditionalRegistration.Startup` | Independent `MapEndpointGroupsWhen` and `MapEndpointWhen` policies, including allowed and rejected registrations | [`ConditionalRegistration`](https://github.com/ignitea-dev/valiant/tree/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/ConditionalRegistration) |
-| `QueryBinding.Startup` | Generated query binding for arrays, objects, JSON values, and supported query formats | [`QueryBinding`](https://github.com/ignitea-dev/valiant/tree/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/QueryBinding) |
+| `Basic.Startup` | Default discovery and mapping for a standalone endpoint and an endpoint group | [`Basic`](https://github.com/static-north-dev/valiant/tree/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/Basic) |
+| `Configuration.Startup` | `ConfigureEndpointGroup`, `ConfigureEndpoint`, and descriptor-based guards using group and endpoint metadata | [`Configuration`](https://github.com/static-north-dev/valiant/tree/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/Configuration) |
+| `ConditionalRegistration.Startup` | Independent `MapEndpointGroupsWhen` and `MapEndpointWhen` policies, including allowed and rejected registrations | [`ConditionalRegistration`](https://github.com/static-north-dev/valiant/tree/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/ConditionalRegistration) |
+| `QueryBinding.Startup` | Generated query binding for arrays, objects, JSON values, and supported query formats | [`QueryBinding`](https://github.com/static-north-dev/valiant/tree/main/endpoints/samples/StaticNorth.Valiant.Endpoints.AspNetCore.Samples/QueryBinding) |
 
 Every startup registers and maps the generated route plan through
 `AddValiantEndpoints()` and `MapValiantEndpoints()`.

@@ -15,6 +15,28 @@ npm run build
 npm run serve
 ```
 
+## LLM and crawler files
+
+The static site publishes these root files:
+
+- `/llms.txt`: a concise, curated entry point for language models and agents;
+- `/llms-full.txt`: the complete **current** documentation in one generated
+  Markdown context; it deliberately excludes `versioned_docs` so it does not
+  mix historical APIs with the current package family;
+- `/robots.txt`: allows indexing and points at Docusaurus's generated
+  `/sitemap.xml`.
+
+`static/llms-full.txt` is generated from `content` in the same Validation →
+Endpoints → Mapping → Settings order as `sidebars.js`. It is committed rather
+than regenerated during builds, so a production build is reproducible from its
+pinned source commit. Run these commands before committing a content or sidebar
+change:
+
+```bash
+npm run docs:generate-llms
+npm run docs:check-llms
+```
+
 ## Cloudflare Pages
 
 The site builds static files, so no Cloudflare adapter is required. CI builds

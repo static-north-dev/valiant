@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://valiant.staticnorth.dev/sitemap.xml

@@ -7,10 +7,10 @@ const config = {
   tagline: 'Source-generated building blocks for dependable .NET applications.',
   favicon: 'img/valiant-logo.png',
 
-  url: 'https://valiant.dev',
+  url: 'https://valiant.staticnorth.dev',
   baseUrl: '/',
 
-  organizationName: 'ignitea-dev',
+  organizationName: 'static-north-dev',
   projectName: 'valiant',
 
   onBrokenLinks: 'throw',

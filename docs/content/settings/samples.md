@@ -22,14 +22,14 @@ dotnet run --project settings/samples/StaticNorth.Valiant.Settings.Samples
 ```
 
 Select one delegate in
-[`Program.cs`](https://github.com/ignitea-dev/valiant/blob/main/settings/samples/StaticNorth.Valiant.Settings.Samples/Program.cs):
+[`Program.cs`](https://github.com/static-north-dev/valiant/blob/main/settings/samples/StaticNorth.Valiant.Settings.Samples/Program.cs):
 
 | Delegate | Demonstrates | Source |
 | --- | --- | --- |
-| `Basic.Sample.Run` | The normal configured-settings flow: `[ValiantSettings(..., configure: true)]`, `AddValiantSettings(configuration)`, and `IOptions<TSettings>` consumption | [`Basic`](https://github.com/ignitea-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.Samples/Basic) |
-| `RegistrationOptions.Sample.Run` | Default schema-provider registration compared with `RegisterSchemaProviders = false`, while configured Options still bind | [`RegistrationOptions`](https://github.com/ignitea-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.Samples/RegistrationOptions) |
-| `SchemaRegistry.Sample.Run` | `ValiantSettingsSchemas.All`, `Get<TSettings>`, and successful and unsuccessful `TryGet<TSettings>` lookups | [`SchemaRegistry`](https://github.com/ignitea-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.Samples/SchemaRegistry) |
-| `SchemaMetadata.Sample.Run` | Property kinds, nested objects, collections, nullability, required members, and secret metadata | [`SchemaMetadata`](https://github.com/ignitea-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.Samples/SchemaMetadata) |
+| `Basic.Sample.Run` | The normal configured-settings flow: `[ValiantSettings(..., configure: true)]`, `AddValiantSettings(configuration)`, and `IOptions<TSettings>` consumption | [`Basic`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.Samples/Basic) |
+| `RegistrationOptions.Sample.Run` | Default schema-provider registration compared with `RegisterSchemaProviders = false`, while configured Options still bind | [`RegistrationOptions`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.Samples/RegistrationOptions) |
+| `SchemaRegistry.Sample.Run` | `ValiantSettingsSchemas.All`, `Get<TSettings>`, and successful and unsuccessful `TryGet<TSettings>` lookups | [`SchemaRegistry`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.Samples/SchemaRegistry) |
+| `SchemaMetadata.Sample.Run` | Property kinds, nested objects, collections, nullability, required members, and secret metadata | [`SchemaMetadata`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.Samples/SchemaMetadata) |
 
 `SchemaMetadata` also shows that a runtime property initializer is not emitted
 as schema `DefaultValue` metadata.
@@ -43,17 +43,17 @@ dotnet run --project settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Sa
 ```
 
 Select one startup type in
-[`Program.cs`](https://github.com/ignitea-dev/valiant/blob/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Program.cs):
+[`Program.cs`](https://github.com/static-north-dev/valiant/blob/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Program.cs):
 
 | Startup | Demonstrates | Source |
 | --- | --- | --- |
-| `Basic.Startup` | `AddValiantSettings()` and the default `/_valiant/settings` explorer and schema routes | [`Basic`](https://github.com/ignitea-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Basic) |
-| `Configuration.Startup` | A custom `/admin/settings` path and authorization conventions on the returned `RouteGroupBuilder` | [`Configuration`](https://github.com/ignitea-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Configuration) |
-| `RuntimeValues.Startup` | `ShowRuntimeValues = true`, explicit secret masking, defensive name-based masking, and reveal disabled | [`RuntimeValues`](https://github.com/ignitea-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/RuntimeValues) |
-| `SecretReveal.Startup` | `AllowSecretReveal = true` with explicit `?revealSecrets=true` opt-in | [`SecretReveal`](https://github.com/ignitea-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/SecretReveal) |
-| `Validation.Startup` | `ValidateWithValiant = true` with permissive behavior when a configured model has no validator | [`Validation`](https://github.com/ignitea-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Validation) |
-| `Validation.InvalidStartup` | Valiant failures translated into `OptionsValidationException` failures | [`Validation`](https://github.com/ignitea-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Validation) |
-| `Validation.RequiredStartup` | `RequireValidators = true` failing when a configured settings model has no matching validator | [`Validation`](https://github.com/ignitea-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Validation) |
+| `Basic.Startup` | `AddValiantSettings()` and the default `/_valiant/settings` explorer and schema routes | [`Basic`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Basic) |
+| `Configuration.Startup` | A custom `/admin/settings` path and authorization conventions on the returned `RouteGroupBuilder` | [`Configuration`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Configuration) |
+| `RuntimeValues.Startup` | `ShowRuntimeValues = true`, explicit secret masking, defensive name-based masking, and reveal disabled | [`RuntimeValues`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/RuntimeValues) |
+| `SecretReveal.Startup` | `AllowSecretReveal = true` with explicit `?revealSecrets=true` opt-in | [`SecretReveal`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/SecretReveal) |
+| `Validation.Startup` | `ValidateWithValiant = true` with permissive behavior when a configured model has no validator | [`Validation`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Validation) |
+| `Validation.InvalidStartup` | Valiant failures translated into `OptionsValidationException` failures | [`Validation`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Validation) |
+| `Validation.RequiredStartup` | `RequireValidators = true` failing when a configured settings model has no matching validator | [`Validation`](https://github.com/static-north-dev/valiant/tree/main/settings/samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/Validation) |
 
 The three validation startups intentionally share one folder because they use
 the same settings models and validators while exercising different registration
