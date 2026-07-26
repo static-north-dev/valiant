@@ -1,6 +1,6 @@
-using Valiant.Endpoints.AspNetCore.DependencyInjection;
+using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 
-namespace Valiant.Endpoints.AspNetCore.Samples.ConditionalRegistration;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Samples.ConditionalRegistration;
 
 /// <summary>
 /// Demonstrates conditional registration of endpoint groups and individual endpoints.

@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authentication;
-using Valiant.Settings.AspNetCore;
-using Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Settings.AspNetCore;
+using StaticNorth.Valiant.Settings.DependencyInjection;
 
-namespace Valiant.Settings.AspNetCore.Samples.Configuration;
+namespace StaticNorth.Valiant.Settings.AspNetCore.Samples.Configuration;
 
 /// <summary>
 /// Demonstrates a custom UI path and authorization on the returned route group.

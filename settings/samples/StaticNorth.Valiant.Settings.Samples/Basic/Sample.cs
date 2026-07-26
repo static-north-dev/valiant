@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Settings.DependencyInjection;
 
-namespace Valiant.Settings.Samples.Basic;
+namespace StaticNorth.Valiant.Settings.Samples.Basic;
 
 /// <summary>
 /// Demonstrates the normal configured-settings flow from registration to <see cref="IOptions{TOptions}"/>.

@@ -1,4 +1,4 @@
-namespace Valiant.Validation;
+namespace StaticNorth.Valiant.Validation;
 
 /// <summary>
 /// Provides type-constrained validation methods for strings, enums, comparable values, collections, and dictionaries.

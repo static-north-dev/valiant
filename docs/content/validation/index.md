@@ -8,7 +8,7 @@ description: Source-generated validation with fluent or attribute rules and firs
 Valiant Validation generates direct validators from compact, strongly typed rules. Author rules with fluent C#, model attributes, native branches, nested contexts, and reusable validators; then connect them to ASP.NET Core, OpenAPI, MediatR, or source-generated Mediator.
 
 ```csharp
-using Valiant.Validation;
+using StaticNorth.Valiant.Validation;
 
 [ValiantValidator]
 public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser>

@@ -1,10 +1,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Valiant.Settings;
-using Valiant.Settings.DependencyInjection;
-using Valiant.Validation;
-using Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Settings;
+using StaticNorth.Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Validation;
+using StaticNorth.Valiant.Validation.DependencyInjection;
 
 var configuration = new ConfigurationBuilder()
     .AddInMemoryCollection(new Dictionary<string, string?>
@@ -31,7 +31,7 @@ catch (OptionsValidationException)
 {
 }
 
-Console.WriteLine("Valiant.Settings.Validation package consumer passed.");
+Console.WriteLine("StaticNorth.Valiant.Settings.Validation package consumer passed.");
 
 [ValiantSettings("Validated", configure: true)]
 public sealed record ValidatedSmokeSettings

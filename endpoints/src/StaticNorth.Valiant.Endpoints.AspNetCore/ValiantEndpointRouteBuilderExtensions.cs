@@ -6,9 +6,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Valiant.Endpoints.AspNetCore.Infrastructure;
+using StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure;
 
-namespace Valiant.Endpoints.AspNetCore;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 
 /// <summary>
 /// Extension methods for mapping endpoint-per-class Minimal APIs.

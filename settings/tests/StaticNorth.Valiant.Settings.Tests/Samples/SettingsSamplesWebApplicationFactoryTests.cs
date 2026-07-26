@@ -2,15 +2,15 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using BasicStartup = Valiant.Settings.AspNetCore.Samples.Basic.Startup;
-using ConfigurationStartup = Valiant.Settings.AspNetCore.Samples.Configuration.Startup;
-using InvalidValidationStartup = Valiant.Settings.AspNetCore.Samples.Validation.InvalidStartup;
-using RequiredValidationStartup = Valiant.Settings.AspNetCore.Samples.Validation.RequiredStartup;
-using RuntimeValuesStartup = Valiant.Settings.AspNetCore.Samples.RuntimeValues.Startup;
-using SecretRevealStartup = Valiant.Settings.AspNetCore.Samples.SecretReveal.Startup;
-using ValidationStartup = Valiant.Settings.AspNetCore.Samples.Validation.Startup;
+using BasicStartup = StaticNorth.Valiant.Settings.AspNetCore.Samples.Basic.Startup;
+using ConfigurationStartup = StaticNorth.Valiant.Settings.AspNetCore.Samples.Configuration.Startup;
+using InvalidValidationStartup = StaticNorth.Valiant.Settings.AspNetCore.Samples.Validation.InvalidStartup;
+using RequiredValidationStartup = StaticNorth.Valiant.Settings.AspNetCore.Samples.Validation.RequiredStartup;
+using RuntimeValuesStartup = StaticNorth.Valiant.Settings.AspNetCore.Samples.RuntimeValues.Startup;
+using SecretRevealStartup = StaticNorth.Valiant.Settings.AspNetCore.Samples.SecretReveal.Startup;
+using ValidationStartup = StaticNorth.Valiant.Settings.AspNetCore.Samples.Validation.Startup;
 
-namespace Valiant.Settings.Tests.Samples;
+namespace StaticNorth.Valiant.Settings.Tests.Samples;
 
 public sealed class SettingsSamplesWebApplicationFactoryTests
 {

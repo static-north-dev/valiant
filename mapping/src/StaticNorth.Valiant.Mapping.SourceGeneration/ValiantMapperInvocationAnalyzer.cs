@@ -4,9 +4,9 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Valiant.SourceGeneration;
+using StaticNorth.Valiant.SourceGeneration;
 
-namespace Valiant.Mapping.SourceGeneration;
+namespace StaticNorth.Valiant.Mapping.SourceGeneration;
 
 /// <summary>
 /// Validates mapper facade and factory calls without participating in source-generation discovery.
@@ -14,7 +14,7 @@ namespace Valiant.Mapping.SourceGeneration;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class ValiantMapperInvocationAnalyzer : DiagnosticAnalyzer
 {
-    private const string MappingNamespace = "Valiant.Mapping";
+    private const string MappingNamespace = "StaticNorth.Valiant.Mapping";
     private static readonly SymbolDisplayFormat TypeDisplayFormat = ValiantGeneratorTypeDisplayFormats.TypeDisplayFormat;
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>

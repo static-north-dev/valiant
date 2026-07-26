@@ -1,6 +1,6 @@
-using Valiant.Endpoints.AspNetCore.DependencyInjection;
+using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 
-namespace Valiant.Endpoints.AspNetCore.Samples.Configuration;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Samples.Configuration;
 
 /// <summary>
 /// Demonstrates endpoint-group and endpoint configuration hooks during mapping.

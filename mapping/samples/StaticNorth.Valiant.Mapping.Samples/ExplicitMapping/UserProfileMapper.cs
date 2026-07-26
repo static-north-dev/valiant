@@ -1,4 +1,4 @@
-namespace Valiant.Mapping.Samples.ExplicitMapping;
+namespace StaticNorth.Valiant.Mapping.Samples.ExplicitMapping;
 
 [ValiantMapper]
 public sealed partial class UserProfileMapper : MapperDefinition<UserProfile, UserProfileDto>

@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
 
-namespace Valiant.SourceGeneration;
+namespace StaticNorth.Valiant.SourceGeneration;
 
 internal static class ValiantFingerprint
 {

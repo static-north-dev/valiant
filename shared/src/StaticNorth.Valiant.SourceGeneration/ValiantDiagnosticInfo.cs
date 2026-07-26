@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
 
-namespace Valiant.SourceGeneration;
+namespace StaticNorth.Valiant.SourceGeneration;
 
 /// <summary>
 /// Stores a diagnostic as value data suitable for an incremental generator pipeline.

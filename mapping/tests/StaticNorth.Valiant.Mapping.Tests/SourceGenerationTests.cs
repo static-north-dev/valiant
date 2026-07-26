@@ -3,11 +3,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Valiant.Mapping;
-using Valiant.Mapping.SourceGeneration;
-using Valiant.SourceGeneration.Testing;
+using StaticNorth.Valiant.Mapping;
+using StaticNorth.Valiant.Mapping.SourceGeneration;
+using StaticNorth.Valiant.SourceGeneration.Testing;
 
-namespace Valiant.Mapping.Tests;
+namespace StaticNorth.Valiant.Mapping.Tests;
 
 public sealed class SourceGenerationTests
 {
@@ -18,7 +18,7 @@ public sealed class SourceGenerationTests
             .Select(static reference => Path.GetFileName(reference.Display));
 
         await Assert.That(referenceFileNames).DoesNotContain(Path.GetFileName(typeof(SourceGenerationTests).Assembly.Location));
-        await Assert.That(referenceFileNames).DoesNotContain(Path.GetFileName(typeof(global::Valiant.Mapping.Samples.Basic.Person).Assembly.Location));
+        await Assert.That(referenceFileNames).DoesNotContain(Path.GetFileName(typeof(global::StaticNorth.Valiant.Mapping.Samples.Basic.Person).Assembly.Location));
     }
 
     [Test]
@@ -26,7 +26,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -60,7 +60,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -89,17 +89,17 @@ public sealed class SourceGenerationTests
         await Assert.That(result.Diagnostics.Where(static diagnostic =>
             diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated).Contains(
-            "if (GetEffectiveMappingMode() == global::Valiant.Mapping.ValiantMappingMode.Debuggable)");
+            "if (GetEffectiveMappingMode() == global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Debuggable)");
         await Assert.That(generated).Contains("return MapRuntime(source);");
         await Assert.That(generated).Contains("Name = source.Name");
         await Assert.That(generated).Contains(
-            "var mode = _valiantMappingOptions?.Mode ?? global::Valiant.Mapping.ValiantMappingMode.Auto;");
+            "var mode = _valiantMappingOptions?.Mode ?? global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Auto;");
         await Assert.That(generated).Contains("#if DEBUG");
         await Assert.That(generated).Contains(
-            "return global::Valiant.Mapping.ValiantMappingMode.Debuggable;");
+            "return global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Debuggable;");
         await Assert.That(generated).Contains("#else");
         await Assert.That(generated).Contains(
-            "return global::Valiant.Mapping.ValiantMappingMode.Fast;");
+            "return global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Fast;");
         await Assert.That(generated).Contains("Configure(context);");
     }
 
@@ -108,7 +108,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -127,7 +127,7 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonMapper.Mapper.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("global::Valiant.Mapping.IMapper<global::Person, global::PersonDto>", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("global::StaticNorth.Valiant.Mapping.IMapper<global::Person, global::PersonDto>", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -135,7 +135,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -174,7 +174,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -208,7 +208,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -253,7 +253,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -286,7 +286,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -320,7 +320,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -366,7 +366,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -411,7 +411,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -448,7 +448,7 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using System;
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public partial class Mapper : MapperDefinition<From, To>
@@ -524,7 +524,7 @@ public sealed class SourceGenerationTests
         {
             return $$"""
             using System;
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public partial class Mapper : MapperDefinition<From, To>
@@ -566,7 +566,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -602,7 +602,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -645,7 +645,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -681,7 +681,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -750,7 +750,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -798,7 +798,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -852,7 +852,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -912,7 +912,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -966,7 +966,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -1021,7 +1021,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class AddressMapper : MapperDefinition<Address, AddressDto>;
@@ -1087,7 +1087,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -1129,7 +1129,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -1175,7 +1175,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -1208,7 +1208,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -1251,7 +1251,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -1291,7 +1291,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -1331,7 +1331,7 @@ public sealed class SourceGenerationTests
     {
         var assembly = CompileAndLoad(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class OrderMapper : MapperDefinition<Order, OrderDto>;
@@ -1377,7 +1377,7 @@ public sealed class SourceGenerationTests
         var assembly = CompileAndLoad(
             """
             using System.Collections.Generic;
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class AddressMapper : MapperDefinition<Address, AddressDto>;
@@ -1447,7 +1447,7 @@ public sealed class SourceGenerationTests
         var assembly = CompileAndLoad(
             """
             using Microsoft.Extensions.DependencyInjection;
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class AddressMapper : MapperDefinition<Address, AddressDto>;
@@ -1504,7 +1504,7 @@ public sealed class SourceGenerationTests
             """
             using System.Collections.Generic;
             using Microsoft.Extensions.DependencyInjection;
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class AddressMapper : MapperDefinition<Address, AddressDto>;
@@ -1562,7 +1562,7 @@ public sealed class SourceGenerationTests
             using System.Collections.Generic;
             using System.Linq;
             using Microsoft.Extensions.DependencyInjection;
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class AddressMapper : MapperDefinition<Address, AddressDto>;
@@ -1618,7 +1618,7 @@ public sealed class SourceGenerationTests
         var assembly = CompileAndLoad(
             """
             using Microsoft.Extensions.DependencyInjection;
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class AddressMapper : MapperDefinition<Address, AddressDto>;
@@ -1689,7 +1689,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class AddressMapper : MapperDefinition<Address, AddressDto>;
@@ -1730,7 +1730,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -1774,18 +1774,18 @@ public sealed class SourceGenerationTests
             }
             """);
 
-        var dependencyInjection = result.GeneratedSources.Single(static source => source.HintName == "Valiant.Mapping.DependencyInjection.g.cs").SourceText.ToString();
+        var dependencyInjection = result.GeneratedSources.Single(static source => source.HintName == "StaticNorth.Valiant.Mapping.DependencyInjection.g.cs").SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(dependencyInjection.Contains("AddValiantMappers", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("typeof(global::Valiant.Mapping.ValiantMappingOptions)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.ValiantMappingOptions)", StringComparison.Ordinal)).IsTrue();
         await Assert.That(dependencyInjection.Contains("file sealed class ValiantGeneratedMapper", StringComparison.Ordinal)).IsTrue();
         await Assert.That(dependencyInjection.Contains("file sealed class ValiantGeneratedMapperFactory", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("typeof(global::Valiant.Mapping.IMapper), typeof(global::Valiant.Mapping.ValiantGeneratedMapper)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("typeof(global::Valiant.Mapping.IMapperFactory), typeof(global::Valiant.Mapping.ValiantGeneratedMapperFactory)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapper), typeof(global::StaticNorth.Valiant.Mapping.ValiantGeneratedMapper)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapperFactory), typeof(global::StaticNorth.Valiant.Mapping.ValiantGeneratedMapperFactory)", StringComparison.Ordinal)).IsTrue();
         await Assert.That(dependencyInjection.Contains("MakeGenericType", StringComparison.Ordinal)).IsFalse();
         await Assert.That(dependencyInjection.Contains("typeof(global::PersonMapper), typeof(global::PersonMapper)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("typeof(global::Valiant.Mapping.IMapper<global::Person, global::PersonDto>), typeof(global::PersonMapper)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapper<global::Person, global::PersonDto>), typeof(global::PersonMapper)", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -1793,7 +1793,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class UserMapper : MapperDefinition<User, UserDto>;
@@ -1826,7 +1826,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -1858,7 +1858,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -1894,7 +1894,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -1926,7 +1926,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -1958,7 +1958,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -1990,7 +1990,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -2026,7 +2026,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -2058,7 +2058,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -2090,7 +2090,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -2122,7 +2122,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             namespace Microsoft.Extensions.DependencyInjection
             {
@@ -2155,17 +2155,17 @@ public sealed class SourceGenerationTests
             }
             """);
 
-        var dependencyInjection = result.GeneratedSources.Single(static source => source.HintName == "Valiant.Mapping.DependencyInjection.g.cs").SourceText.ToString();
+        var dependencyInjection = result.GeneratedSources.Single(static source => source.HintName == "StaticNorth.Valiant.Mapping.DependencyInjection.g.cs").SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(dependencyInjection.Contains("AddValiantMappers", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("typeof(global::Valiant.Mapping.ValiantMappingOptions)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.ValiantMappingOptions)", StringComparison.Ordinal)).IsTrue();
         await Assert.That(dependencyInjection.Contains("file sealed class ValiantGeneratedMapper", StringComparison.Ordinal)).IsTrue();
         await Assert.That(dependencyInjection.Contains("file sealed class ValiantGeneratedMapperFactory", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("typeof(global::Valiant.Mapping.IMapper), typeof(global::Valiant.Mapping.ValiantGeneratedMapper)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("typeof(global::Valiant.Mapping.IMapperFactory), typeof(global::Valiant.Mapping.ValiantGeneratedMapperFactory)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapper), typeof(global::StaticNorth.Valiant.Mapping.ValiantGeneratedMapper)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapperFactory), typeof(global::StaticNorth.Valiant.Mapping.ValiantGeneratedMapperFactory)", StringComparison.Ordinal)).IsTrue();
         await Assert.That(dependencyInjection.Contains("MakeGenericType", StringComparison.Ordinal)).IsFalse();
-        await Assert.That(dependencyInjection.Contains("typeof(global::Valiant.Mapping.IMapper<", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapper<", StringComparison.Ordinal)).IsFalse();
     }
 
     [Test]
@@ -2174,7 +2174,7 @@ public sealed class SourceGenerationTests
         var assembly = CompileAndLoad(
             """
             using Microsoft.Extensions.DependencyInjection;
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -2194,7 +2194,7 @@ public sealed class SourceGenerationTests
 
                     using var provider = services.BuildServiceProvider();
                     var mapper = provider.GetRequiredService<IMapper<Person, PersonDto>>();
-                    var mapperFacade = provider.GetRequiredService<Valiant.Mapping.IMapper>();
+                    var mapperFacade = provider.GetRequiredService<StaticNorth.Valiant.Mapping.IMapper>();
                     var mapperFactory = provider.GetRequiredService<IMapperFactory>();
                     var concrete = provider.GetRequiredService<PersonMapper>();
                     var addressMapper = provider.GetRequiredService<IMapper<Address, AddressDto>>();
@@ -2270,7 +2270,7 @@ public sealed class SourceGenerationTests
         var assembly = CompileAndLoad(
             """
             using Microsoft.Extensions.DependencyInjection;
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             public static class TestRunner
             {
@@ -2283,7 +2283,7 @@ public sealed class SourceGenerationTests
                     });
 
                     using var provider = services.BuildServiceProvider();
-                    var mapper = provider.GetRequiredService<Valiant.Mapping.IMapper>();
+                    var mapper = provider.GetRequiredService<StaticNorth.Valiant.Mapping.IMapper>();
                     var factory = provider.GetRequiredService<IMapperFactory>();
                     return
                     [
@@ -2309,7 +2309,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -2331,7 +2331,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -2354,7 +2354,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -2375,7 +2375,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
@@ -2405,7 +2405,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : IMapperDefinition<Person, PersonDto>
@@ -2436,7 +2436,7 @@ public sealed class SourceGenerationTests
             source,
             parseOptions,
             references,
-            "Valiant.Mapping.SourceGeneration.Tests");
+            "StaticNorth.Valiant.Mapping.SourceGeneration.Tests");
         var execution = GeneratorTestHarness.Run(new ValiantMappingGenerator(), compilation, parseOptions);
         var analyzerDiagnostics = execution.OutputCompilation
             .WithAnalyzers([new ValiantMapperInvocationAnalyzer()])
@@ -2459,12 +2459,12 @@ public sealed class SourceGenerationTests
     public async Task Dynamic_Lookup_Uses_Chains_For_Small_Sets_And_Dictionary_For_Large_Sets()
     {
         var small = RunGenerator(CreateMapperSetSource(1)).GeneratedSources
-            .Single(static source => source.HintName == "Valiant.Mapping.DependencyInjection.g.cs")
+            .Single(static source => source.HintName == "StaticNorth.Valiant.Mapping.DependencyInjection.g.cs")
             .SourceText
             .ToString();
         var largeSource = CreateMapperSetSource(9);
         var large = RunGenerator(largeSource).GeneratedSources
-            .Single(static source => source.HintName == "Valiant.Mapping.DependencyInjection.g.cs")
+            .Single(static source => source.HintName == "StaticNorth.Valiant.Mapping.DependencyInjection.g.cs")
             .SourceText
             .ToString();
 
@@ -2479,7 +2479,7 @@ public sealed class SourceGenerationTests
     public async Task Unrelated_Edit_Leaves_Tracked_Mapper_Step_Cached_Or_Unchanged()
     {
         const string mapper = """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -2502,7 +2502,7 @@ public sealed class SourceGenerationTests
     {
         var diagnostics = RunInvocationAnalyzer(
             """
-            using Valiant.Mapping;
+            using StaticNorth.Valiant.Mapping;
 
             [ValiantMapper]
             public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>;
@@ -2524,7 +2524,7 @@ public sealed class SourceGenerationTests
 
     private static string CreateMapperSetSource(int count)
     {
-        var builder = new System.Text.StringBuilder("using Valiant.Mapping;\n");
+        var builder = new System.Text.StringBuilder("using StaticNorth.Valiant.Mapping;\n");
         for (var index = 0; index < count; index++)
         {
             builder.Append("[ValiantMapper] public sealed partial class Mapper")
@@ -2557,7 +2557,7 @@ public sealed class SourceGenerationTests
             after,
             stepName,
             references,
-            "Valiant.Mapping.Tracked.Tests");
+            "StaticNorth.Valiant.Mapping.Tracked.Tests");
     }
 
     private static ImmutableArray<Diagnostic> RunInvocationAnalyzer(string source)
@@ -2567,7 +2567,7 @@ public sealed class SourceGenerationTests
         var references = GetTrustedPlatformReferences()
             .Add(MetadataReference.CreateFromFile(typeof(IMapper<,>).Assembly.Location));
         var compilation = CSharpCompilation.Create(
-            "Valiant.Mapping.Analyzer.Tests",
+            "StaticNorth.Valiant.Mapping.Analyzer.Tests",
             [syntaxTree],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
@@ -2597,7 +2597,7 @@ public sealed class SourceGenerationTests
                 path: "/tests/GeneratedInput.cs");
 
             var compilation = CSharpCompilation.Create(
-                "Valiant.Mapping.SourceGeneration.Tests",
+                "StaticNorth.Valiant.Mapping.SourceGeneration.Tests",
                 [syntaxTree],
                 references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
@@ -2639,7 +2639,7 @@ public sealed class SourceGenerationTests
             .Add(MetadataReference.CreateFromFile(typeof(ServiceCollection).Assembly.Location));
 
         var compilation = CSharpCompilation.Create(
-            "Valiant.Mapping.GeneratedMapper.Tests",
+            "StaticNorth.Valiant.Mapping.GeneratedMapper.Tests",
             [syntaxTree],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
@@ -2670,7 +2670,7 @@ public sealed class SourceGenerationTests
     private static ImmutableArray<MetadataReference> GetTrustedPlatformReferences()
     {
         var testAssemblyFileName = Path.GetFileName(typeof(SourceGenerationTests).Assembly.Location);
-        var sampleAssemblyFileName = Path.GetFileName(typeof(global::Valiant.Mapping.Samples.Basic.Person).Assembly.Location);
+        var sampleAssemblyFileName = Path.GetFileName(typeof(global::StaticNorth.Valiant.Mapping.Samples.Basic.Person).Assembly.Location);
 
         return GeneratorTestHarness.GetTrustedPlatformReferences(testAssemblyFileName)
             .Where(reference => !string.Equals(

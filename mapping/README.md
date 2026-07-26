@@ -9,7 +9,7 @@ Valiant Mapping is a source-generated object mapping library for .NET. It genera
 ## Quick Start
 
 ```csharp
-using Valiant.Mapping;
+using StaticNorth.Valiant.Mapping;
 
 [ValiantMapper]
 public sealed partial class UserMapper : MapperDefinition<User, UserDto>;

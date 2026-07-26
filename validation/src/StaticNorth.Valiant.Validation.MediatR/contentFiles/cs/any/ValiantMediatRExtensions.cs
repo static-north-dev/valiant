@@ -1,7 +1,7 @@
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Valiant.Validation.MediatR;
+namespace StaticNorth.Valiant.Validation.MediatR;
 
 /// <summary>
 /// Registration helpers for Valiant validation in MediatR pipelines.

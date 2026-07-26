@@ -1,4 +1,4 @@
-namespace Valiant.Mapping;
+namespace StaticNorth.Valiant.Mapping;
 
 /// <summary>
 /// Defines how mapping rules handle null source values.

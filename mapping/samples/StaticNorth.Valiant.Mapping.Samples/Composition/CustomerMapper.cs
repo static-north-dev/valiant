@@ -1,4 +1,4 @@
-namespace Valiant.Mapping.Samples.Composition;
+namespace StaticNorth.Valiant.Mapping.Samples.Composition;
 
 [ValiantMapper]
 public sealed partial class CustomerMapper(AddressMapper addressMapper)

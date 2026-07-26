@@ -1,4 +1,4 @@
-namespace Valiant.Validation;
+namespace StaticNorth.Valiant.Validation;
 
 /// <summary>
 /// Describes a single validation failure.

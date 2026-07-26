@@ -1,4 +1,4 @@
-namespace Valiant.Mapping;
+namespace StaticNorth.Valiant.Mapping;
 
 /// <summary>
 /// Legacy base type for runtime mappers.

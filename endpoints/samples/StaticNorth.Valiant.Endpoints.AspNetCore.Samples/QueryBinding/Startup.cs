@@ -1,6 +1,6 @@
-using Valiant.Endpoints.AspNetCore.DependencyInjection;
+using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 
-namespace Valiant.Endpoints.AspNetCore.Samples.QueryBinding;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Samples.QueryBinding;
 
 /// <summary>
 /// Demonstrates generated query binding for arrays, objects, and supported query formats.

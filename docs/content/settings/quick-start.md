@@ -21,7 +21,7 @@ Specific integration packages forward the core runtime, build, and generator ass
 ## 2. Mark a settings model
 
 ```csharp
-using Valiant.Settings;
+using StaticNorth.Valiant.Settings;
 
 [ValiantSettings("Mail", configure: true)]
 public sealed record MailSettings
@@ -39,7 +39,7 @@ The section path is required. `configure: true` opts this model into generated O
 ## 3. Register generated settings
 
 ```csharp
-using Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Settings.DependencyInjection;
 
 builder.Services.AddValiantSettings(builder.Configuration);
 ```

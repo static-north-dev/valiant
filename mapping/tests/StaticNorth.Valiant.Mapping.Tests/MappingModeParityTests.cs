@@ -1,19 +1,19 @@
-using CompositionAddress = Valiant.Mapping.Samples.Composition.Address;
-using CompositionAddressMapper = Valiant.Mapping.Samples.Composition.AddressMapper;
-using CompositionCustomer = Valiant.Mapping.Samples.Composition.Customer;
-using CompositionCustomerDto = Valiant.Mapping.Samples.Composition.CustomerDto;
-using CompositionCustomerMapper = Valiant.Mapping.Samples.Composition.CustomerMapper;
-using ConditionalContact = Valiant.Mapping.Samples.ConditionalMapping.Contact;
-using ConditionalContactDto = Valiant.Mapping.Samples.ConditionalMapping.ContactDto;
-using ConditionalContactMapper = Valiant.Mapping.Samples.ConditionalMapping.ContactMapper;
-using ExplicitUserProfile = Valiant.Mapping.Samples.ExplicitMapping.UserProfile;
-using ExplicitUserProfileDto = Valiant.Mapping.Samples.ExplicitMapping.UserProfileDto;
-using ExplicitUserProfileMapper = Valiant.Mapping.Samples.ExplicitMapping.UserProfileMapper;
-using NullProfile = Valiant.Mapping.Samples.NullHandling.Profile;
-using NullProfileDto = Valiant.Mapping.Samples.NullHandling.ProfileDto;
-using NullProfileMapper = Valiant.Mapping.Samples.NullHandling.ProfileMapper;
+using CompositionAddress = StaticNorth.Valiant.Mapping.Samples.Composition.Address;
+using CompositionAddressMapper = StaticNorth.Valiant.Mapping.Samples.Composition.AddressMapper;
+using CompositionCustomer = StaticNorth.Valiant.Mapping.Samples.Composition.Customer;
+using CompositionCustomerDto = StaticNorth.Valiant.Mapping.Samples.Composition.CustomerDto;
+using CompositionCustomerMapper = StaticNorth.Valiant.Mapping.Samples.Composition.CustomerMapper;
+using ConditionalContact = StaticNorth.Valiant.Mapping.Samples.ConditionalMapping.Contact;
+using ConditionalContactDto = StaticNorth.Valiant.Mapping.Samples.ConditionalMapping.ContactDto;
+using ConditionalContactMapper = StaticNorth.Valiant.Mapping.Samples.ConditionalMapping.ContactMapper;
+using ExplicitUserProfile = StaticNorth.Valiant.Mapping.Samples.ExplicitMapping.UserProfile;
+using ExplicitUserProfileDto = StaticNorth.Valiant.Mapping.Samples.ExplicitMapping.UserProfileDto;
+using ExplicitUserProfileMapper = StaticNorth.Valiant.Mapping.Samples.ExplicitMapping.UserProfileMapper;
+using NullProfile = StaticNorth.Valiant.Mapping.Samples.NullHandling.Profile;
+using NullProfileDto = StaticNorth.Valiant.Mapping.Samples.NullHandling.ProfileDto;
+using NullProfileMapper = StaticNorth.Valiant.Mapping.Samples.NullHandling.ProfileMapper;
 
-namespace Valiant.Mapping.Tests;
+namespace StaticNorth.Valiant.Mapping.Tests;
 
 public sealed class MappingModeParityTests
 {

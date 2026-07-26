@@ -1,8 +1,8 @@
-using Valiant.Validation.AspNetCore;
-using Valiant.Validation.AspNetCore.Samples.Orders;
-using Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Validation.AspNetCore;
+using StaticNorth.Valiant.Validation.AspNetCore.Samples.Orders;
+using StaticNorth.Valiant.Validation.DependencyInjection;
 
-namespace Valiant.Validation.AspNetCore.Samples.MinimalApi;
+namespace StaticNorth.Valiant.Validation.AspNetCore.Samples.MinimalApi;
 
 /// <summary>
 /// Demonstrates typed and all-parameter Minimal API validation filters.

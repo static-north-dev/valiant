@@ -9,7 +9,7 @@ Install the most specific settings package your application uses. `StaticNorth.V
 ## Quick Start
 
 ```csharp
-using Valiant.Settings;
+using StaticNorth.Valiant.Settings;
 
 [ValiantSettings("ConnectionStrings:Primary")]
 public sealed record DbSettings
@@ -27,7 +27,7 @@ Use `[ValiantSecret]` on sensitive properties so runtime value visualizers can m
 When `Microsoft.Extensions.DependencyInjection`, `Microsoft.Extensions.Configuration`, and `Microsoft.Extensions.Options.ConfigurationExtensions` are available in the compilation, the source generator also emits dependency injection registration:
 
 ```csharp
-using Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Settings.DependencyInjection;
 
 builder.Services.AddValiantSettings(builder.Configuration);
 ```
@@ -65,8 +65,8 @@ builder.Services.AddValiantSettings(builder.Configuration, options =>
 Reference `StaticNorth.Valiant.Settings.Validation` to opt configured settings models into normal ASP.NET Core options validation with matching Valiant validators. No additional attribute is required on the settings model beyond `[ValiantSettings("Section", configure: true)]`.
 
 ```csharp
-using Valiant.Settings.DependencyInjection;
-using Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Validation.DependencyInjection;
 
 builder.Services.AddValiantValidators();
 builder.Services.AddValiantSettings(builder.Configuration, options =>
@@ -91,8 +91,8 @@ builder.Services.AddValiantSettings(builder.Configuration, options =>
 `StaticNorth.Valiant.Settings.AspNetCore` maps a small built-in UI and JSON endpoint for visualizing generated settings schemas:
 
 ```csharp
-using Valiant.Settings.AspNetCore;
-using Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Settings.AspNetCore;
+using StaticNorth.Valiant.Settings.DependencyInjection;
 
 builder.Services.AddValiantSettings(builder.Configuration);
 

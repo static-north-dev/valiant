@@ -1,4 +1,4 @@
-namespace Valiant.Validation.Samples.AttributeValidation;
+namespace StaticNorth.Valiant.Validation.Samples.AttributeValidation;
 
 /// <summary>
 /// Demonstrates declaring validation rules with attributes and using the

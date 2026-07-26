@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.AspNetCore.Samples.QueryBinding;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Samples.QueryBinding;
 
 [ValiantEndpointGroup]
 public class QueryBindingEndpointGroup : IEndpointGroup

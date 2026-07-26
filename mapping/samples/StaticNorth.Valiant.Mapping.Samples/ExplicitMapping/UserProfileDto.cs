@@ -1,4 +1,4 @@
-namespace Valiant.Mapping.Samples.ExplicitMapping;
+namespace StaticNorth.Valiant.Mapping.Samples.ExplicitMapping;
 
 public sealed record UserProfileDto
 {

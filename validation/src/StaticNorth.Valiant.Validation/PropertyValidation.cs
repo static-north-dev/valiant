@@ -1,4 +1,4 @@
-namespace Valiant.Validation;
+namespace StaticNorth.Valiant.Validation;
 
 /// <summary>
 /// Fluent property validation builder used by Valiant validators.

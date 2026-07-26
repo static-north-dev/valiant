@@ -1,4 +1,4 @@
-namespace Valiant.Settings.Tests;
+namespace StaticNorth.Valiant.Settings.Tests;
 
 public sealed class PackageAssetFlowTests
 {

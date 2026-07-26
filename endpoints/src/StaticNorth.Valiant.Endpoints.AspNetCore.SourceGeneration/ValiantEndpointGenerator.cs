@@ -6,9 +6,9 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
 using Microsoft.CodeAnalysis.Text;
-using Valiant.SourceGeneration;
+using StaticNorth.Valiant.SourceGeneration;
 
-namespace Valiant.Endpoints.AspNetCore.SourceGeneration;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration;
 
 /// <summary>
 /// Generates ASP.NET Core endpoint route registration code for Valiant endpoints.
@@ -16,23 +16,23 @@ namespace Valiant.Endpoints.AspNetCore.SourceGeneration;
 [Generator(LanguageNames.CSharp)]
 public sealed class ValiantEndpointGenerator : IIncrementalGenerator
 {
-    private const string EndpointAttributeMetadataName = "Valiant.Endpoints.ValiantEndpointAttribute";
-    private const string GenericEndpointAttributeMetadataName = "Valiant.Endpoints.ValiantEndpointAttribute`1";
-    private const string EndpointGroupAttributeMetadataName = "Valiant.Endpoints.ValiantEndpointGroupAttribute";
-    private const string EndpointServiceCollectionExtensionsMetadataName = "Valiant.Endpoints.AspNetCore.DependencyInjection.ValiantEndpointServiceCollectionExtensions";
-    private const string QueryParameterOptionsMetadataName = "Valiant.Endpoints.AspNetCore.QueryParameterOptions";
-    private const string QueryParsingAttributeMetadataName = "Valiant.Endpoints.AspNetCore.ValiantQueryParsingAttribute";
+    private const string EndpointAttributeMetadataName = "StaticNorth.Valiant.Endpoints.ValiantEndpointAttribute";
+    private const string GenericEndpointAttributeMetadataName = "StaticNorth.Valiant.Endpoints.ValiantEndpointAttribute`1";
+    private const string EndpointGroupAttributeMetadataName = "StaticNorth.Valiant.Endpoints.ValiantEndpointGroupAttribute";
+    private const string EndpointServiceCollectionExtensionsMetadataName = "StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection.ValiantEndpointServiceCollectionExtensions";
+    private const string QueryParameterOptionsMetadataName = "StaticNorth.Valiant.Endpoints.AspNetCore.QueryParameterOptions";
+    private const string QueryParsingAttributeMetadataName = "StaticNorth.Valiant.Endpoints.AspNetCore.ValiantQueryParsingAttribute";
     private const string FromQueryAttributeMetadataName = "Microsoft.AspNetCore.Mvc.FromQueryAttribute";
     private const string AsParametersAttributeMetadataName = "Microsoft.AspNetCore.Http.AsParametersAttribute";
-    private const string AspNetCoreNamespace = "Valiant.Endpoints.AspNetCore";
+    private const string AspNetCoreNamespace = "StaticNorth.Valiant.Endpoints.AspNetCore";
     private const string EndpointMetadataName = "IEndpoint";
     private const string EndpointGroupMetadataName = "IEndpointGroup";
 
     private static readonly DiagnosticDescriptor UnsupportedEndpointShape = new(
         "VLE001",
         "Unsupported endpoint shape",
-        "Endpoint declaration '{0}' must implement Valiant.Endpoints.AspNetCore.IEndpoint",
-        "Valiant.Endpoints",
+        "Endpoint declaration '{0}' must implement StaticNorth.Valiant.Endpoints.AspNetCore.IEndpoint",
+        "StaticNorth.Valiant.Endpoints",
         DiagnosticSeverity.Error,
         true);
 
@@ -40,7 +40,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         "VLE002",
         "Ambiguous endpoint shape",
         "Endpoint declaration '{0}' must not implement both IEndpoint and IEndpointGroup",
-        "Valiant.Endpoints",
+        "StaticNorth.Valiant.Endpoints",
         DiagnosticSeverity.Error,
         true);
 
@@ -48,23 +48,23 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         "VLE003",
         "Endpoint group must use group attribute",
         "Endpoint group '{0}' must use ValiantEndpointGroupAttribute instead of ValiantEndpointAttribute",
-        "Valiant.Endpoints",
+        "StaticNorth.Valiant.Endpoints",
         DiagnosticSeverity.Error,
         true);
 
     private static readonly DiagnosticDescriptor InvalidEndpointGroupType = new(
         "VLE004",
         "Invalid endpoint group type",
-        "Endpoint '{0}' declares group type '{1}', but that type does not implement Valiant.Endpoints.AspNetCore.IEndpointGroup",
-        "Valiant.Endpoints",
+        "Endpoint '{0}' declares group type '{1}', but that type does not implement StaticNorth.Valiant.Endpoints.AspNetCore.IEndpointGroup",
+        "StaticNorth.Valiant.Endpoints",
         DiagnosticSeverity.Error,
         true);
 
     private static readonly DiagnosticDescriptor UnsupportedEndpointGroupShape = new(
         "VLE005",
         "Unsupported endpoint group shape",
-        "Endpoint group declaration '{0}' must implement Valiant.Endpoints.AspNetCore.IEndpointGroup",
-        "Valiant.Endpoints",
+        "Endpoint group declaration '{0}' must implement StaticNorth.Valiant.Endpoints.AspNetCore.IEndpointGroup",
+        "StaticNorth.Valiant.Endpoints",
         DiagnosticSeverity.Error,
         true);
 
@@ -72,7 +72,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         "VLE006",
         "Missing endpoint attribute",
         "Endpoint declaration '{0}' must be marked with ValiantEndpointAttribute",
-        "Valiant.Endpoints",
+        "StaticNorth.Valiant.Endpoints",
         DiagnosticSeverity.Error,
         true);
 
@@ -80,7 +80,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         "VLE007",
         "Missing endpoint group attribute",
         "Endpoint group declaration '{0}' must be marked with ValiantEndpointGroupAttribute",
-        "Valiant.Endpoints",
+        "StaticNorth.Valiant.Endpoints",
         DiagnosticSeverity.Error,
         true);
 
@@ -88,7 +88,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         "VLE008",
         "Endpoint must use endpoint attribute",
         "Endpoint declaration '{0}' must use ValiantEndpointAttribute instead of ValiantEndpointGroupAttribute",
-        "Valiant.Endpoints",
+        "StaticNorth.Valiant.Endpoints",
         DiagnosticSeverity.Error,
         true);
 
@@ -96,7 +96,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         "VLE009",
         "Duplicate endpoint attribute",
         "Endpoint declaration '{0}' must use only one ValiantEndpointAttribute form",
-        "Valiant.Endpoints",
+        "StaticNorth.Valiant.Endpoints",
         DiagnosticSeverity.Error,
         true);
 
@@ -104,7 +104,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         "VLE010",
         "Unsupported query object binding shape",
         "Query object type '{0}' cannot receive a generated query binder because {1}",
-        "Valiant.Endpoints",
+        "StaticNorth.Valiant.Endpoints",
         DiagnosticSeverity.Error,
         true);
 
@@ -112,7 +112,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         "VLE011",
         "Conflicting query JSON policies",
         "Query object type '{0}' is used by direct query parameters with conflicting JsonValues policies",
-        "Valiant.Endpoints",
+        "StaticNorth.Valiant.Endpoints",
         DiagnosticSeverity.Error,
         true);
 
@@ -1392,7 +1392,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
                 }
             }
 
-            return "Valiant.Endpoints.AspNetCore." +
+            return "StaticNorth.Valiant.Endpoints.AspNetCore." +
                 ((uint)hash).ToString("X8", System.Globalization.CultureInfo.InvariantCulture) +
                 ".g.cs";
         }
@@ -1505,11 +1505,11 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
     {
         var builder = new StringBuilder();
         ValiantSourceBuilder.AppendGeneratedFileHeader(builder);
-        builder.AppendLine("[assembly: global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointRouteRegistrarAttribute(typeof(global::Valiant.Endpoints.AspNetCore.Generated.ValiantEndpointRouteRegistrar))]");
+        builder.AppendLine("[assembly: global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointRouteRegistrarAttribute(typeof(global::StaticNorth.Valiant.Endpoints.AspNetCore.Generated.ValiantEndpointRouteRegistrar))]");
         builder.AppendLine();
-        builder.AppendLine("namespace Valiant.Endpoints.AspNetCore.Generated");
+        builder.AppendLine("namespace StaticNorth.Valiant.Endpoints.AspNetCore.Generated");
         builder.AppendLine("{");
-        builder.AppendLine("    internal sealed class ValiantEndpointRouteRegistrar : global::Valiant.Endpoints.AspNetCore.Infrastructure.IValiantEndpointRouteRegistrar");
+        builder.AppendLine("    internal sealed class ValiantEndpointRouteRegistrar : global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.IValiantEndpointRouteRegistrar");
         builder.AppendLine("    {");
         builder.AppendLine("        public ValiantEndpointRouteRegistrar()");
         builder.AppendLine("        {");
@@ -1532,9 +1532,9 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
 
         for (var index = 0; index < groups.Length; index++)
         {
-            builder.Append("            global::Valiant.Endpoints.AspNetCore.EndpointGroupRegistration groupRegistration")
+            builder.Append("            global::StaticNorth.Valiant.Endpoints.AspNetCore.EndpointGroupRegistration groupRegistration")
                 .Append(groups[index].Index.ToString(System.Globalization.CultureInfo.InvariantCulture))
-                .Append(" = global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.CreateEndpointGroupRegistration<")
+                .Append(" = global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.CreateEndpointGroupRegistration<")
                 .Append(groups[index].Type)
                 .Append(">(")
                 .Append(groups[index].Order.ToString(System.Globalization.CultureInfo.InvariantCulture))
@@ -1542,7 +1542,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             builder.Append("            global::Microsoft.AspNetCore.Routing.RouteGroupBuilder? group")
                 .Append(groups[index].Index.ToString(System.Globalization.CultureInfo.InvariantCulture))
                 .AppendLine(" = null;");
-            builder.Append("            if (global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpointGroup<")
+            builder.Append("            if (global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpointGroup<")
                 .Append(groups[index].Type)
                 .Append(">(builder, groupRegistration")
                 .Append(groups[index].Index.ToString(System.Globalization.CultureInfo.InvariantCulture))
@@ -1550,7 +1550,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             builder.AppendLine("            {");
             builder.Append("                group")
                 .Append(groups[index].Index.ToString(System.Globalization.CultureInfo.InvariantCulture))
-                .Append(" = global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpointGroup<")
+                .Append(" = global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpointGroup<")
                 .Append(groups[index].Type)
                 .Append(">(builder, groupRegistration")
                 .Append(groups[index].Index.ToString(System.Globalization.CultureInfo.InvariantCulture))
@@ -1591,7 +1591,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
                 "group" + groupIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 "groupRegistration" + groupIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 queryBindingGenerated);
-            builder.Append("                if (global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpoint<")
+            builder.Append("                if (global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpoint<")
                 .Append(endpoint.Type)
                 .Append(">(group")
                 .Append(groupIndex.ToString(System.Globalization.CultureInfo.InvariantCulture))
@@ -1630,7 +1630,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
                 "builder",
                 "null",
                 queryBindingGenerated);
-            builder.Append("            if (global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpoint<")
+            builder.Append("            if (global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpoint<")
                 .Append(endpoint.Type)
                 .Append(">(builder, endpointRegistration")
                 .Append(endpointIndex.ToString(System.Globalization.CultureInfo.InvariantCulture))
@@ -1662,10 +1662,10 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         builder.Append(indent);
         if (!endpoint.QueryParsingOverrides.IsEmpty)
         {
-            builder.Append("global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ApplyQueryParsingOverrides(");
+            builder.Append("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ApplyQueryParsingOverrides(");
         }
 
-        builder.Append("global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpoint<")
+        builder.Append("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpoint<")
             .Append(endpoint.Type)
             .Append(">(")
             .Append(routeBuilderExpression)
@@ -1679,12 +1679,12 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             AppendEnumArray(
                 builder,
                 endpoint.QueryParsingOverrides.SupportedArrayFormats,
-                "global::Valiant.Endpoints.AspNetCore.QueryArrayFormat");
+                "global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryArrayFormat");
             builder.Append(", ");
             AppendEnumArray(
                 builder,
                 endpoint.QueryParsingOverrides.SupportedObjectFormats,
-                "global::Valiant.Endpoints.AspNetCore.QueryObjectFormat");
+                "global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryObjectFormat");
             builder.Append(", ")
                 .Append(endpoint.QueryParsingOverrides.EnableJsonQueryValues switch
                 {
@@ -1708,9 +1708,9 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         bool queryBindingGenerated)
     {
         builder.Append(indent)
-            .Append("global::Valiant.Endpoints.AspNetCore.EndpointRegistration endpointRegistration")
+            .Append("global::StaticNorth.Valiant.Endpoints.AspNetCore.EndpointRegistration endpointRegistration")
             .Append(endpointIndex.ToString(System.Globalization.CultureInfo.InvariantCulture))
-            .Append(" = global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.CreateEndpointRegistration<")
+            .Append(" = global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.CreateEndpointRegistration<")
             .Append(endpoint.Type)
             .Append(">(")
             .Append(routeBuilderExpression)
@@ -1724,12 +1724,12 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         AppendEnumArray(
             builder,
             endpoint.QueryParsingOverrides.SupportedArrayFormats,
-            "global::Valiant.Endpoints.AspNetCore.QueryArrayFormat");
+            "global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryArrayFormat");
         builder.Append(", ");
         AppendEnumArray(
             builder,
             endpoint.QueryParsingOverrides.SupportedObjectFormats,
-            "global::Valiant.Endpoints.AspNetCore.QueryObjectFormat");
+            "global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryObjectFormat");
         builder.Append(", ")
             .Append(endpoint.QueryParsingOverrides.EnableJsonQueryValues switch
             {
@@ -2001,9 +2001,9 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
         builder.AppendLine("global::System.ArgumentNullException.ThrowIfNull(context);");
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("var parsingOptions = global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ResolveQueryParsingOptions(context);");
+        builder.AppendLine("var parsingOptions = global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ResolveQueryParsingOptions(context);");
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.Append("var result = global::Valiant.Endpoints.AspNetCore.QueryStringParser.Parse<")
+        builder.Append("var result = global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryStringParser.Parse<")
             .Append(binding.Type)
             .AppendLine(">(context.Request.QueryString.Value, parsingOptions);");
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);

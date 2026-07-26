@@ -1,4 +1,4 @@
-namespace Valiant.Mapping;
+namespace StaticNorth.Valiant.Mapping;
 
 /// <summary>
 /// Defines the mapping contract for a source-generated mapper definition.

@@ -16,8 +16,8 @@ This is the consumer package. It includes the shared endpoint contracts and bund
 ## 2. Create an endpoint
 
 ```csharp
-using Valiant.Endpoints;
-using Valiant.Endpoints.AspNetCore;
+using StaticNorth.Valiant.Endpoints;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
 
 [ValiantEndpoint]
 internal sealed class HealthEndpoint : IEndpoint
@@ -34,7 +34,7 @@ internal sealed class HealthEndpoint : IEndpoint
 ## 3. Register and map
 
 ```csharp
-using Valiant.Endpoints.AspNetCore.DependencyInjection;
+using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 
 builder.Services.AddValiantEndpoints();
 

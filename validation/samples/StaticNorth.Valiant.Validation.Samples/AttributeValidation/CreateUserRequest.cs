@@ -1,4 +1,4 @@
-namespace Valiant.Validation.Samples.AttributeValidation;
+namespace StaticNorth.Valiant.Validation.Samples.AttributeValidation;
 
 /// <summary>
 /// Represents a sample user creation request.

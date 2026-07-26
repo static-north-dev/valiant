@@ -1,4 +1,4 @@
-namespace Valiant.Settings;
+namespace StaticNorth.Valiant.Settings;
 
 /// <summary>
 /// Configures generated Valiant settings registration.

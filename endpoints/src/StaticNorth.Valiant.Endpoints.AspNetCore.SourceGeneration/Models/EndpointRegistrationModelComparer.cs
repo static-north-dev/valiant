@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.AspNetCore.SourceGeneration;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration;
 
 internal sealed class EndpointRegistrationModelComparer : IEqualityComparer<EndpointRegistrationModel>
 {

@@ -1,4 +1,4 @@
-namespace Valiant.Validation;
+namespace StaticNorth.Valiant.Validation;
 
 /// <summary>
 /// Base type for reusable property validators.

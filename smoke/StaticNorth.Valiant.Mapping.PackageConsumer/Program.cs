@@ -1,4 +1,4 @@
-using Valiant.Mapping;
+using StaticNorth.Valiant.Mapping;
 
 var target = new SmokeMapper(new ValiantMappingOptions
 {
@@ -10,7 +10,7 @@ if (target.Value != "packaged mapper")
     throw new InvalidOperationException("The packaged mapping generator did not produce a working fast mapper.");
 }
 
-Console.WriteLine("Valiant.Mapping package consumer passed.");
+Console.WriteLine("StaticNorth.Valiant.Mapping package consumer passed.");
 
 public sealed record SmokeSource(string Value);
 

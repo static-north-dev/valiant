@@ -5,10 +5,10 @@ description: Choose the smallest Valiant Validation package set for your applica
 
 # Package guide
 
-:::note Migrating from Valiant packages
-Replace each former `Valiant.*` package reference with its
-`StaticNorth.Valiant.*` counterpart. The C# namespaces stay `Valiant.*`, so
-your `using` directives and application source do not need to change.
+:::caution Breaking migration from Valiant
+Replace each former `Valiant.*` package reference and `using Valiant...`
+directive with its `StaticNorth.Valiant.*` counterpart. Public C# namespaces
+now use `StaticNorth.Valiant.*`, so application source must be updated too.
 :::
 
 Install the most specific package for each integration you use. Integration packages carry the core validation runtime, build, and analyzer assets, so a separate `StaticNorth.Valiant.Validation` reference is unnecessary.

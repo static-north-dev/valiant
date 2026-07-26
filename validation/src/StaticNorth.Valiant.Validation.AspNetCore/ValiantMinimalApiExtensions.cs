@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Valiant.Validation.AspNetCore;
+namespace StaticNorth.Valiant.Validation.AspNetCore;
 
 /// <summary>
 /// Minimal API validation extensions for Valiant validators.

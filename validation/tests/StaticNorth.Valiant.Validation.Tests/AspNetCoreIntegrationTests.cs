@@ -5,9 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Valiant.Validation.AspNetCore;
+using StaticNorth.Valiant.Validation.AspNetCore;
 
-namespace Valiant.Validation.Tests;
+namespace StaticNorth.Valiant.Validation.Tests;
 
 public sealed class AspNetCoreIntegrationTests
 {

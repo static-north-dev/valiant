@@ -1,6 +1,6 @@
-using Valiant.Endpoints.AspNetCore.DependencyInjection;
+using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 
-namespace Valiant.Endpoints.AspNetCore.Samples.Basic;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Samples.Basic;
 
 /// <summary>
 /// Demonstrates default endpoint discovery and mapping for standalone and grouped endpoints.

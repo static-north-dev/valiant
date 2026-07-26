@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace Valiant.Endpoints.AspNetCore.Infrastructure;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure;
 
 /// <summary>
 /// Infrastructure marker used to locate a source-generated endpoint registrar.

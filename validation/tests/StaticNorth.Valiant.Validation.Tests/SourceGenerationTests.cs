@@ -1,10 +1,10 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Valiant.SourceGeneration.Testing;
-using Valiant.Validation.SourceGeneration;
+using StaticNorth.Valiant.SourceGeneration.Testing;
+using StaticNorth.Valiant.Validation.SourceGeneration;
 
-namespace Valiant.Validation.Tests;
+namespace StaticNorth.Valiant.Validation.Tests;
 
 public sealed class SourceGenerationTests
 {
@@ -13,7 +13,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -38,8 +38,8 @@ public sealed class SourceGenerationTests
         await Assert.That(generated.Contains("/// Validates the specified instance.", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("/// Determines whether the specified instance is valid.", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("/// Asynchronously validates the specified instance.", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("void global::Valiant.Validation.IValidatorDefinition<global::Person>.Configure(global::Valiant.Validation.ValidationContext<global::Person> context)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("((global::Valiant.Validation.IValidatorDefinition<global::Person>)this).Configure(context);", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("void global::StaticNorth.Valiant.Validation.IValidatorDefinition<global::Person>.Configure(global::StaticNorth.Valiant.Validation.ValidationContext<global::Person> context)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("((global::StaticNorth.Valiant.Validation.IValidatorDefinition<global::Person>)this).Configure(context);", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -47,7 +47,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -73,18 +73,18 @@ public sealed class SourceGenerationTests
         await Assert.That(result.Diagnostics.Where(static diagnostic =>
             diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated).Contains(
-            "if (GetEffectiveValidationMode() == global::Valiant.Validation.ValiantValidationMode.Debuggable)");
+            "if (GetEffectiveValidationMode() == global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable)");
         await Assert.That(generated).Contains("return ValidateRuntime(instance);");
         await Assert.That(generated).Contains(
             "return await ValidateRuntimeAsync(instance, cancellationToken).ConfigureAwait(false);");
         await Assert.That(generated).Contains(
-            "var mode = _valiantValidationOptions?.Mode ?? global::Valiant.Validation.ValiantValidationMode.Auto;");
+            "var mode = _valiantValidationOptions?.Mode ?? global::StaticNorth.Valiant.Validation.ValiantValidationMode.Auto;");
         await Assert.That(generated).Contains("#if DEBUG");
         await Assert.That(generated).Contains(
-            "return global::Valiant.Validation.ValiantValidationMode.Debuggable;");
+            "return global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable;");
         await Assert.That(generated).Contains("#else");
         await Assert.That(generated).Contains(
-            "return global::Valiant.Validation.ValiantValidationMode.Fast;");
+            "return global::StaticNorth.Valiant.Validation.ValiantValidationMode.Fast;");
         await Assert.That(generated).Contains("var value0 = instance.Name;");
         await Assert.That(generated).Contains(
             "global::System.String.IsNullOrWhiteSpace(value0)");
@@ -95,7 +95,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : ValidatorDefinition<Person>;
@@ -112,13 +112,13 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(result.Diagnostics.Any(static x => x.Id == "VLT104")).IsFalse();
-        await Assert.That(generated.Contains("public global::Valiant.Validation.ValidationResult Validate(global::Person instance)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("public global::StaticNorth.Valiant.Validation.ValidationResult Validate(global::Person instance)", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("public override ", StringComparison.Ordinal)).IsFalse();
-        await Assert.That(generated.Contains("private global::Valiant.Validation.ValiantFailureBehavior GetEffectiveFailureBehavior()", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("private global::StaticNorth.Valiant.Validation.ValiantFailureBehavior GetEffectiveFailureBehavior()", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("var value0 = instance.Name;", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("instance.instance", StringComparison.Ordinal)).IsFalse();
         await Assert.That(generated.Contains("global::System.String.IsNullOrWhiteSpace(value0)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("global::Valiant.Validation.ValidationChecks.HasMaxLength", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("global::StaticNorth.Valiant.Validation.ValidationChecks.HasMaxLength", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -126,7 +126,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : ValidatorDefinition<Person>;
@@ -145,7 +145,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : ValidatorDefinition<Person>
@@ -174,7 +174,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class UserValidator : IValidatorDefinition<User>
@@ -213,7 +213,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator(RegisterAsDefault = false)]
             public sealed partial class UserNameValidator : IValidatorDefinition<User>
@@ -255,7 +255,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : ValidatorDefinition<Person>;
@@ -281,7 +281,7 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using System.Collections;
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : ValidatorDefinition<Person>;
@@ -297,7 +297,7 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(result.Diagnostics.Any(static x => x.Id == "VLT007")).IsFalse();
-        await Assert.That(generated.Contains("global::Valiant.Validation.ValidationChecks.HasMinLength", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("global::StaticNorth.Valiant.Validation.ValidationChecks.HasMinLength", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -305,7 +305,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : ValidatorDefinition<Person>;
@@ -325,7 +325,7 @@ public sealed class SourceGenerationTests
         await Assert.That(generated.Contains("((global::System.Func<global::Person, bool>)(global::Person.ShouldValidateName))(instance)", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("(\"NameRequired\" ?? \"Required\")", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("(\"Name is required.\" ?? \"'Name' is required.\")", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("global::Valiant.Validation.ValiantSeverity.Warning", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("global::StaticNorth.Valiant.Validation.ValiantSeverity.Warning", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -333,7 +333,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator<Person>]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -359,7 +359,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator(typeof(Person))]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -385,7 +385,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             public partial class ValidatorContainer
             {
@@ -409,7 +409,7 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated.Contains("public partial class ValidatorContainer", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("public sealed partial class PersonValidator : global::Valiant.Validation.IValidator<global::Person>", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("public sealed partial class PersonValidator : global::StaticNorth.Valiant.Validation.IValidator<global::Person>", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("internal sealed class __ValiantValidatorContainer_PersonValidatorMetadataProvider", StringComparison.Ordinal)).IsTrue();
     }
 
@@ -418,7 +418,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             public class ValidatorContainer
             {
@@ -446,7 +446,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed class PersonValidator : IValidatorDefinition<Person>
@@ -471,7 +471,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator
@@ -496,7 +496,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator(typeof(OtherPerson))]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -526,7 +526,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -547,7 +547,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -572,7 +572,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -597,7 +597,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -626,7 +626,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -651,7 +651,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -689,7 +689,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -729,7 +729,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -761,7 +761,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class ProductValidator : IValidatorDefinition<Product>
@@ -793,7 +793,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -820,7 +820,7 @@ public sealed class SourceGenerationTests
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated.Contains("if (instance.Address is not null)", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("var value0 = instance.Address.Line1;", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("new global::Valiant.Validation.ValidationFailure(\"Address.Line1\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("new global::StaticNorth.Valiant.Validation.ValidationFailure(\"Address.Line1\"", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -828,7 +828,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -865,8 +865,8 @@ public sealed class SourceGenerationTests
         await Assert.That(generated.Contains("var __valiantChild", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("if (__valiantChild", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("if (instance.Address is not null)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("new global::Valiant.Validation.ValidationFailure(\"Address.\" + \"Line1\"", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("new global::Valiant.Validation.ValidationFailure(\"Address.\" + \"Zip\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("new global::StaticNorth.Valiant.Validation.ValidationFailure(\"Address.\" + \"Line1\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("new global::StaticNorth.Valiant.Validation.ValidationFailure(\"Address.\" + \"Zip\"", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -874,7 +874,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -915,7 +915,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -986,7 +986,7 @@ public sealed class SourceGenerationTests
             namespace Validators
             {
                 using Models;
-                using Valiant.Validation;
+                using StaticNorth.Valiant.Validation;
 
                 [ValiantValidator]
                 public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1013,7 +1013,7 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using System.Collections.Generic;
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1089,7 +1089,7 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using System.Collections.Generic;
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1128,10 +1128,10 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("global::Valiant.Validation.ValidationChecks.HasCount", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("global::Valiant.Validation.ValidationChecks.All", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("global::Valiant.Validation.ValidationChecks.Any", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("global::Valiant.Validation.ValidationChecks.None", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("global::StaticNorth.Valiant.Validation.ValidationChecks.HasCount", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("global::StaticNorth.Valiant.Validation.ValidationChecks.All", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("global::StaticNorth.Valiant.Validation.ValidationChecks.Any", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("global::StaticNorth.Valiant.Validation.ValidationChecks.None", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("foreach (var __valiantItem", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("\"Children[\" + (__valiantIndex", StringComparison.Ordinal)).IsTrue();
     }
@@ -1142,7 +1142,7 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using System.Collections.Generic;
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1186,7 +1186,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1219,7 +1219,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1252,10 +1252,10 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated.Contains("internal sealed class __ValiantPersonValidatorMetadataProvider", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("new global::Valiant.Validation.ValiantPropertyValidationMetadata(\"Name\", typeof(string), false", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("new global::Valiant.Validation.ValiantValidationCheckMetadata(\"Required\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("new global::StaticNorth.Valiant.Validation.ValiantPropertyValidationMetadata(\"Name\", typeof(string), false", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("new global::StaticNorth.Valiant.Validation.ValiantValidationCheckMetadata(\"Required\"", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("\"NameRequired\", \"Name is required.\", \"Warning\"", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("new global::Valiant.Validation.ValiantPropertyValidationMetadata(\"Age\", typeof(int), true", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("new global::StaticNorth.Valiant.Validation.ValiantPropertyValidationMetadata(\"Age\", typeof(int), true", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -1263,7 +1263,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1287,7 +1287,7 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("new global::Valiant.Validation.ValiantPropertyValidationMetadata(\"Age\", typeof(int), true", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("new global::StaticNorth.Valiant.Validation.ValiantPropertyValidationMetadata(\"Age\", typeof(int), true", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -1295,7 +1295,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator(RegisterAsDefault = false)]
             public sealed partial class RequiredNameValidator : IValidatorDefinition<Person>
@@ -1343,7 +1343,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed class AddressPropertyValidator : PropertyValidatorDefinition<Address>
@@ -1413,14 +1413,14 @@ public sealed class SourceGenerationTests
             """);
 
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
-        var dependencyInjection = result.GeneratedSources.Single(static x => x.HintName == "Valiant.Validation.DependencyInjection.g.cs").SourceText.ToString();
+        var dependencyInjection = result.GeneratedSources.Single(static x => x.HintName == "StaticNorth.Valiant.Validation.DependencyInjection.g.cs").SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated.Contains("var propertyValidatorResult0 = _addressPropertyValidator.Validate(value0);", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("var propertyValidatorResult0 = await _addressPropertyValidator.ValidateAsync(value0, cancellationToken).ConfigureAwait(false);", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("CombinePropertyPath(\"Address\", propertyValidatorFailure0.PropertyName)", StringComparison.Ordinal)).IsTrue();
         await Assert.That(dependencyInjection.Contains("CreateValidatorDescriptor(typeof(global::AddressPropertyValidator), typeof(global::AddressPropertyValidator), valiantValidationOptions.Lifetime)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("CreateValidatorDescriptor(typeof(global::Valiant.Validation.IPropertyValidator<global::Address>), typeof(global::AddressPropertyValidator), valiantValidationOptions.Lifetime)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("CreateValidatorDescriptor(typeof(global::StaticNorth.Valiant.Validation.IPropertyValidator<global::Address>), typeof(global::AddressPropertyValidator), valiantValidationOptions.Lifetime)", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -1428,7 +1428,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed class AddressPropertyValidator : PropertyValidatorDefinition<Address>
@@ -1466,7 +1466,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed class AddressPropertyValidator : PropertyValidatorDefinition<Address>
@@ -1502,7 +1502,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1553,11 +1553,11 @@ public sealed class SourceGenerationTests
             }
             """);
 
-        var generated = result.GeneratedSources.Single(static x => x.HintName == "Valiant.Validation.DependencyInjection.g.cs").SourceText.ToString();
+        var generated = result.GeneratedSources.Single(static x => x.HintName == "StaticNorth.Valiant.Validation.DependencyInjection.g.cs").SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated.Contains("CreateValidatorDescriptor(typeof(global::PersonValidator), typeof(global::PersonValidator), valiantValidationOptions.Lifetime)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("case global::Valiant.Validation.ValiantValidatorLifetime.Scoped:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("case global::StaticNorth.Valiant.Validation.ValiantValidatorLifetime.Scoped:", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("return global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Transient(serviceType, implementationType);", StringComparison.Ordinal)).IsTrue();
     }
 
@@ -1601,7 +1601,7 @@ public sealed class SourceGenerationTests
             }
             """);
 
-        var generated = result.GeneratedSources.Single(static x => x.HintName == "Valiant.Validation.DependencyInjection.g.cs").SourceText.ToString();
+        var generated = result.GeneratedSources.Single(static x => x.HintName == "StaticNorth.Valiant.Validation.DependencyInjection.g.cs").SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated.Contains("/// Provides dependency injection registration helpers", StringComparison.Ordinal)).IsTrue();
@@ -1618,7 +1618,7 @@ public sealed class SourceGenerationTests
     public async Task Unrelated_NonValidator_Edit_Does_Not_Change_Generated_Validator_Source()
     {
         const string before = """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1641,7 +1641,7 @@ public sealed class SourceGenerationTests
             """;
 
         const string after = """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1681,7 +1681,7 @@ public sealed class SourceGenerationTests
     public async Task Unrelated_Edit_Leaves_Tracked_Validator_Step_Cached_Or_Unchanged()
     {
         const string validator = """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1712,7 +1712,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             #line 200 "mapped-validator.cs"
             [ValiantValidator]
@@ -1737,7 +1737,7 @@ public sealed class SourceGenerationTests
     public async Task Diagnostic_Location_Updates_When_Validator_File_Moves()
     {
         const string source = """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed class PersonValidator : IValidatorDefinition<Person>
@@ -1754,12 +1754,12 @@ public sealed class SourceGenerationTests
             OutputKind.DynamicallyLinkedLibrary,
             nullableContextOptions: NullableContextOptions.Enable);
         var beforeCompilation = CSharpCompilation.Create(
-            "Valiant.Validation.FileMove.Tests",
+            "StaticNorth.Valiant.Validation.FileMove.Tests",
             [CSharpSyntaxTree.ParseText(source, parseOptions, path: "/tests/Before.cs")],
             references,
             options);
         var afterCompilation = CSharpCompilation.Create(
-            "Valiant.Validation.FileMove.Tests",
+            "StaticNorth.Valiant.Validation.FileMove.Tests",
             [CSharpSyntaxTree.ParseText(source, parseOptions, path: "/tests/After.cs")],
             references,
             options);
@@ -1779,7 +1779,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1797,7 +1797,7 @@ public sealed class SourceGenerationTests
             .SourceText
             .ToString();
 
-        await Assert.That(generated).Contains("validationFailureBehavior == global::Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : 2");
+        await Assert.That(generated).Contains("validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : 2");
     }
 
     [Test]
@@ -1841,7 +1841,7 @@ public sealed class SourceGenerationTests
             """;
 
         var before = """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1859,7 +1859,7 @@ public sealed class SourceGenerationTests
             """ + dependencyInjectionTypes;
 
         var after = """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1877,11 +1877,11 @@ public sealed class SourceGenerationTests
             """ + dependencyInjectionTypes;
 
         var beforeSource = RunGenerator(before).GeneratedSources
-            .Single(static source => source.HintName == "Valiant.Validation.DependencyInjection.g.cs")
+            .Single(static source => source.HintName == "StaticNorth.Valiant.Validation.DependencyInjection.g.cs")
             .SourceText
             .ToString();
         var afterSource = RunGenerator(after).GeneratedSources
-            .Single(static source => source.HintName == "Valiant.Validation.DependencyInjection.g.cs")
+            .Single(static source => source.HintName == "StaticNorth.Valiant.Validation.DependencyInjection.g.cs")
             .SourceText
             .ToString();
 
@@ -1893,7 +1893,7 @@ public sealed class SourceGenerationTests
     {
         var diagnostics = RunCompilation(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -1924,7 +1924,7 @@ public sealed class SourceGenerationTests
     {
         var diagnostics = RunCompilation(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class RequestValidator : IValidatorDefinition<Request>
@@ -1949,7 +1949,7 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using System;
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -2023,7 +2023,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Validation;
+            using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
@@ -2062,7 +2062,7 @@ public sealed class SourceGenerationTests
             source,
             parseOptions,
             references,
-            "Valiant.Validation.SourceGeneration.Tests");
+            "StaticNorth.Valiant.Validation.SourceGeneration.Tests");
         var execution = GeneratorTestHarness.Run(new ValiantGenerator(), compilation, parseOptions);
 
         var diagnostics = execution.OutputCompilation.GetDiagnostics()
@@ -2088,7 +2088,7 @@ public sealed class SourceGenerationTests
             after,
             stepName,
             references,
-            "Valiant.Validation.Tracked.Tests");
+            "StaticNorth.Valiant.Validation.Tracked.Tests");
     }
 
     private static ImmutableArray<Diagnostic> RunCompilation(string source)
@@ -2103,7 +2103,7 @@ public sealed class SourceGenerationTests
             .Add(MetadataReference.CreateFromFile(typeof(IValidator<>).Assembly.Location));
 
         var compilation = CSharpCompilation.Create(
-            "Valiant.Validation.SourceGeneration.Tests",
+            "StaticNorth.Valiant.Validation.SourceGeneration.Tests",
             [syntaxTree],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));

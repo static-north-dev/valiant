@@ -1,4 +1,4 @@
-namespace Valiant.Mapping;
+namespace StaticNorth.Valiant.Mapping;
 
 /// <summary>
 /// Configures runtime behavior for generated Valiant mappers.

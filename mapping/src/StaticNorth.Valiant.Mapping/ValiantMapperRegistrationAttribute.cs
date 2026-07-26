@@ -1,4 +1,4 @@
-namespace Valiant.Mapping;
+namespace StaticNorth.Valiant.Mapping;
 
 /// <summary>
 /// Describes a source-generated mapper pair available in an assembly.

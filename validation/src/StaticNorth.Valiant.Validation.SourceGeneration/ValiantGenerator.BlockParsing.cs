@@ -1,9 +1,9 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using static Valiant.SourceGeneration.ValiantNativeControlFlow;
+using static StaticNorth.Valiant.SourceGeneration.ValiantNativeControlFlow;
 
-namespace Valiant.Validation.SourceGeneration;
+namespace StaticNorth.Valiant.Validation.SourceGeneration;
 
 /// <summary>
 /// Generates Valiant validation implementations and dependency injection registration code.

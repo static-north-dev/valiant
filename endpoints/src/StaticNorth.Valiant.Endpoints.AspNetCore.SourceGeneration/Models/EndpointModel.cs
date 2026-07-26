@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.AspNetCore.SourceGeneration;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration;
 
 internal readonly struct EndpointModel(
     string type,

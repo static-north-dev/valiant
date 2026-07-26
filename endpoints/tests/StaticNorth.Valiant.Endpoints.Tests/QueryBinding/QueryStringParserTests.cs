@@ -1,6 +1,6 @@
-using Valiant.Endpoints.AspNetCore;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
 
-namespace Valiant.Endpoints.Tests.QueryBinding;
+namespace StaticNorth.Valiant.Endpoints.Tests.QueryBinding;
 
 public sealed class QueryStringParserTests
 {

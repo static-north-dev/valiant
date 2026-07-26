@@ -1,6 +1,6 @@
 using Mediator;
 
-namespace Valiant.Validation.Mediator;
+namespace StaticNorth.Valiant.Validation.Mediator;
 
 /// <summary>
 /// Mediator pipeline behavior that validates messages before invoking the next pipeline step.

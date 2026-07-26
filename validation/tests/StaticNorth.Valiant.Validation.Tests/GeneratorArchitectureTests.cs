@@ -1,4 +1,4 @@
-namespace Valiant.Validation.Tests;
+namespace StaticNorth.Valiant.Validation.Tests;
 
 public sealed class GeneratorArchitectureTests
 {
@@ -9,8 +9,8 @@ public sealed class GeneratorArchitectureTests
             ReadRepositoryFile("validation/src/StaticNorth.Valiant.Validation.SourceGeneration/ValiantGenerator.AttributeParsing.cs");
 
         await Assert.That(source.Contains("ForAttributeWithMetadataName", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(source.Contains("\"Valiant.Validation.ValiantValidatorAttribute\"", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(source.Contains("\"Valiant.Validation.ValiantValidatorAttribute`1\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(source.Contains("\"StaticNorth.Valiant.Validation.ValiantValidatorAttribute\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(source.Contains("\"StaticNorth.Valiant.Validation.ValiantValidatorAttribute`1\"", StringComparison.Ordinal)).IsTrue();
         await Assert.That(source.Contains("ClassDeclarationSyntax { AttributeLists.Count: > 0 }", StringComparison.Ordinal)).IsTrue();
         await Assert.That(source.Contains("CreateValiantTypeProvider", StringComparison.Ordinal)).IsTrue();
         await Assert.That(source.Contains("CreateSyntaxProvider", StringComparison.Ordinal)).IsFalse();

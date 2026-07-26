@@ -1,4 +1,4 @@
-namespace Valiant.Settings;
+namespace StaticNorth.Valiant.Settings;
 
 /// <summary>
 /// Marks a type as a Valiant settings model for source-generated schema metadata.

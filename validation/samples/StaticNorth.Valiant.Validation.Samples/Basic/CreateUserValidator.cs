@@ -1,4 +1,4 @@
-namespace Valiant.Validation.Samples.Basic;
+namespace StaticNorth.Valiant.Validation.Samples.Basic;
 
 [ValiantValidator]
 public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser>

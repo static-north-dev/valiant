@@ -11,8 +11,8 @@ Valiant Endpoints provides endpoint-per-class helpers for ASP.NET Core Minimal A
 ## Quick Start
 
 ```csharp
-using Valiant.Endpoints;
-using Valiant.Endpoints.AspNetCore;
+using StaticNorth.Valiant.Endpoints;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
 
 [ValiantEndpointGroup]
 internal sealed class TodosEndpointGroup : IEndpointGroup

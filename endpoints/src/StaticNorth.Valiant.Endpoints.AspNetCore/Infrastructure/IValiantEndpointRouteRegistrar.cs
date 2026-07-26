@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using Microsoft.AspNetCore.Routing;
 
-namespace Valiant.Endpoints.AspNetCore.Infrastructure;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure;
 
 /// <summary>
 /// Infrastructure contract used by source-generated endpoint registrars.

@@ -1,4 +1,4 @@
-namespace Valiant.Mapping.Samples.Basic;
+namespace StaticNorth.Valiant.Mapping.Samples.Basic;
 
 /// <summary>
 /// Demonstrates the smallest useful Valiant mapper: map matching members by

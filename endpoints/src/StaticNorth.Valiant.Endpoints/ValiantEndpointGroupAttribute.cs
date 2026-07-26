@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints;
+namespace StaticNorth.Valiant.Endpoints;
 
 /// <summary>
 /// Marks an endpoint group declaration for source-generated Valiant endpoint registration.

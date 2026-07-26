@@ -1,4 +1,4 @@
-namespace Valiant.Mapping.Samples.FlatteningAndEnums;
+namespace StaticNorth.Valiant.Mapping.Samples.FlatteningAndEnums;
 
 [ValiantMapper]
 public sealed partial class OfficeMapper : MapperDefinition<Office, OfficeDto>;

@@ -1,8 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
-using Valiant.Validation.DependencyInjection;
-using Valiant.Validation.Samples.Catalog;
+using StaticNorth.Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Validation.Samples.Catalog;
 
-namespace Valiant.Validation.Samples.FailureHandling;
+namespace StaticNorth.Valiant.Validation.Samples.FailureHandling;
 
 /// <summary>
 /// Demonstrates per-property fail-fast behavior, result helpers, and converting

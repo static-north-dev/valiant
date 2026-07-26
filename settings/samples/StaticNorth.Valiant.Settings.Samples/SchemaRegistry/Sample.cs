@@ -1,4 +1,4 @@
-namespace Valiant.Settings.Samples.SchemaRegistry;
+namespace StaticNorth.Valiant.Settings.Samples.SchemaRegistry;
 
 /// <summary>
 /// Demonstrates generated schema registry enumeration and typed lookups.

@@ -4,7 +4,7 @@ using System.Net;
 using System.Reflection;
 using System.Text.Json;
 
-namespace Valiant.Endpoints.AspNetCore;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 
 /// <summary>
 /// Parses query strings into typed objects while enforcing configured query formats.

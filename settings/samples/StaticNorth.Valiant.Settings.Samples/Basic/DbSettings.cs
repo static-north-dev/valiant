@@ -1,4 +1,4 @@
-namespace Valiant.Settings.Samples.Basic;
+namespace StaticNorth.Valiant.Settings.Samples.Basic;
 
 [ValiantSettings("Samples:Db", configure: true)]
 public class DbSettings

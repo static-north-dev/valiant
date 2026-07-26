@@ -1,8 +1,8 @@
 using System.Collections.Immutable;
 using System.Text;
-using static Valiant.SourceGeneration.ValiantFingerprint;
+using static StaticNorth.Valiant.SourceGeneration.ValiantFingerprint;
 
-namespace Valiant.Mapping.SourceGeneration;
+namespace StaticNorth.Valiant.Mapping.SourceGeneration;
 
 /// <summary>
 /// Generates Valiant mapper implementations and dependency injection registration code.

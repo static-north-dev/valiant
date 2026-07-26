@@ -1,13 +1,13 @@
 using MediatR;
 
-namespace Valiant.Validation.Tests;
+namespace StaticNorth.Valiant.Validation.Tests;
 
 public sealed class MediatorIntegrationTests
 {
     [Test]
     public async Task MediatR_Behavior_Runs_Validators_Before_Next()
     {
-        var behavior = new Valiant.Validation.MediatR.ValiantValidationBehavior<MediatRTestRequest, string>(
+        var behavior = new StaticNorth.Valiant.Validation.MediatR.ValiantValidationBehavior<MediatRTestRequest, string>(
         [
             new MediatRTestRequestValidator()
         ]);
@@ -29,7 +29,7 @@ public sealed class MediatorIntegrationTests
     [Test]
     public async Task MediatR_Behavior_Throws_When_Validation_Fails()
     {
-        var behavior = new Valiant.Validation.MediatR.ValiantValidationBehavior<MediatRTestRequest, string>(
+        var behavior = new StaticNorth.Valiant.Validation.MediatR.ValiantValidationBehavior<MediatRTestRequest, string>(
         [
             new MediatRTestRequestValidator()
         ]);
@@ -51,7 +51,7 @@ public sealed class MediatorIntegrationTests
     [Test]
     public async Task Mediator_Behavior_Runs_Validators_Before_Next()
     {
-        var behavior = new Valiant.Validation.Mediator.ValiantValidationBehavior<MediatorTestRequest, string>(
+        var behavior = new StaticNorth.Valiant.Validation.Mediator.ValiantValidationBehavior<MediatorTestRequest, string>(
         [
             new MediatorTestRequestValidator()
         ]);
@@ -73,7 +73,7 @@ public sealed class MediatorIntegrationTests
     [Test]
     public async Task Mediator_Behavior_Throws_When_Validation_Fails()
     {
-        var behavior = new Valiant.Validation.Mediator.ValiantValidationBehavior<MediatorTestRequest, string>(
+        var behavior = new StaticNorth.Valiant.Validation.Mediator.ValiantValidationBehavior<MediatorTestRequest, string>(
         [
             new MediatorTestRequestValidator()
         ]);

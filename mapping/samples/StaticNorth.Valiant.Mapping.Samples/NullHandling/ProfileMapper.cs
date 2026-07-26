@@ -1,4 +1,4 @@
-namespace Valiant.Mapping.Samples.NullHandling;
+namespace StaticNorth.Valiant.Mapping.Samples.NullHandling;
 
 [ValiantMapper]
 public sealed partial class ProfileMapper : MapperDefinition<Profile, ProfileDto>

@@ -5,7 +5,7 @@ using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
-namespace Valiant.Validation.AspNetCore.OpenApi;
+namespace StaticNorth.Valiant.Validation.AspNetCore.OpenApi;
 
 /// <summary>
 /// Applies source-generated Valiant validation metadata to native OpenAPI schemas.

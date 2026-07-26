@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 
-namespace Valiant.Endpoints.AspNetCore;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 
 /// <summary>
 /// Marks a type as a Valiant endpoint group.

@@ -4,7 +4,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 
-namespace Valiant.Endpoints.AspNetCore;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 
 /// <summary>
 /// Serializes typed objects into query strings while enforcing configured output formats.

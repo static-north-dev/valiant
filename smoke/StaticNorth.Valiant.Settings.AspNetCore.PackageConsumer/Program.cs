@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
-using Valiant.Settings;
-using Valiant.Settings.AspNetCore;
-using Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Settings;
+using StaticNorth.Valiant.Settings.AspNetCore;
+using StaticNorth.Valiant.Settings.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -19,7 +19,7 @@ if (schema.SectionPath != "PackageSmoke")
     throw new InvalidOperationException("The ASP.NET Core leaf package did not forward the settings analyzer.");
 }
 
-Console.WriteLine("Valiant.Settings.AspNetCore package consumer passed.");
+Console.WriteLine("StaticNorth.Valiant.Settings.AspNetCore package consumer passed.");
 
 [ValiantSettings("PackageSmoke", configure: true)]
 public sealed record UiSmokeSettings

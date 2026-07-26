@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.Tests.SourceGeneration;
+namespace StaticNorth.Valiant.Endpoints.Tests.SourceGeneration;
 
 public sealed class GeneratorArchitectureTests
 {

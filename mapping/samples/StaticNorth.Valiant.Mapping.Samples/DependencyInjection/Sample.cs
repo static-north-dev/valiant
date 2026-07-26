@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Valiant.Mapping.Samples.DependencyInjection;
+namespace StaticNorth.Valiant.Mapping.Samples.DependencyInjection;
 
 /// <summary>
 /// Demonstrates generated registration and the typed mapper, non-generic

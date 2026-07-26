@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace Valiant.SourceGeneration;
+namespace StaticNorth.Valiant.SourceGeneration;
 
 internal static class ValiantNativeControlFlow
 {

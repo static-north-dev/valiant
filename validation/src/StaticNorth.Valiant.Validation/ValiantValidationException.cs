@@ -1,4 +1,4 @@
-namespace Valiant.Validation;
+namespace StaticNorth.Valiant.Validation;
 
 /// <summary>
 /// Thrown when a validation result contains blocking validation errors.

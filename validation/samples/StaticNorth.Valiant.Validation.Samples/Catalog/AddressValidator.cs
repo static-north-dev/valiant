@@ -1,4 +1,4 @@
-namespace Valiant.Validation.Samples.Catalog;
+namespace StaticNorth.Valiant.Validation.Samples.Catalog;
 
 /// <summary>
 /// Validates sample addresses.

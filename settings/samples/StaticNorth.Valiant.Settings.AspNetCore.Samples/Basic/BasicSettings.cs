@@ -1,4 +1,4 @@
-namespace Valiant.Settings.AspNetCore.Samples.Basic;
+namespace StaticNorth.Valiant.Settings.AspNetCore.Samples.Basic;
 
 [ValiantSettings("Samples:AspNetCore:Basic")]
 public sealed record BasicSettings

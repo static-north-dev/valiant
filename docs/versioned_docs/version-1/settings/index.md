@@ -8,7 +8,7 @@ description: Generated settings schemas, optional Options binding and validation
 Valiant Settings turns strongly typed configuration models into deterministic schemas. Use the same generated metadata for Options binding, validation, documentation, tooling, or the built-in ASP.NET Core settings explorer—without reflection-based assembly scanning.
 
 ```csharp
-using Valiant.Settings;
+using StaticNorth.Valiant.Settings;
 
 [ValiantSettings("Payments", configure: true)]
 public sealed record PaymentSettings

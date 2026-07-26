@@ -6,11 +6,11 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Valiant.Endpoints.AspNetCore;
-using Valiant.Endpoints.AspNetCore.SourceGeneration;
-using Valiant.SourceGeneration.Testing;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+using StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration;
+using StaticNorth.Valiant.SourceGeneration.Testing;
 
-namespace Valiant.Endpoints.Tests.SourceGeneration;
+namespace StaticNorth.Valiant.Endpoints.Tests.SourceGeneration;
 
 public sealed class SourceGenerationTests
 {
@@ -19,8 +19,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class HealthEndpoint : IEndpoint
@@ -35,8 +35,8 @@ public sealed class SourceGenerationTests
         var generated = GetGeneratedSource(result);
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated).Contains("[assembly: global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointRouteRegistrarAttribute(");
-        await Assert.That(generated).Contains("internal sealed class ValiantEndpointRouteRegistrar : global::Valiant.Endpoints.AspNetCore.Infrastructure.IValiantEndpointRouteRegistrar");
+        await Assert.That(generated).Contains("[assembly: global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointRouteRegistrarAttribute(");
+        await Assert.That(generated).Contains("internal sealed class ValiantEndpointRouteRegistrar : global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.IValiantEndpointRouteRegistrar");
         await Assert.That(generated).Contains("public ValiantEndpointRouteRegistrar()");
         await Assert.That(generated).Contains("MapEndpoint<global::HealthEndpoint>(builder, endpointRegistration0);");
         await Assert.That(generated).DoesNotContain("MapEndpointGroup");
@@ -47,8 +47,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpointGroup]
             public sealed class TodosEndpointGroup : IEndpointGroup
@@ -72,11 +72,11 @@ public sealed class SourceGenerationTests
         var generated = GetGeneratedSource(result);
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated).Contains("if (global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpointGroup<global::TodosEndpointGroup>(builder, groupRegistration0))");
+        await Assert.That(generated).Contains("if (global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpointGroup<global::TodosEndpointGroup>(builder, groupRegistration0))");
         await Assert.That(generated).Contains("if (group0 is not null)");
         await Assert.That(generated).Contains("CreateEndpointRegistration<global::ListTodosEndpoint>(group0, groupRegistration0, 0, true, null, null, null)");
-        await Assert.That(generated).Contains("if (global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpoint<global::ListTodosEndpoint>(group0, endpointRegistration2))");
-        await Assert.That(generated).Contains("if (global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpoint<global::HealthEndpoint>(builder, endpointRegistration1))");
+        await Assert.That(generated).Contains("if (global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpoint<global::ListTodosEndpoint>(group0, endpointRegistration2))");
+        await Assert.That(generated).Contains("if (global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpoint<global::HealthEndpoint>(builder, endpointRegistration1))");
         await Assert.That(generated).DoesNotContain("ValiantEndpointGeneratedCode.ShouldMap<");
         await Assert.That(generated).DoesNotContain("ConfigureEndpointGroupAfterMapping");
     }
@@ -86,8 +86,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpointGroup]
             public sealed class TodosEndpointGroup : IEndpointGroup
@@ -111,8 +111,8 @@ public sealed class SourceGenerationTests
         var generated = GetGeneratedSource(result);
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated).Contains("group0 = global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpointGroup<global::TodosEndpointGroup>(builder, groupRegistration0);");
-        await Assert.That(generated).Contains("global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpoint<global::ListTodosEndpoint>(group0, endpointRegistration1);");
+        await Assert.That(generated).Contains("group0 = global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpointGroup<global::TodosEndpointGroup>(builder, groupRegistration0);");
+        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpoint<global::ListTodosEndpoint>(group0, endpointRegistration1);");
         await Assert.That(generated).DoesNotContain("ConfigureEndpointGroupAfterMapping");
         await Assert.That(generated).DoesNotContain("MapEndpoint<global::ListTodosEndpoint>(builder,");
     }
@@ -122,8 +122,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpointGroup]
             public sealed class TodosEndpointGroup : IEndpointGroup
@@ -147,8 +147,8 @@ public sealed class SourceGenerationTests
         var generated = GetGeneratedSource(result);
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated).Contains("group0 = global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpointGroup<global::TodosEndpointGroup>(builder, groupRegistration0);");
-        await Assert.That(generated).Contains("global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpoint<global::ListTodosEndpoint>(group0, endpointRegistration1);");
+        await Assert.That(generated).Contains("group0 = global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpointGroup<global::TodosEndpointGroup>(builder, groupRegistration0);");
+        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpoint<global::ListTodosEndpoint>(group0, endpointRegistration1);");
         await Assert.That(generated).DoesNotContain("ConfigureEndpointGroupAfterMapping");
         await Assert.That(generated).DoesNotContain("MapEndpoint<global::ListTodosEndpoint>(builder,");
     }
@@ -161,8 +161,8 @@ public sealed class SourceGenerationTests
             """
             using Microsoft.AspNetCore.Builder;
             using Microsoft.AspNetCore.Routing;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpointGroup]
             public sealed class TodosEndpointGroup : IEndpointGroup;
@@ -172,7 +172,7 @@ public sealed class SourceGenerationTests
                 .Add(MetadataReference.CreateFromFile(typeof(ValiantEndpointAttribute).Assembly.Location))
                 .Add(MetadataReference.CreateFromFile(typeof(IEndpointGroup).Assembly.Location))
                 .Add(MetadataReference.CreateFromFile(typeof(IEndpointRouteBuilder).Assembly.Location)),
-            "Valiant.Endpoints.RequiredGroupFactory.Tests");
+            "StaticNorth.Valiant.Endpoints.RequiredGroupFactory.Tests");
 
         var diagnostic = compilation.GetDiagnostics().Single(static diagnostic => diagnostic.Id == "CS0535");
 
@@ -184,8 +184,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpointGroup]
             public sealed class TodosEndpointGroup : IEndpointGroup
@@ -221,8 +221,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpointGroup]
             public sealed class TodosEndpointGroup : IEndpointGroup
@@ -237,7 +237,7 @@ public sealed class SourceGenerationTests
         var generated = GetGeneratedSource(result);
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated).Contains("group0 = global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpointGroup<global::TodosEndpointGroup>(builder, groupRegistration0);");
+        await Assert.That(generated).Contains("group0 = global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpointGroup<global::TodosEndpointGroup>(builder, groupRegistration0);");
         await Assert.That(generated).DoesNotContain("ConfigureEndpointGroupAfterMapping");
         await Assert.That(generated).DoesNotContain("MapEndpoint<");
     }
@@ -250,8 +250,8 @@ public sealed class SourceGenerationTests
             using System.Collections.Generic;
             using Microsoft.AspNetCore.Http;
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class SearchEndpoint : IEndpoint
@@ -292,8 +292,8 @@ public sealed class SourceGenerationTests
             """
             using Microsoft.AspNetCore.Http;
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class SearchEndpoint : IEndpoint
@@ -328,8 +328,8 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class SearchEndpoint : IEndpoint
@@ -359,8 +359,8 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             [ValiantQueryParsing(JsonValues = JsonQueryValues.Disabled)]
@@ -390,8 +390,8 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             [ValiantQueryParsing]
@@ -419,8 +419,8 @@ public sealed class SourceGenerationTests
             """
             using Microsoft.AspNetCore.Http;
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             [ValiantQueryParsing(
@@ -455,13 +455,13 @@ public sealed class SourceGenerationTests
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(registration).Contains("ApplyQueryParsingOverrides(");
         await Assert.That(registration).Contains(
-            "new global::Valiant.Endpoints.AspNetCore.QueryArrayFormat[] { " +
-            "(global::Valiant.Endpoints.AspNetCore.QueryArrayFormat)0, " +
-            "(global::Valiant.Endpoints.AspNetCore.QueryArrayFormat)1 }");
+            "new global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryArrayFormat[] { " +
+            "(global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryArrayFormat)0, " +
+            "(global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryArrayFormat)1 }");
         await Assert.That(registration).Contains(
-            "new global::Valiant.Endpoints.AspNetCore.QueryObjectFormat[] { " +
-            "(global::Valiant.Endpoints.AspNetCore.QueryObjectFormat)0, " +
-            "(global::Valiant.Endpoints.AspNetCore.QueryObjectFormat)1 }");
+            "new global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryObjectFormat[] { " +
+            "(global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryObjectFormat)0, " +
+            "(global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryObjectFormat)1 }");
         await Assert.That(registration).Contains(", false);");
     }
 
@@ -471,8 +471,8 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             [ValiantQueryParsing(
@@ -500,8 +500,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             [ValiantQueryParsing(
@@ -525,8 +525,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             [ValiantQueryParsing(
@@ -548,12 +548,12 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(registration).Contains(
-            "new global::Valiant.Endpoints.AspNetCore.QueryArrayFormat[] {  }");
+            "new global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryArrayFormat[] {  }");
         await Assert.That(registration).Contains(
-            "new global::Valiant.Endpoints.AspNetCore.QueryObjectFormat[] { " +
-            "(global::Valiant.Endpoints.AspNetCore.QueryObjectFormat)1, " +
-            "(global::Valiant.Endpoints.AspNetCore.QueryObjectFormat)999, " +
-            "(global::Valiant.Endpoints.AspNetCore.QueryObjectFormat)1 }");
+            "new global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryObjectFormat[] { " +
+            "(global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryObjectFormat)1, " +
+            "(global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryObjectFormat)999, " +
+            "(global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryObjectFormat)1 }");
     }
 
     [Test]
@@ -562,8 +562,8 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class EnabledEndpoint : IEndpoint
@@ -595,8 +595,8 @@ public sealed class SourceGenerationTests
             """
             using System.Collections.Generic;
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class EnabledEndpoint : IEndpoint
@@ -626,8 +626,8 @@ public sealed class SourceGenerationTests
             """
             using Microsoft.AspNetCore.Http;
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             [ValiantQueryParsing(JsonValues = JsonQueryValues.Disabled)]
@@ -662,8 +662,8 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed partial class SearchEndpoint : IEndpoint
@@ -691,8 +691,8 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated).Contains("public static global::System.Threading.Tasks.ValueTask<global::SearchEndpoint.SearchRequest> BindAsync(global::Microsoft.AspNetCore.Http.HttpContext context, global::System.Reflection.ParameterInfo parameter)");
-        await Assert.That(generated).Contains("global::Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ResolveQueryParsingOptions(context)");
-        await Assert.That(generated).Contains("global::Valiant.Endpoints.AspNetCore.QueryStringParser.Parse<global::SearchEndpoint.SearchRequest>");
+        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ResolveQueryParsingOptions(context)");
+        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryStringParser.Parse<global::SearchEndpoint.SearchRequest>");
     }
 
     [Test]
@@ -701,8 +701,8 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class SearchEndpoint : IEndpoint
@@ -738,9 +738,9 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
-            using Valiant.Endpoints.AspNetCore.DependencyInjection;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 
             public sealed class UnrelatedOptions
             {
@@ -788,9 +788,9 @@ public sealed class SourceGenerationTests
     {
         const string source = """
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
-            using Valiant.Endpoints.AspNetCore.DependencyInjection;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 
             public static class Configuration
             {
@@ -848,9 +848,9 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
-            using Valiant.Endpoints.AspNetCore.DependencyInjection;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 
             public static class Configuration
             {
@@ -888,9 +888,9 @@ public sealed class SourceGenerationTests
     {
         const string source = """
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
-            using Valiant.Endpoints.AspNetCore.DependencyInjection;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 
             public static class Configuration
             {
@@ -932,8 +932,8 @@ public sealed class SourceGenerationTests
         var result = RunGenerator(
             """
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpointGroup]
             public sealed class CarsEndpointGroup : IEndpointGroup
@@ -966,7 +966,7 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated).Contains("public static global::System.Threading.Tasks.ValueTask<global::ListCarsEndpoint.Request> BindAsync(global::Microsoft.AspNetCore.Http.HttpContext context, global::System.Reflection.ParameterInfo parameter)");
-        await Assert.That(generated).Contains("global::Valiant.Endpoints.AspNetCore.QueryStringParser.Parse<global::ListCarsEndpoint.Request>");
+        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryStringParser.Parse<global::ListCarsEndpoint.Request>");
     }
 
     [Test]
@@ -977,8 +977,8 @@ public sealed class SourceGenerationTests
             using System.Collections.Generic;
             using Microsoft.AspNetCore.Http;
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class SearchEndpoint : IEndpoint
@@ -1015,8 +1015,8 @@ public sealed class SourceGenerationTests
             using System.Collections.Generic;
             using Microsoft.AspNetCore.Http;
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class SearchEndpoint : IEndpoint
@@ -1053,8 +1053,8 @@ public sealed class SourceGenerationTests
             using System.Collections.Generic;
             using Microsoft.AspNetCore.Http;
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class SearchEndpoint : IEndpoint
@@ -1091,8 +1091,8 @@ public sealed class SourceGenerationTests
             using System.Collections.Generic;
             using Microsoft.AspNetCore.Http;
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class SearchEndpoint : IEndpoint
@@ -1121,8 +1121,8 @@ public sealed class SourceGenerationTests
             """
             using Microsoft.AspNetCore.Http;
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class SearchEndpoint : IEndpoint
@@ -1156,8 +1156,8 @@ public sealed class SourceGenerationTests
             """
             using Microsoft.AspNetCore.Http;
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class SearchEndpoint : IEndpoint
@@ -1196,8 +1196,8 @@ public sealed class SourceGenerationTests
             using System.Linq;
             using Microsoft.AspNetCore.Http;
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class SearchEndpoint : IEndpoint
@@ -1228,8 +1228,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class RootB : IEndpoint
@@ -1280,8 +1280,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint(Order = 20)]
             public sealed class RootA : IEndpoint
@@ -1336,7 +1336,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints;
 
             [ValiantEndpoint]
             public sealed class NotAnEndpoint;
@@ -1351,8 +1351,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class AmbiguousEndpoint : IEndpoint, IEndpointGroup
@@ -1371,8 +1371,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint(typeof(ParentGroup))]
             public sealed class ChildGroup : IEndpointGroup
@@ -1396,8 +1396,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint(typeof(NotAGroup))]
             public sealed class HealthEndpoint : IEndpoint
@@ -1417,8 +1417,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint<NotAGroup>]
             public sealed class HealthEndpoint : IEndpoint
@@ -1438,8 +1438,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint(typeof(TodosEndpointGroup))]
             [ValiantEndpoint<TodosEndpointGroup>]
@@ -1464,8 +1464,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpointGroup]
             public sealed class HealthEndpoint : IEndpoint
@@ -1483,8 +1483,8 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class TodosEndpointGroup : IEndpointGroup
@@ -1502,7 +1502,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             public sealed class HealthEndpoint : IEndpoint
             {
@@ -1519,7 +1519,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             public sealed class TodosEndpointGroup : IEndpointGroup
             {
@@ -1536,7 +1536,7 @@ public sealed class SourceGenerationTests
     {
         var result = RunGenerator(
             """
-            using EndpointContract = Valiant.Endpoints.AspNetCore.IEndpoint;
+            using EndpointContract = StaticNorth.Valiant.Endpoints.AspNetCore.IEndpoint;
 
             public sealed class HealthEndpoint : EndpointContract
             {
@@ -1554,8 +1554,8 @@ public sealed class SourceGenerationTests
             """
             using System;
             using Microsoft.AspNetCore.Mvc;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class HealthEndpoint : IEndpoint
@@ -1589,8 +1589,8 @@ public sealed class SourceGenerationTests
         const string source = """
             using Microsoft.AspNetCore.Builder;
             using Microsoft.AspNetCore.Routing;
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             [ValiantQueryParsing(SupportedArrayFormats = [ARRAY_FORMAT])]
@@ -1612,8 +1612,8 @@ public sealed class SourceGenerationTests
     public async Task Unrelated_Edit_Leaves_Tracked_Endpoint_Step_Cached_Or_Unchanged()
     {
         const string endpoint = """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class HealthEndpoint : IEndpoint
@@ -1635,8 +1635,8 @@ public sealed class SourceGenerationTests
     public async Task Unrelated_Edit_Leaves_Registration_Output_Cached_Or_Unchanged()
     {
         const string endpoint = """
-            using Valiant.Endpoints;
-            using Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
 
             [ValiantEndpoint]
             public sealed class HealthEndpoint : IEndpoint
@@ -1664,7 +1664,7 @@ public sealed class SourceGenerationTests
         }
 
         return result.GeneratedSources.Single(static source =>
-            source.HintName.StartsWith("Valiant.Endpoints.AspNetCore.", StringComparison.Ordinal) &&
+            source.HintName.StartsWith("StaticNorth.Valiant.Endpoints.AspNetCore.", StringComparison.Ordinal) &&
             source.HintName.EndsWith(".g.cs", StringComparison.Ordinal)).SourceText.ToString();
     }
 
@@ -1693,7 +1693,7 @@ public sealed class SourceGenerationTests
                   {
                       public static void Configure(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)
                       {
-                          global::Valiant.Endpoints.AspNetCore.DependencyInjection.ValiantEndpointServiceCollectionExtensions.AddValiantEndpoints(
+                          global::StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection.ValiantEndpointServiceCollectionExtensions.AddValiantEndpoints(
                               services,
                               static options =>
                               {
@@ -1716,7 +1716,7 @@ public sealed class SourceGenerationTests
             sourceWithUsings,
             parseOptions,
             references,
-            "Valiant.Endpoints.SourceGeneration.Tests");
+            "StaticNorth.Valiant.Endpoints.SourceGeneration.Tests");
         var execution = GeneratorTestHarness.Run(new ValiantEndpointGenerator(), compilation, parseOptions);
         var analyzerDiagnostics = execution.OutputCompilation
             .WithAnalyzers([new ValiantEndpointDeclarationAnalyzer()])
@@ -1756,7 +1756,7 @@ public sealed class SourceGenerationTests
             after,
             stepName,
             references,
-            "Valiant.Endpoints.Tracked.Tests");
+            "StaticNorth.Valiant.Endpoints.Tracked.Tests");
     }
 
     private static int CountOccurrences(string text, string value)

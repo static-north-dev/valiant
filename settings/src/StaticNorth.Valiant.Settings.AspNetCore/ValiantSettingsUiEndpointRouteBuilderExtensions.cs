@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
-namespace Valiant.Settings.AspNetCore;
+namespace StaticNorth.Valiant.Settings.AspNetCore;
 
 /// <summary>
 /// Maps ASP.NET Core endpoints for visualizing generated Valiant settings schemas.

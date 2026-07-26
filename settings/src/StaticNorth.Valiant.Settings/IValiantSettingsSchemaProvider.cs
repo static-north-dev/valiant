@@ -1,4 +1,4 @@
-namespace Valiant.Settings;
+namespace StaticNorth.Valiant.Settings;
 
 /// <summary>
 /// Provides generated schema metadata for a Valiant settings model.

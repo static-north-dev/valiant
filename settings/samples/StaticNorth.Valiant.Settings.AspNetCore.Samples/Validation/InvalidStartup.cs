@@ -1,7 +1,7 @@
-using Valiant.Settings.DependencyInjection;
-using Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Validation.DependencyInjection;
 
-namespace Valiant.Settings.AspNetCore.Samples.Validation;
+namespace StaticNorth.Valiant.Settings.AspNetCore.Samples.Validation;
 
 /// <summary>
 /// Demonstrates translated Options validation failures for invalid configured values.

@@ -2,12 +2,12 @@ using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Valiant.Settings.Samples.Basic;
-using Valiant.Settings.Samples.RegistrationOptions;
-using Valiant.Settings.Samples.SchemaMetadata;
-using Valiant.Settings.Samples.SchemaRegistry;
+using StaticNorth.Valiant.Settings.Samples.Basic;
+using StaticNorth.Valiant.Settings.Samples.RegistrationOptions;
+using StaticNorth.Valiant.Settings.Samples.SchemaMetadata;
+using StaticNorth.Valiant.Settings.Samples.SchemaRegistry;
 
-namespace Valiant.Settings.Tests.Samples;
+namespace StaticNorth.Valiant.Settings.Tests.Samples;
 
 public sealed class CoreSettingsSamplesTests
 {
@@ -128,7 +128,7 @@ public sealed class CoreSettingsSamplesTests
         Action<ValiantSettingsOptions>? configure = null)
     {
         var extensionType = SampleAssembly.GetType(
-            "Valiant.Settings.DependencyInjection.ValiantSettingsServiceCollectionExtensions",
+            "StaticNorth.Valiant.Settings.DependencyInjection.ValiantSettingsServiceCollectionExtensions",
             throwOnError: true)!;
         var method = extensionType.GetMethod(
             "AddValiantSettings",
@@ -165,7 +165,7 @@ public sealed class CoreSettingsSamplesTests
 
     private static Type GetRegistryType()
     {
-        return SampleAssembly.GetType("Valiant.Settings.ValiantSettingsSchemas", throwOnError: true)!;
+        return SampleAssembly.GetType("StaticNorth.Valiant.Settings.ValiantSettingsSchemas", throwOnError: true)!;
     }
 
     private static async Task AssertProperty(

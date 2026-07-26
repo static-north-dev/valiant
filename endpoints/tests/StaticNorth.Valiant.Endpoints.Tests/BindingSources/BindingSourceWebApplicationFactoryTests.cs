@@ -1,10 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using QueryBindingDisabledTestApplicationFactory = Valiant.Endpoints.Tests.QueryBinding.QueryBindingDisabledTestApplicationFactory;
-using QueryBindingTestApplicationFactory = Valiant.Endpoints.Tests.QueryBinding.QueryBindingTestApplicationFactory;
+using QueryBindingDisabledTestApplicationFactory = StaticNorth.Valiant.Endpoints.Tests.QueryBinding.QueryBindingDisabledTestApplicationFactory;
+using QueryBindingTestApplicationFactory = StaticNorth.Valiant.Endpoints.Tests.QueryBinding.QueryBindingTestApplicationFactory;
 
-namespace Valiant.Endpoints.Tests.BindingSources;
+namespace StaticNorth.Valiant.Endpoints.Tests.BindingSources;
 
 [ClassDataSource<QueryBindingTestApplicationFactory>(Shared = SharedType.PerClass)]
 public sealed class BindingSourceEnabledWebApplicationFactoryTests(

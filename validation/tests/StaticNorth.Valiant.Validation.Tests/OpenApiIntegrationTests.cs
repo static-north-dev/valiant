@@ -4,9 +4,9 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
-using Valiant.Validation.AspNetCore.OpenApi;
+using StaticNorth.Valiant.Validation.AspNetCore.OpenApi;
 
-namespace Valiant.Validation.Tests;
+namespace StaticNorth.Valiant.Validation.Tests;
 
 public sealed class OpenApiIntegrationTests
 {

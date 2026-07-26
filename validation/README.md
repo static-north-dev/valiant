@@ -15,7 +15,7 @@ Install the most specific package your application uses. Integration packages fo
 ## Quick Start
 
 ```csharp
-using Valiant.Validation;
+using StaticNorth.Valiant.Validation;
 
 [ValiantValidator]
 public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser>
@@ -68,7 +68,7 @@ In `Debuggable` mode, the user-authored `Configure` method executes at runtime, 
 Validators can also derive from `ValidatorDefinition<T>` when model attributes should define the default rules:
 
 ```csharp
-using Valiant.Validation;
+using StaticNorth.Valiant.Validation;
 
 [ValiantValidator]
 public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser>;

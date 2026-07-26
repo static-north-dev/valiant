@@ -8,13 +8,11 @@ The goal is to keep developer APIs explicit while generating direct runtime code
 
 ### Package migration
 
-Packages are now published under the `StaticNorth.Valiant.*` family. Replace
-each `Valiant.*` package reference with the corresponding
-`StaticNorth.Valiant.*` package reference. The public C# namespaces and APIs
-remain `Valiant.*`, so existing `using Valiant...` directives and source code
-do not change. This is a new package and assembly family; previously published
-`Valiant.*` packages remain available as historical versions and are not
-forwarding packages.
+Packages and public C# namespaces use the `StaticNorth.Valiant.*` family. This
+is a breaking migration from the historical `Valiant.*` package and namespace
+family: replace both package references and `using Valiant...` directives with
+their `StaticNorth.Valiant...` counterparts. Previously published `Valiant.*`
+packages remain historical versions and do not forward to the new family.
 
 - `StaticNorth.Valiant.Validation` provides the runtime API and source generator.
 - `StaticNorth.Valiant.Validation.AspNetCore` adds Minimal API, MVC, and problem-details integration.
@@ -34,7 +32,7 @@ The full module guides live in the [Docusaurus documentation site](docs/README.m
 ## Quick start
 
 ```csharp
-using Valiant.Validation;
+using StaticNorth.Valiant.Validation;
 
 [ValiantValidator]
 public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser>
@@ -151,7 +149,7 @@ Property validators skip null property values. Add `Required()` before `UseValid
 Validators can also derive from `ValidatorDefinition<T>` when model attributes should define the default rules:
 
 ```csharp
-using Valiant.Validation;
+using StaticNorth.Valiant.Validation;
 
 [ValiantValidator]
 public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser>;
@@ -212,7 +210,7 @@ Generated validators also expose static validation metadata through `IValiantVal
 Mapping follows the same authoring style as validators: add the marker attribute and implement the definition interface so the generator can infer the source and target types.
 
 ```csharp
-using Valiant.Mapping;
+using StaticNorth.Valiant.Mapping;
 
 [ValiantMapper]
 public sealed partial class UserMapper : MapperDefinition<User, UserDto>;
@@ -453,7 +451,7 @@ foreach (var item in context.Instance.Items)
 Minimal APIs can validate endpoint models with an endpoint filter:
 
 ```csharp
-using Valiant.Validation.AspNetCore;
+using StaticNorth.Valiant.Validation.AspNetCore;
 
 app.MapPost("/users", (CreateUser user) => Results.Ok())
     .WithValiantValidation<CreateUser>();
@@ -465,7 +463,7 @@ Both extensions add ASP.NET Core `ProducesValidationProblem(400)` endpoint metad
 `StaticNorth.Valiant.Validation.AspNetCore.OpenApi` adds native .NET OpenAPI schema reflection for generated validation metadata:
 
 ```csharp
-using Valiant.Validation.AspNetCore.OpenApi;
+using StaticNorth.Valiant.Validation.AspNetCore.OpenApi;
 
 builder.Services.AddOpenApi();
 builder.Services.AddValiantValidators();
@@ -505,7 +503,7 @@ ValidationProblemDetails mvcProblem = result.ToMvcValidationProblemDetails();
 `StaticNorth.Valiant.Validation.MediatR` adds a MediatR pipeline behavior that runs all registered `IValidator<TRequest>` instances before the request handler:
 
 ```csharp
-using Valiant.Validation.MediatR;
+using StaticNorth.Valiant.Validation.MediatR;
 
 services.AddMediatR(configuration =>
 {
@@ -519,7 +517,7 @@ The package intentionally pins MediatR to `12.5.0`, the final free MediatR relea
 `StaticNorth.Valiant.Validation.Mediator` adds the equivalent behavior for the source-generated Mediator package:
 
 ```csharp
-using Valiant.Validation.Mediator;
+using StaticNorth.Valiant.Validation.Mediator;
 
 services.AddMediator(options =>
 {
@@ -532,7 +530,7 @@ services.AddValiantMediatorValidation();
 For NativeAOT, configure the behavior in the `AddMediator` options delegate instead:
 
 ```csharp
-using Valiant.Validation.Mediator;
+using StaticNorth.Valiant.Validation.Mediator;
 
 services.AddMediator(options =>
 {

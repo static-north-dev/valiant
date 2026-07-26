@@ -1,43 +1,43 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
-using BasicPerson = Valiant.Mapping.Samples.Basic.Person;
-using BasicPersonDto = Valiant.Mapping.Samples.Basic.PersonDto;
-using BasicPersonMapper = Valiant.Mapping.Samples.Basic.PersonMapper;
-using CompositionAddress = Valiant.Mapping.Samples.Composition.Address;
-using CompositionAddressMapper = Valiant.Mapping.Samples.Composition.AddressMapper;
-using CompositionCustomer = Valiant.Mapping.Samples.Composition.Customer;
-using CompositionCustomerMapper = Valiant.Mapping.Samples.Composition.CustomerMapper;
-using ConditionalContact = Valiant.Mapping.Samples.ConditionalMapping.Contact;
-using ConditionalContactMapper = Valiant.Mapping.Samples.ConditionalMapping.ContactMapper;
-using DependencyPerson = Valiant.Mapping.Samples.DependencyInjection.Person;
-using DependencyPersonDto = Valiant.Mapping.Samples.DependencyInjection.PersonDto;
-using DependencyPersonMapper = Valiant.Mapping.Samples.DependencyInjection.PersonMapper;
-using ExplicitUserProfile = Valiant.Mapping.Samples.ExplicitMapping.UserProfile;
-using ExplicitUserProfileMapper = Valiant.Mapping.Samples.ExplicitMapping.UserProfileMapper;
-using FlatteningOffice = Valiant.Mapping.Samples.FlatteningAndEnums.Office;
-using FlatteningOfficeImport = Valiant.Mapping.Samples.FlatteningAndEnums.OfficeImport;
-using FlatteningOfficeImportMapper = Valiant.Mapping.Samples.FlatteningAndEnums.OfficeImportMapper;
-using FlatteningOfficeLocation = Valiant.Mapping.Samples.FlatteningAndEnums.OfficeLocation;
-using FlatteningOfficeMapper = Valiant.Mapping.Samples.FlatteningAndEnums.OfficeMapper;
-using FlatteningOfficeStatus = Valiant.Mapping.Samples.FlatteningAndEnums.OfficeStatus;
-using FlatteningOfficeStatusDto = Valiant.Mapping.Samples.FlatteningAndEnums.OfficeStatusDto;
-using NullProfile = Valiant.Mapping.Samples.NullHandling.Profile;
-using NullProfileMapper = Valiant.Mapping.Samples.NullHandling.ProfileMapper;
+using BasicPerson = StaticNorth.Valiant.Mapping.Samples.Basic.Person;
+using BasicPersonDto = StaticNorth.Valiant.Mapping.Samples.Basic.PersonDto;
+using BasicPersonMapper = StaticNorth.Valiant.Mapping.Samples.Basic.PersonMapper;
+using CompositionAddress = StaticNorth.Valiant.Mapping.Samples.Composition.Address;
+using CompositionAddressMapper = StaticNorth.Valiant.Mapping.Samples.Composition.AddressMapper;
+using CompositionCustomer = StaticNorth.Valiant.Mapping.Samples.Composition.Customer;
+using CompositionCustomerMapper = StaticNorth.Valiant.Mapping.Samples.Composition.CustomerMapper;
+using ConditionalContact = StaticNorth.Valiant.Mapping.Samples.ConditionalMapping.Contact;
+using ConditionalContactMapper = StaticNorth.Valiant.Mapping.Samples.ConditionalMapping.ContactMapper;
+using DependencyPerson = StaticNorth.Valiant.Mapping.Samples.DependencyInjection.Person;
+using DependencyPersonDto = StaticNorth.Valiant.Mapping.Samples.DependencyInjection.PersonDto;
+using DependencyPersonMapper = StaticNorth.Valiant.Mapping.Samples.DependencyInjection.PersonMapper;
+using ExplicitUserProfile = StaticNorth.Valiant.Mapping.Samples.ExplicitMapping.UserProfile;
+using ExplicitUserProfileMapper = StaticNorth.Valiant.Mapping.Samples.ExplicitMapping.UserProfileMapper;
+using FlatteningOffice = StaticNorth.Valiant.Mapping.Samples.FlatteningAndEnums.Office;
+using FlatteningOfficeImport = StaticNorth.Valiant.Mapping.Samples.FlatteningAndEnums.OfficeImport;
+using FlatteningOfficeImportMapper = StaticNorth.Valiant.Mapping.Samples.FlatteningAndEnums.OfficeImportMapper;
+using FlatteningOfficeLocation = StaticNorth.Valiant.Mapping.Samples.FlatteningAndEnums.OfficeLocation;
+using FlatteningOfficeMapper = StaticNorth.Valiant.Mapping.Samples.FlatteningAndEnums.OfficeMapper;
+using FlatteningOfficeStatus = StaticNorth.Valiant.Mapping.Samples.FlatteningAndEnums.OfficeStatus;
+using FlatteningOfficeStatusDto = StaticNorth.Valiant.Mapping.Samples.FlatteningAndEnums.OfficeStatusDto;
+using NullProfile = StaticNorth.Valiant.Mapping.Samples.NullHandling.Profile;
+using NullProfileMapper = StaticNorth.Valiant.Mapping.Samples.NullHandling.ProfileMapper;
 
-namespace Valiant.Mapping.Tests;
+namespace StaticNorth.Valiant.Mapping.Tests;
 
 public sealed class MappingSampleTests
 {
     [Test]
     public void Every_Selectable_Sample_Entry_Point_Runs()
     {
-        Valiant.Mapping.Samples.Basic.Sample.Run();
-        Valiant.Mapping.Samples.ExplicitMapping.Sample.Run();
-        Valiant.Mapping.Samples.ConditionalMapping.Sample.Run();
-        Valiant.Mapping.Samples.NullHandling.Sample.Run();
-        Valiant.Mapping.Samples.FlatteningAndEnums.Sample.Run();
-        Valiant.Mapping.Samples.Composition.Sample.Run();
-        Valiant.Mapping.Samples.DependencyInjection.Sample.Run();
+        StaticNorth.Valiant.Mapping.Samples.Basic.Sample.Run();
+        StaticNorth.Valiant.Mapping.Samples.ExplicitMapping.Sample.Run();
+        StaticNorth.Valiant.Mapping.Samples.ConditionalMapping.Sample.Run();
+        StaticNorth.Valiant.Mapping.Samples.NullHandling.Sample.Run();
+        StaticNorth.Valiant.Mapping.Samples.FlatteningAndEnums.Sample.Run();
+        StaticNorth.Valiant.Mapping.Samples.Composition.Sample.Run();
+        StaticNorth.Valiant.Mapping.Samples.DependencyInjection.Sample.Run();
     }
 
     [Test]
@@ -198,7 +198,7 @@ public sealed class MappingSampleTests
         Action<ValiantMappingOptions> configure)
     {
         var extensionType = typeof(DependencyPersonMapper).Assembly.GetType(
-            "Valiant.Mapping.ValiantMappingServiceCollectionExtensions",
+            "StaticNorth.Valiant.Mapping.ValiantMappingServiceCollectionExtensions",
             throwOnError: true)!;
         var method = extensionType.GetMethod(
             "AddValiantMappers",

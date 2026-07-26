@@ -1,7 +1,7 @@
-using Valiant.Validation.AspNetCore;
-using Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Validation.AspNetCore;
+using StaticNorth.Valiant.Validation.DependencyInjection;
 
-namespace Valiant.Validation.AspNetCore.Samples.Mvc;
+namespace StaticNorth.Valiant.Validation.AspNetCore.Samples.Mvc;
 
 /// <summary>
 /// Demonstrates automatic MVC model validation. Controllers contain no manual

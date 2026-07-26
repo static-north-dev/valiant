@@ -2,11 +2,11 @@ using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Valiant.SourceGeneration;
-using static Valiant.SourceGeneration.ValiantNativeControlFlow;
-using static Valiant.SourceGeneration.ValiantTypeDeclarations;
+using StaticNorth.Valiant.SourceGeneration;
+using static StaticNorth.Valiant.SourceGeneration.ValiantNativeControlFlow;
+using static StaticNorth.Valiant.SourceGeneration.ValiantTypeDeclarations;
 
-namespace Valiant.Mapping.SourceGeneration;
+namespace StaticNorth.Valiant.Mapping.SourceGeneration;
 
 /// <summary>
 /// Generates Valiant mapper implementations and dependency injection registration code.
@@ -34,7 +34,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         public const string MapperDefinitionInterfaceMetadataName = "IMapperDefinition`2";
         public const string MappingDefinitionInterfaceMetadataName = "IMappingDefinition`2";
         public const string MapperAttributeMetadataName = "ValiantMapperAttribute";
-        public const string Namespace = "Valiant.Mapping";
+        public const string Namespace = "StaticNorth.Valiant.Mapping";
     }
 
     private static readonly DiagnosticDescriptor MapperMustBePartial = new(
@@ -2073,7 +2073,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         {
             NullHandlingPolicy.MapNulls => null,
             NullHandlingPolicy.IgnoreSourceNulls => "(" + sourceExpression + ") is not null",
-            _ => "GetEffectiveNullHandling() != global::Valiant.Mapping.ValiantNullHandling.IgnoreSourceNulls || (" + sourceExpression + ") is not null"
+            _ => "GetEffectiveNullHandling() != global::StaticNorth.Valiant.Mapping.ValiantNullHandling.IgnoreSourceNulls || (" + sourceExpression + ") is not null"
         };
     }
 

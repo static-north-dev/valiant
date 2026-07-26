@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Valiant.Validation.AspNetCore;
+namespace StaticNorth.Valiant.Validation.AspNetCore;
 
 /// <summary>
 /// Converts Valiant validation failures to ASP.NET Core validation problem details shapes.

@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.AspNetCore.Samples.ConditionalRegistration;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore.Samples.ConditionalRegistration;
 
 [ValiantEndpoint<BlockedEndpointGroup>]
 public sealed class BlockedGroupedEndpoint : IEndpoint

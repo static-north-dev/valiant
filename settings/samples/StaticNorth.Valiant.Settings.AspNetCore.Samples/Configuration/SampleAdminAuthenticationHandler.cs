@@ -3,7 +3,7 @@ using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 
-namespace Valiant.Settings.AspNetCore.Samples.Configuration;
+namespace StaticNorth.Valiant.Settings.AspNetCore.Samples.Configuration;
 
 internal sealed class SampleAdminAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,

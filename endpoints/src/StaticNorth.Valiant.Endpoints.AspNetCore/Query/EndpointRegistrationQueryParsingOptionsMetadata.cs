@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.AspNetCore;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 
 internal sealed class EndpointRegistrationQueryParsingOptionsMetadata
 {

@@ -76,7 +76,7 @@ Integration package rule: when an integration package is the intended single ins
 Typical validator:
 
 ```csharp
-using Valiant.Validation;
+using StaticNorth.Valiant.Validation;
 
 [ValiantValidator]
 public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser>;
@@ -85,7 +85,7 @@ public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser
 Fluent rule validator:
 
 ```csharp
-using Valiant.Validation;
+using StaticNorth.Valiant.Validation;
 
 [ValiantValidator]
 public sealed partial class CreateUserFluentValidator : ValidatorDefinition<CreateUser>

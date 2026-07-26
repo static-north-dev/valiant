@@ -2,11 +2,11 @@ using System.ComponentModel;
 using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
-using Valiant.Endpoints.AspNetCore;
-using Valiant.Endpoints.AspNetCore.DependencyInjection;
-using Valiant.Endpoints.AspNetCore.Infrastructure;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
+using StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure;
 
-namespace Valiant.Endpoints.Tests.ApiSurface;
+namespace StaticNorth.Valiant.Endpoints.Tests.ApiSurface;
 
 public sealed class PublicApiSurfaceTests
 {
@@ -16,9 +16,9 @@ public sealed class PublicApiSurfaceTests
         var visibleTypes = GetVisibleExportedTypeNames(typeof(ValiantEndpointAttribute).Assembly);
 
         await Assert.That(visibleTypes).IsEquivalentTo([
-            "Valiant.Endpoints.ValiantEndpointAttribute",
-            "Valiant.Endpoints.ValiantEndpointAttribute`1",
-            "Valiant.Endpoints.ValiantEndpointGroupAttribute"
+            "StaticNorth.Valiant.Endpoints.ValiantEndpointAttribute",
+            "StaticNorth.Valiant.Endpoints.ValiantEndpointAttribute`1",
+            "StaticNorth.Valiant.Endpoints.ValiantEndpointGroupAttribute"
         ]);
     }
 
@@ -28,31 +28,52 @@ public sealed class PublicApiSurfaceTests
         var visibleTypes = GetVisibleExportedTypeNames(typeof(IEndpoint).Assembly);
 
         await Assert.That(visibleTypes).IsEquivalentTo([
-            "Valiant.Endpoints.AspNetCore.DependencyInjection.ValiantEndpointServiceCollectionExtensions",
-            "Valiant.Endpoints.AspNetCore.EndpointConfigurationOptions",
-            "Valiant.Endpoints.AspNetCore.EndpointGroupRegistration",
-            "Valiant.Endpoints.AspNetCore.EndpointQueryParameterConfigurationOptions",
-            "Valiant.Endpoints.AspNetCore.EndpointQueryParameterRegistration",
-            "Valiant.Endpoints.AspNetCore.EndpointRegistration",
-            "Valiant.Endpoints.AspNetCore.IEndpoint",
-            "Valiant.Endpoints.AspNetCore.IEndpointGroup",
-            "Valiant.Endpoints.AspNetCore.JsonQueryValues",
-            "Valiant.Endpoints.AspNetCore.QueryArrayFormat",
-            "Valiant.Endpoints.AspNetCore.QueryError",
-            "Valiant.Endpoints.AspNetCore.QueryErrorKind",
-            "Valiant.Endpoints.AspNetCore.QueryObjectFormat",
-            "Valiant.Endpoints.AspNetCore.QueryParameterOptions",
-            "Valiant.Endpoints.AspNetCore.QueryParseResult",
-            "Valiant.Endpoints.AspNetCore.QueryParseResult`1",
-            "Valiant.Endpoints.AspNetCore.QueryParsingOptions",
-            "Valiant.Endpoints.AspNetCore.QuerySerializationOptions",
-            "Valiant.Endpoints.AspNetCore.QuerySerializationResult",
-            "Valiant.Endpoints.AspNetCore.QueryStringParser",
-            "Valiant.Endpoints.AspNetCore.QueryStringSerializer",
-            "Valiant.Endpoints.AspNetCore.ValiantEndpointOptions",
-            "Valiant.Endpoints.AspNetCore.ValiantEndpointRouteBuilderExtensions",
-            "Valiant.Endpoints.AspNetCore.ValiantQueryParsingAttribute"
+            "StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection.ValiantEndpointServiceCollectionExtensions",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.EndpointConfigurationOptions",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.EndpointGroupRegistration",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.EndpointQueryParameterConfigurationOptions",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.EndpointQueryParameterRegistration",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.EndpointRegistration",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.IEndpoint",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.IEndpointGroup",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.JsonQueryValues",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.QueryArrayFormat",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.QueryError",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.QueryErrorKind",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.QueryObjectFormat",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.QueryParameterOptions",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.QueryParseResult",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.QueryParseResult`1",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.QueryParsingOptions",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.QuerySerializationOptions",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.QuerySerializationResult",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.QueryStringParser",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.QueryStringSerializer",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.ValiantEndpointOptions",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.ValiantEndpointRouteBuilderExtensions",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.ValiantQueryParsingAttribute"
         ]);
+    }
+
+    [Test]
+    public async Task Endpoint_Assemblies_Expose_Only_StaticNorth_Valiant_Namespaces()
+    {
+        Assembly[] assemblies = [
+            typeof(ValiantEndpointAttribute).Assembly,
+            typeof(IEndpoint).Assembly,
+            typeof(StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration.ValiantEndpointGenerator).Assembly
+        ];
+
+        foreach (var assembly in assemblies)
+        {
+            var unexpectedNamespaces = assembly
+                .GetExportedTypes()
+                .Select(static type => type.Namespace)
+                .Where(static @namespace => @namespace is null || !@namespace.StartsWith("StaticNorth.Valiant.", StringComparison.Ordinal))
+                .ToArray();
+
+            await Assert.That(unexpectedNamespaces).IsEmpty();
+        }
     }
 
     [Test]
@@ -166,11 +187,11 @@ public sealed class PublicApiSurfaceTests
     public async Task RuntimeOnly_Query_Types_And_Generated_Registrar_Are_Not_Exported()
     {
         var runtimeAssembly = typeof(IEndpoint).Assembly;
-        var metadataType = runtimeAssembly.GetType("Valiant.Endpoints.AspNetCore.EndpointQueryParsingOptionsMetadata");
-        var overridesMetadataType = runtimeAssembly.GetType("Valiant.Endpoints.AspNetCore.EndpointQueryParsingOverridesMetadata");
-        var resolverType = runtimeAssembly.GetType("Valiant.Endpoints.AspNetCore.QueryParsingOptionsResolver");
+        var metadataType = runtimeAssembly.GetType("StaticNorth.Valiant.Endpoints.AspNetCore.EndpointQueryParsingOptionsMetadata");
+        var overridesMetadataType = runtimeAssembly.GetType("StaticNorth.Valiant.Endpoints.AspNetCore.EndpointQueryParsingOverridesMetadata");
+        var resolverType = runtimeAssembly.GetType("StaticNorth.Valiant.Endpoints.AspNetCore.QueryParsingOptionsResolver");
         var registrarType = typeof(PublicApiSurfaceTests).Assembly
-            .GetType("Valiant.Endpoints.AspNetCore.Generated.ValiantEndpointRouteRegistrar");
+            .GetType("StaticNorth.Valiant.Endpoints.AspNetCore.Generated.ValiantEndpointRouteRegistrar");
 
         await Assert.That(metadataType).IsNotNull();
         await Assert.That(metadataType!.IsNotPublic).IsTrue();

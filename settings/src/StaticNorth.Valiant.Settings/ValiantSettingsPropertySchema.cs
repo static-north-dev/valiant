@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Valiant.Settings;
+namespace StaticNorth.Valiant.Settings;
 
 /// <summary>
 /// Describes a generated settings property schema.

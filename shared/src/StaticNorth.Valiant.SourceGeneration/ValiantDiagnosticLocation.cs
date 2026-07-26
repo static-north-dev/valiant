@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 
-namespace Valiant.SourceGeneration;
+namespace StaticNorth.Valiant.SourceGeneration;
 
 /// <summary>
 /// Stores diagnostic location data without retaining a syntax tree or compilation.

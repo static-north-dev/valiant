@@ -1,7 +1,7 @@
 using System.Collections;
 using Microsoft.Extensions.Options;
 
-namespace Valiant.Settings.AspNetCore;
+namespace StaticNorth.Valiant.Settings.AspNetCore;
 
 /// <summary>
 /// Creates UI-friendly schema documents from generated Valiant settings metadata.

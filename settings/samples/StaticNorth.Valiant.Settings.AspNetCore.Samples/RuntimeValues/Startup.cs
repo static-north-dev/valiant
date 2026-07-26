@@ -1,6 +1,6 @@
-using Valiant.Settings.DependencyInjection;
+using StaticNorth.Valiant.Settings.DependencyInjection;
 
-namespace Valiant.Settings.AspNetCore.Samples.RuntimeValues;
+namespace StaticNorth.Valiant.Settings.AspNetCore.Samples.RuntimeValues;
 
 /// <summary>
 /// Demonstrates runtime values with explicit and name-matched secrets masked.

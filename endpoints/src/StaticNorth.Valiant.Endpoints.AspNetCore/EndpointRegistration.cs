@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.AspNetCore;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 
 /// <summary>
 /// Describes a source-generated endpoint before it is mapped.

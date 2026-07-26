@@ -1,6 +1,6 @@
 using MediatR;
 
-namespace Valiant.Validation.MediatR;
+namespace StaticNorth.Valiant.Validation.MediatR;
 
 /// <summary>
 /// MediatR pipeline behavior that validates requests before invoking the next pipeline step.

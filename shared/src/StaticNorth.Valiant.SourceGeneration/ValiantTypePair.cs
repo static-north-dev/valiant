@@ -1,4 +1,4 @@
-namespace Valiant.SourceGeneration;
+namespace StaticNorth.Valiant.SourceGeneration;
 
 /// <summary>
 /// Identifies a source and target type pair using stable generated type names.

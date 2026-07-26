@@ -1,3 +1,3 @@
-namespace Valiant.Validation.Samples.Basic;
+namespace StaticNorth.Valiant.Validation.Samples.Basic;
 
 public sealed record CreateUser(string? Name);

@@ -1,8 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
-using Valiant.Validation.DependencyInjection;
-using Valiant.Validation.Samples.Catalog;
+using StaticNorth.Valiant.Validation.DependencyInjection;
+using StaticNorth.Valiant.Validation.Samples.Catalog;
 
-namespace Valiant.Validation.Samples.ControlFlowAndCollections;
+namespace StaticNorth.Valiant.Validation.Samples.ControlFlowAndCollections;
 
 /// <summary>
 /// Demonstrates collection and dictionary rules, conditional and switch-based

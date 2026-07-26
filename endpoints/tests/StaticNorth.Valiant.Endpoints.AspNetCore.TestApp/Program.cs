@@ -1,6 +1,6 @@
-using Valiant.Endpoints.AspNetCore;
-using Valiant.Endpoints.AspNetCore.DependencyInjection;
-using Valiant.Endpoints.AspNetCore.TestApp;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
+using StaticNorth.Valiant.Endpoints.AspNetCore.TestApp;
 
 var builder = WebApplication.CreateBuilder(args);
 

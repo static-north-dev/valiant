@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.AspNetCore;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 
 /// <summary>
 /// Defines the query string formats that can represent array values.

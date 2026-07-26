@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using Microsoft.CodeAnalysis;
 
-namespace Valiant.Validation.SourceGeneration;
+namespace StaticNorth.Valiant.Validation.SourceGeneration;
 
 /// <summary>
 /// Generates Valiant validation implementations and dependency injection registration code.
@@ -10,8 +10,8 @@ namespace Valiant.Validation.SourceGeneration;
 public sealed partial class ValiantGenerator
 {
     private const string AttributeSuffix = "Attribute";
-    private const string ValiantValidationNamespace = "Valiant.Validation";
-    private const string ValiantSeverityMetadataName = "Valiant.Validation.ValiantSeverity";
+    private const string ValiantValidationNamespace = "StaticNorth.Valiant.Validation";
+    private const string ValiantSeverityMetadataName = "StaticNorth.Valiant.Validation.ValiantSeverity";
     private const string RuleInstanceExpression = "instance";
     private const string AttributeCodePropertyName = "Code";
     private const string AttributeMessagePropertyName = "Message";
@@ -21,7 +21,7 @@ public sealed partial class ValiantGenerator
     private const string SystemCollectionsICollectionMetadataName = "System.Collections.ICollection";
     private const string SystemCollectionsIEnumerableMetadataName = "System.Collections.IEnumerable";
     private const string SystemCollectionsIDictionaryMetadataName = "System.Collections.IDictionary";
-    private const string ValiantPropertyValidatorDefinitionMetadataName = "Valiant.Validation.PropertyValidatorDefinition`1";
+    private const string ValiantPropertyValidatorDefinitionMetadataName = "StaticNorth.Valiant.Validation.PropertyValidatorDefinition`1";
     private const string ExpectedReferenceOrNullableValueType = "a reference type or nullable value type";
     private const string ExpectedEnumOrNullableEnum = "an enum or nullable enum";
     private const string ExpectedString = "string";
@@ -247,7 +247,7 @@ public sealed partial class ValiantGenerator
         }
 
         var propertyType = memberType.ToDisplayString(MetadataTypeDisplayFormat);
-        var validatorExpression = "((global::Valiant.Validation.IPropertyValidator<" +
+        var validatorExpression = "((global::StaticNorth.Valiant.Validation.IPropertyValidator<" +
             propertyType +
             ">)(new " +
             validatorType.ToDisplayString(TypeDisplayFormat) +
@@ -532,13 +532,13 @@ public sealed partial class ValiantGenerator
             switch (value)
             {
                 case 0:
-                    expression = "global::Valiant.Validation.ValiantSeverity.Error";
+                    expression = "global::StaticNorth.Valiant.Validation.ValiantSeverity.Error";
                     return true;
                 case 1:
-                    expression = "global::Valiant.Validation.ValiantSeverity.Warning";
+                    expression = "global::StaticNorth.Valiant.Validation.ValiantSeverity.Warning";
                     return true;
                 case 2:
-                    expression = "global::Valiant.Validation.ValiantSeverity.Info";
+                    expression = "global::StaticNorth.Valiant.Validation.ValiantSeverity.Info";
                     return true;
             }
         }

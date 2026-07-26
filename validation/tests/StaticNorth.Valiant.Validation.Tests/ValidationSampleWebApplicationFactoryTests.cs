@@ -3,9 +3,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Valiant.Validation.AspNetCore.Samples.Orders;
+using StaticNorth.Valiant.Validation.AspNetCore.Samples.Orders;
 
-namespace Valiant.Validation.Tests;
+namespace StaticNorth.Valiant.Validation.Tests;
 
 public sealed class ValidationSampleWebApplicationFactoryTests
 {
@@ -15,7 +15,7 @@ public sealed class ValidationSampleWebApplicationFactoryTests
     public async Task MinimalApi_Sample_Rejects_Invalid_Requests_Before_Handler(string path)
     {
         await using var factory = new SampleApplicationFactory<
-            global::Valiant.Validation.AspNetCore.Samples.MinimalApi.Startup>();
+            global::StaticNorth.Valiant.Validation.AspNetCore.Samples.MinimalApi.Startup>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync(path, InvalidOrder());
@@ -37,7 +37,7 @@ public sealed class ValidationSampleWebApplicationFactoryTests
         HttpStatusCode expectedStatus)
     {
         await using var factory = new SampleApplicationFactory<
-            global::Valiant.Validation.AspNetCore.Samples.MinimalApi.Startup>();
+            global::StaticNorth.Valiant.Validation.AspNetCore.Samples.MinimalApi.Startup>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync(path, ValidOrder());
@@ -52,7 +52,7 @@ public sealed class ValidationSampleWebApplicationFactoryTests
     public async Task MinimalApi_Sample_Validates_Nested_Lines_And_Conditional_Vip_Rules(string path)
     {
         await using var factory = new SampleApplicationFactory<
-            global::Valiant.Validation.AspNetCore.Samples.MinimalApi.Startup>();
+            global::StaticNorth.Valiant.Validation.AspNetCore.Samples.MinimalApi.Startup>();
         using var client = factory.CreateClient();
         var order = ValidOrder() with
         {
@@ -83,7 +83,7 @@ public sealed class ValidationSampleWebApplicationFactoryTests
     public async Task Mvc_Sample_Automatically_Rejects_Invalid_Model_And_Allows_Valid_Model()
     {
         await using var factory = new SampleApplicationFactory<
-            global::Valiant.Validation.AspNetCore.Samples.Mvc.Startup>();
+            global::StaticNorth.Valiant.Validation.AspNetCore.Samples.Mvc.Startup>();
         using var client = factory.CreateClient();
 
         var invalidResponse = await client.PostAsJsonAsync("/mvc/orders", InvalidOrder());
@@ -101,7 +101,7 @@ public sealed class ValidationSampleWebApplicationFactoryTests
     public async Task ProblemDetails_Sample_Groups_Validation_Messages_By_Property(string path)
     {
         await using var factory = new SampleApplicationFactory<
-            global::Valiant.Validation.AspNetCore.Samples.ProblemDetails.Startup>();
+            global::StaticNorth.Valiant.Validation.AspNetCore.Samples.ProblemDetails.Startup>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync(path, InvalidOrder());
@@ -121,7 +121,7 @@ public sealed class ValidationSampleWebApplicationFactoryTests
     public async Task ProblemDetails_Sample_Returns_Success_For_A_Valid_Model(string path)
     {
         await using var factory = new SampleApplicationFactory<
-            global::Valiant.Validation.AspNetCore.Samples.ProblemDetails.Startup>();
+            global::StaticNorth.Valiant.Validation.AspNetCore.Samples.ProblemDetails.Startup>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync(path, ValidOrder());
@@ -133,7 +133,7 @@ public sealed class ValidationSampleWebApplicationFactoryTests
     public async Task OpenApi_Sample_Projects_Validation_Metadata_Into_Real_Document()
     {
         await using var factory = new SampleApplicationFactory<
-            global::Valiant.Validation.AspNetCore.Samples.OpenApi.Startup>();
+            global::StaticNorth.Valiant.Validation.AspNetCore.Samples.OpenApi.Startup>();
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/openapi/v1.json");

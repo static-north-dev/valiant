@@ -1,4 +1,4 @@
-namespace Valiant.Endpoints.AspNetCore;
+namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 
 /// <summary>
 /// Stores source-generated partial query parsing overrides for an endpoint.

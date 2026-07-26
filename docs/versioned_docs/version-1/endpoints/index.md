@@ -8,8 +8,8 @@ description: Endpoint-per-class Minimal APIs with generated registration, groups
 Valiant Endpoints gives every ASP.NET Core Minimal API endpoint a small class and generates deterministic route registration. Group vertical slices, apply conventions once, exclude features at startup, and bind query shapes that ASP.NET Core does not handle by default.
 
 ```csharp
-using Valiant.Endpoints;
-using Valiant.Endpoints.AspNetCore;
+using StaticNorth.Valiant.Endpoints;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
 
 [ValiantEndpoint<TodosEndpointGroup>]
 internal sealed class ListTodosEndpoint : IEndpoint

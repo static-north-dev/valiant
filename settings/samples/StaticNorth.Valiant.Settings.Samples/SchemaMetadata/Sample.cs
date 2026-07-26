@@ -1,4 +1,4 @@
-namespace Valiant.Settings.Samples.SchemaMetadata;
+namespace StaticNorth.Valiant.Settings.Samples.SchemaMetadata;
 
 /// <summary>
 /// Demonstrates generated property kinds, nesting, collections, nullability, and secret metadata.

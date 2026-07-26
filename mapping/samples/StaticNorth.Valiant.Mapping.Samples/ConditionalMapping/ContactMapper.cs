@@ -1,4 +1,4 @@
-namespace Valiant.Mapping.Samples.ConditionalMapping;
+namespace StaticNorth.Valiant.Mapping.Samples.ConditionalMapping;
 
 [ValiantMapper]
 public sealed partial class ContactMapper : MapperDefinition<Contact, ContactDto>

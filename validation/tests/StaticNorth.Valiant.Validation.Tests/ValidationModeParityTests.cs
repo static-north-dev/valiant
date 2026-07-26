@@ -1,12 +1,12 @@
 using System.Globalization;
 using System.Reflection;
-using SampleAddressPropertyValidator = Valiant.Validation.Samples.Catalog.AddressPropertyValidator;
-using SampleAddressValidator = Valiant.Validation.Samples.Catalog.AddressValidator;
-using SampleCatalogItemFactory = Valiant.Validation.Samples.Catalog.CatalogItemFactory;
-using SampleCatalogItemRulesValidator = Valiant.Validation.Samples.Catalog.CatalogItemRulesValidator;
-using SampleCatalogItemValidator = Valiant.Validation.Samples.Catalog.CatalogItemValidator;
+using SampleAddressPropertyValidator = StaticNorth.Valiant.Validation.Samples.Catalog.AddressPropertyValidator;
+using SampleAddressValidator = StaticNorth.Valiant.Validation.Samples.Catalog.AddressValidator;
+using SampleCatalogItemFactory = StaticNorth.Valiant.Validation.Samples.Catalog.CatalogItemFactory;
+using SampleCatalogItemRulesValidator = StaticNorth.Valiant.Validation.Samples.Catalog.CatalogItemRulesValidator;
+using SampleCatalogItemValidator = StaticNorth.Valiant.Validation.Samples.Catalog.CatalogItemValidator;
 
-namespace Valiant.Validation.Tests;
+namespace StaticNorth.Valiant.Validation.Tests;
 
 /// <summary>
 /// Verifies that the generated direct backend and the runtime Configure backend
