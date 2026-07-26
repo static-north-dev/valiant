@@ -156,10 +156,19 @@ html:is(
 }
 
 .navbar {
-  backdrop-filter: blur(14px);
   background: color-mix(in srgb, var(--ifm-navbar-background-color) 90%, transparent);
   border-bottom: 1px solid var(--ifm-color-emphasis-200);
   box-shadow: none;
+}
+
+/*
+ * A backdrop filter creates a containing block for fixed descendants. Keep it
+ * off the mobile navbar so Docusaurus's fixed drawer can fill the viewport.
+ */
+@media (min-width: 997px) {
+  .navbar {
+    backdrop-filter: blur(14px);
+  }
 }
 
 .navbar__title {
