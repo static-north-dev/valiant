@@ -2,7 +2,7 @@
 
 > StaticNorth.Valiant is a family of source-generated .NET libraries for validation, endpoint-per-class Minimal APIs, object mapping, and strongly typed settings.
 
-Use the current documentation for the `StaticNorth.Valiant.*` package and C# namespace family. This is a breaking migration from the historical `Valiant.*` packages and namespaces: update both package references and `using Valiant...` directives. Generated code is designed for explicit startup registration, trimming, and Native AOT rather than runtime assembly scanning.
+Use the current documentation for the `StaticNorth.Valiant.*` package and C# namespace family. Generated code is designed for explicit startup registration, trimming, and Native AOT rather than runtime assembly scanning.
 
 ## Documentation
 

@@ -6,14 +6,6 @@ The goal is to keep developer APIs explicit while generating direct runtime code
 
 ## Packages
 
-### Package migration
-
-Packages and public C# namespaces use the `StaticNorth.Valiant.*` family. This
-is a breaking migration from the historical `Valiant.*` package and namespace
-family: replace both package references and `using Valiant...` directives with
-their `StaticNorth.Valiant...` counterparts. Previously published `Valiant.*`
-packages remain historical versions and do not forward to the new family.
-
 - `StaticNorth.Valiant.Validation` provides the runtime API and source generator.
 - `StaticNorth.Valiant.Validation.AspNetCore` adds Minimal API, MVC, and problem-details integration.
 - `StaticNorth.Valiant.Validation.AspNetCore.OpenApi` adds native ASP.NET Core OpenAPI schema integration.
