@@ -26,7 +26,7 @@ jobs:
       - name: Checkout canonical documentation source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: develop
+          ref: main
           path: docs-source
           persist-credentials: false
 
@@ -256,10 +256,10 @@ jobs:
           DOCS_SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
           SNAPSHOT_ROOT: ${{ runner.temp }}/docs-snapshot
         run: |
-          git fetch origin develop
-          remote_head="$(git rev-parse origin/develop)"
+          git fetch origin main
+          remote_head="$(git rev-parse origin/main)"
           if [ "$remote_head" != "$DOCS_SOURCE_SHA" ]; then
-            echo "develop moved from $DOCS_SOURCE_SHA to $remote_head during publication." >&2
+            echo "main moved from $DOCS_SOURCE_SHA to $remote_head during publication." >&2
             echo "Run the Publish Docs workflow again to publish the new head safely." >&2
             exit 1
           fi
@@ -287,18 +287,18 @@ jobs:
           else
             short_source="${DOCS_SOURCE_SHA:0:12}"
             git commit -m "docs: publish v$DOCS_MAJOR from $short_source"
-            if ! push_output="$(git push origin HEAD:develop 2>&1)"; then
+            if ! push_output="$(git push origin HEAD:main 2>&1)"; then
               echo "$push_output" >&2
-              echo "Could not persist the documentation snapshot; verify branch rules or rerun if develop moved." >&2
+              echo "Could not persist the documentation snapshot; verify branch rules or rerun if main moved." >&2
               exit 1
             fi
             echo "$push_output"
             docs_commit="$(git rev-parse HEAD)"
           fi
 
-          git fetch origin develop
-          if [ "$(git rev-parse origin/develop)" != "$docs_commit" ]; then
-            echo "origin/develop does not match the persisted documentation commit." >&2
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" != "$docs_commit" ]; then
+            echo "origin/main does not match the persisted documentation commit." >&2
             exit 1
           fi
 

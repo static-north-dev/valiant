@@ -267,11 +267,11 @@ the documentation `.esproj`, so releases cannot invoke npm or deploy the site.
 Stable documentation uses committed Docusaurus snapshots with one numeric entry
 per SemVer major. Major `N` represents the latest released `N.x` docs. A
 manual **Publish Docs** workflow reads the active major from
-`docs/current-major.json`, pins the current `develop` SHA, generates one
+`docs/current-major.json`, pins the current `main` SHA, generates one
 snapshot containing the Validation, Endpoints, Mapping, and Settings sections,
-imports only that major into the complete history on `develop`, commits the
+imports only that major into the complete history on `main`, commits the
 generated files, idempotently ensures the `valiant-docs` Cloudflare Pages
-project exists, and deploys the exact persisted commit. If `develop` moves
+project exists, and deploys the exact persisted commit. If `main` moves
 before persistence, publication fails and must be rerun instead of layering a
 stale snapshot onto the new head. The Cloudflare API token must target the
 account—not a domain or zone—and grant Account > Cloudflare Pages > Edit. All
@@ -293,11 +293,11 @@ a plain link, so the site owns a narrow 3.10.2 theme override at
 against upstream whenever the pinned Docusaurus version changes.
 
 Package sources are built from the immutable release tag. The production docs
-artifact is built separately from the exact bot commit on `develop`, which
+artifact is built separately from the exact bot commit on `main`, which
 holds the complete major-version history. Change `docs/current-major.json` in a
 reviewed commit before publishing a new major.
 Repository rules must allow `github-actions[bot]` to push the allowlisted
-generated docs files to `develop`; signed-commit, required-PR, or status-check
+generated docs files to `main`; signed-commit, required-PR, or status-check
 rules need a narrow bypass or a narrowly scoped GitHub App credential. Renaming
 the release workflow requires a matching update to the NuGet.org
 trusted-publishing policy.
