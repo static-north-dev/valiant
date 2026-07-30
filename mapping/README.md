@@ -99,10 +99,37 @@ Runnable, selectable examples live in
 `mapping/samples/StaticNorth.Valiant.Mapping.Samples`. Each feature folder contains its
 models, mapper, and a documented `Sample` entry point.
 
+## Performance
+
+`StaticNorth.Valiant.Mapping` benchmarks generated `Fast` mappings against the
+pinned Mapperly 4.3.1 control. The suite covers flat objects, nested lists,
+arrays, runtime-array-backed `IEnumerable<T>` values, and `HashSet<T>` targets.
+
+This local reference snapshot was captured on 2026-07-30 with BenchmarkDotNet
+0.15.8 and .NET 10.0.10 Arm64. Lower ratios are faster.
+
+| Covered operation | Valiant | Mapperly | Valiant / Mapperly |
+| --- | ---: | ---: | ---: |
+| Flat object | 7.350 ns | 7.480 ns | 0.98 |
+| List with 100 elements | 698.61 ns | 700.81 ns | 1.00 |
+| Array with 100 elements | 632.386 ns | 636.567 ns | 0.99 |
+| Array-backed `IEnumerable<T>` with 100 elements | 638.460 ns | 779.022 ns | 0.82 |
+| `HashSet<T>` with 100 elements | 2.583 μs | 3.779 μs | 0.68 |
+
+The covered flat, list, and array workloads are at or near parity with the
+pinned control; the covered runtime-sized enumerable and `HashSet<T>` workloads
+are faster. Results are workload- and machine-dependent, not a performance
+guarantee. Refresh or remove this snapshot when the benchmark workload, pinned
+control, target runtime, or performance-sensitive implementation changes.
+
 ## Benchmarks
 
 The standalone
 [`StaticNorth.Valiant.Mapping.Benchmarks`](benchmarks/StaticNorth.Valiant.Mapping.Benchmarks)
 project measures generated `Fast` flat and nested collection mapping, with
-Mapperly as a pinned relative control. Its README documents correctness checks
-and the repeatable before/after workflow.
+Mapperly as a pinned relative control. Its README documents correctness checks,
+the complete benchmark matrix, and the repeatable before/after workflow:
+
+```bash
+dotnet run --project mapping/benchmarks/StaticNorth.Valiant.Mapping.Benchmarks --configuration Release -- --filter '*'
+```

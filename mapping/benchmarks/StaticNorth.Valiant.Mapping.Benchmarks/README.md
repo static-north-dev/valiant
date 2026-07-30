@@ -31,6 +31,11 @@ dotnet run --project mapping/benchmarks/StaticNorth.Valiant.Mapping.Benchmarks -
 
 The dry job is a smoke check, not performance evidence.
 
+BenchmarkDotNet reports are generated local artifacts, not a committed source
+of truth. Their results depend on the workload, machine, runtime, and pinned
+control version; retain or publish a snapshot only while those conditions are
+documented and current.
+
 ## Regression workflow
 
 Run the same command on the before and after commits on the same idle machine,
