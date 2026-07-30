@@ -1,8 +1,10 @@
+using System.ComponentModel;
 using System.Reflection;
 using StaticNorth.Valiant.Validation;
 using StaticNorth.Valiant.Validation.AspNetCore;
 using StaticNorth.Valiant.Validation.AspNetCore.OpenApi;
 using StaticNorth.Valiant.Validation.SourceGeneration;
+using StaticNorth.Valiant.Validation.Infrastructure;
 
 namespace StaticNorth.Valiant.Validation.Tests;
 
@@ -29,6 +31,25 @@ public sealed class NamespaceContractTests
                 .ToArray();
 
             await Assert.That(unexpectedNamespaces).IsEmpty();
+        }
+    }
+
+    [Test]
+    public async Task Generated_Validator_Invocation_Bridge_Is_Hidden_From_IntelliSense()
+    {
+        Type[] infrastructureTypes =
+        [
+            typeof(IValiantValidatorInvoker),
+            typeof(ValiantValidatorInvoker<>),
+            typeof(ValidationResultBuilder)
+        ];
+
+        foreach (var type in infrastructureTypes)
+        {
+            var attribute = type.GetCustomAttribute<EditorBrowsableAttribute>();
+
+            await Assert.That(attribute).IsNotNull();
+            await Assert.That(attribute!.State).IsEqualTo(EditorBrowsableState.Never);
         }
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -1092,6 +1093,8 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             .Select(static argument => argument.ParameterName)
             .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
         var assignments = ImmutableArray.CreateBuilder<MemberAssignmentModel>();
+        var collectionMappings = ImmutableArray.CreateBuilder<CollectionMappingModel>();
+        collectionMappings.AddRange(constructor.CollectionMappings);
 
         foreach (var targetMember in targetMembers)
         {
@@ -1128,7 +1131,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                         targetMember.Type,
                         configure.MapperReuses,
                         compilation,
-                        out var explicitSourceExpression))
+                        out var explicitMappedExpression))
                     {
                         diagnostics.Add(new DiagnosticInfo(
                             IncompatibleTargetMemberType,
@@ -1145,6 +1148,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                         userMappingCondition,
                         CreateNullHandlingGuardCondition(explicitMapping.SourceExpression, explicitMapping.SourceType, explicitMapping.NullHandling));
                     var fallbackExpression = explicitMapping.FallbackExpression;
+                    var explicitSourceExpression = explicitMappedExpression.Expression;
                     var finalSourceExpression = explicitSourceExpression;
                     var finalConditionExpression = CombineConditions(assignmentCondition, ignoreGuardCondition);
                     var coverageCondition = CombineConditions(userMappingCondition, ignoreGuardCondition);
@@ -1161,6 +1165,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                         targetMember.Name,
                         finalSourceExpression,
                         finalConditionExpression));
+                    collectionMappings.AddRange(explicitMappedExpression.CollectionMappings);
                     successfulMappingConditions.Add(coverageCondition);
                 }
 
@@ -1189,9 +1194,10 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                         targetMemberCache,
                         configure.MapperReuses,
                         compilation,
-                        out var unflattenedExpression))
+                        out var unflattenedMappedExpression))
                 {
-                    assignments.Add(new MemberAssignmentModel(targetMember.Name, unflattenedExpression, null));
+                    assignments.Add(new MemberAssignmentModel(targetMember.Name, unflattenedMappedExpression.Expression, null));
+                    collectionMappings.AddRange(unflattenedMappedExpression.CollectionMappings);
                     continue;
                 }
 
@@ -1205,7 +1211,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                 targetMember.Type,
                 configure.MapperReuses,
                 compilation,
-                out var sourceExpression))
+                out var mappedSourceExpression))
             {
                 diagnostics.Add(new DiagnosticInfo(
                     IncompatibleTargetMemberType,
@@ -1216,6 +1222,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                 continue;
             }
 
+            var sourceExpression = mappedSourceExpression.Expression;
             var guardCondition = CombineConditions(
                 CreateNullHandlingGuardCondition(sourceMember.Expression, sourceMember.Type, NullHandlingPolicy.Default),
                 CreateIgnoreGuardCondition(configure.IgnoredMappings, targetMember.Name));
@@ -1230,17 +1237,21 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             {
                 assignments.Add(new MemberAssignmentModel(targetMember.Name, sourceExpression, guardCondition));
             }
+
+            collectionMappings.AddRange(mappedSourceExpression.CollectionMappings);
         }
 
+        var finalCollectionMappings = DeduplicateCollectionMappings(collectionMappings.ToImmutable());
         return new MappingModel(
             mappingPair.SourceType.ToDisplayString(TypeDisplayFormat),
             mappingPair.TargetType.ToDisplayString(TypeDisplayFormat),
             mappingPair.SourceType.IsValueType,
             inheritsMapperBase,
             hasConfigureMethod,
-            UsesServiceProviderMapper(constructor, assignments),
+            UsesServiceProviderMapper(constructor, assignments, finalCollectionMappings),
             constructor,
-            assignments.ToImmutable());
+            assignments.ToImmutable(),
+            finalCollectionMappings);
     }
 
     private static ConstructorMappingModel? CreateConstructorMapping(
@@ -1279,7 +1290,9 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
 
         if (targetNamedType.IsValueType)
         {
-            return new ConstructorMappingModel(ImmutableArray<ConstructorArgumentModel>.Empty);
+            return new ConstructorMappingModel(
+                ImmutableArray<ConstructorArgumentModel>.Empty,
+                ImmutableArray<CollectionMappingModel>.Empty);
         }
 
         var constructors = targetNamedType.InstanceConstructors
@@ -1314,6 +1327,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         out ConstructorMappingModel constructorMapping)
     {
         var arguments = ImmutableArray.CreateBuilder<ConstructorArgumentModel>();
+        var collectionMappings = ImmutableArray.CreateBuilder<CollectionMappingModel>();
 
         foreach (var parameter in constructor.Parameters)
         {
@@ -1325,7 +1339,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                         UnsupportedMappingDeclaration,
                         ignoredMapping.Location,
                         "Conditional Ignore declarations cannot target constructor parameters."));
-                    constructorMapping = new ConstructorMappingModel(ImmutableArray<ConstructorArgumentModel>.Empty);
+                    constructorMapping = EmptyConstructorMapping();
                     return false;
                 }
 
@@ -1348,7 +1362,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                         compilation,
                         out var mappedExpression))
                     {
-                        constructorMapping = new ConstructorMappingModel(ImmutableArray<ConstructorArgumentModel>.Empty);
+                        constructorMapping = EmptyConstructorMapping();
                         return false;
                     }
 
@@ -1358,8 +1372,9 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     var fallbackExpression = explicitMapping.FallbackExpression ?? explicitSourceExpression;
 
                     explicitSourceExpression = mappingCondition is null
-                        ? mappedExpression
-                        : "(" + mappingCondition + ") ? " + mappedExpression + " : " + fallbackExpression;
+                        ? mappedExpression.Expression
+                        : "(" + mappingCondition + ") ? " + mappedExpression.Expression + " : " + fallbackExpression;
+                    collectionMappings.AddRange(mappedExpression.CollectionMappings);
                 }
 
                 arguments.Add(new ConstructorArgumentModel(parameter.Name, explicitSourceExpression));
@@ -1368,7 +1383,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
 
             if (configure.DisablesConventionMapping)
             {
-                constructorMapping = new ConstructorMappingModel(ImmutableArray<ConstructorArgumentModel>.Empty);
+                constructorMapping = EmptyConstructorMapping();
                 return false;
             }
 
@@ -1381,18 +1396,20 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     parameter.Type,
                     configure.MapperReuses,
                     compilation,
-                    out var sourceExpression))
+                    out var mappedSourceExpression))
                 {
-                    constructorMapping = new ConstructorMappingModel(ImmutableArray<ConstructorArgumentModel>.Empty);
+                    constructorMapping = EmptyConstructorMapping();
                     return false;
                 }
 
+                var sourceExpression = mappedSourceExpression.Expression;
                 var nullGuardCondition = CreateNullHandlingGuardCondition(sourceMember.Expression, sourceMember.Type, NullHandlingPolicy.Default);
                 arguments.Add(new ConstructorArgumentModel(
                     parameter.Name,
                     nullGuardCondition is null
                         ? sourceExpression
                         : "(" + nullGuardCondition + ") ? " + sourceExpression + " : default"));
+                collectionMappings.AddRange(mappedSourceExpression.CollectionMappings);
                 continue;
             }
 
@@ -1403,18 +1420,28 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     targetMemberCache,
                     configure.MapperReuses,
                     compilation,
-                    out var unflattenedExpression))
+                    out var unflattenedMappedExpression))
             {
-                arguments.Add(new ConstructorArgumentModel(parameter.Name, unflattenedExpression));
+                arguments.Add(new ConstructorArgumentModel(parameter.Name, unflattenedMappedExpression.Expression));
+                collectionMappings.AddRange(unflattenedMappedExpression.CollectionMappings);
                 continue;
             }
 
-            constructorMapping = new ConstructorMappingModel(ImmutableArray<ConstructorArgumentModel>.Empty);
+            constructorMapping = EmptyConstructorMapping();
             return false;
         }
 
-        constructorMapping = new ConstructorMappingModel(arguments.ToImmutable());
+        constructorMapping = new ConstructorMappingModel(
+            arguments.ToImmutable(),
+            DeduplicateCollectionMappings(collectionMappings.ToImmutable()));
         return true;
+    }
+
+    private static ConstructorMappingModel EmptyConstructorMapping()
+    {
+        return new ConstructorMappingModel(
+            ImmutableArray<ConstructorArgumentModel>.Empty,
+            ImmutableArray<CollectionMappingModel>.Empty);
     }
 
     private static SourceMemberIndex GetSourceMembers(ITypeSymbol sourceType)
@@ -1694,15 +1721,16 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         Dictionary<ITypeSymbol, ImmutableArray<TargetMemberModel>> targetMemberCache,
         ImmutableArray<MapperReuseModel> mapperReuses,
         Compilation compilation,
-        out string expression)
+        out MappedExpressionModel mappedExpression)
     {
-        expression = string.Empty;
+        mappedExpression = EmptyMappedExpression();
         if (!CanConstructUnflattenedTarget(targetType))
         {
             return false;
         }
 
         var assignments = ImmutableArray.CreateBuilder<string>();
+        var collectionMappings = ImmutableArray.CreateBuilder<CollectionMappingModel>();
         foreach (var nestedTargetMember in GetTargetMembers(targetType, targetMemberCache))
         {
             if (!TryGetSourceMember(sourceMembers, targetPrefix + nestedTargetMember.Name, out var sourceMember) ||
@@ -1712,12 +1740,13 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     nestedTargetMember.Type,
                     mapperReuses,
                     compilation,
-                    out var mappedExpression))
+                    out var nestedMappedExpression))
             {
                 continue;
             }
 
-            assignments.Add(nestedTargetMember.Name + " = " + mappedExpression);
+            assignments.Add(nestedTargetMember.Name + " = " + nestedMappedExpression.Expression);
+            collectionMappings.AddRange(nestedMappedExpression.CollectionMappings);
         }
 
         if (assignments.Count == 0)
@@ -1725,7 +1754,9 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             return false;
         }
 
-        expression = "new " + GetNonNullableDisplayName(targetType) + " { " + string.Join(", ", assignments) + " }";
+        mappedExpression = new MappedExpressionModel(
+            "new " + GetNonNullableDisplayName(targetType) + " { " + string.Join(", ", assignments) + " }",
+            DeduplicateCollectionMappings(collectionMappings.ToImmutable()));
         return true;
     }
 
@@ -1927,7 +1958,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         ITypeSymbol targetType,
         ImmutableArray<MapperReuseModel> mapperReuses,
         Compilation compilation,
-        out string mappedExpression)
+        out MappedExpressionModel mappedExpression)
     {
         return TryCreateMappedExpression(
             sourceExpression,
@@ -1946,11 +1977,11 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         ImmutableArray<MapperReuseModel> mapperReuses,
         Compilation compilation,
         int depth,
-        out string mappedExpression)
+        out MappedExpressionModel mappedExpression)
     {
         if (compilation.ClassifyConversion(sourceType, targetType).IsImplicit)
         {
-            mappedExpression = sourceExpression;
+            mappedExpression = CreateMappedExpression(sourceExpression);
             return true;
         }
 
@@ -1959,7 +1990,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             if (SymbolEqualityComparer.Default.Equals(mapperReuse.SourceType, sourceType) &&
                 SymbolEqualityComparer.Default.Equals(mapperReuse.TargetType, targetType))
             {
-                mappedExpression = mapperReuse.MapperExpression + ".Map(" + sourceExpression + ")";
+                mappedExpression = CreateMappedExpression(mapperReuse.MapperExpression + ".Map(" + sourceExpression + ")");
                 return true;
             }
         }
@@ -1967,7 +1998,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         if (GetNonNullableType(sourceType).TypeKind == TypeKind.Enum &&
             GetNonNullableType(targetType).TypeKind == TypeKind.Enum)
         {
-            mappedExpression = "(" + targetType.ToDisplayString(TypeDisplayFormat) + ")" + sourceExpression;
+            mappedExpression = CreateMappedExpression("(" + targetType.ToDisplayString(TypeDisplayFormat) + ")" + sourceExpression);
             return true;
         }
 
@@ -1983,44 +2014,261 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                 depth + 1,
                 out var mappedElementExpression))
         {
-            var selectExpression = "global::System.Linq.Enumerable.Select(" + sourceExpression + ", item => " + mappedElementExpression + ")";
+            var sourceTypeName = sourceType.ToDisplayString(TypeDisplayFormat);
+            var sourceElementTypeName = sourceElementType.ToDisplayString(TypeDisplayFormat);
+            var targetElementTypeName = targetElementType.ToDisplayString(TypeDisplayFormat);
             if (targetType is IArrayTypeSymbol)
             {
-                mappedExpression = "global::System.Linq.Enumerable.ToArray(" + selectExpression + ")";
+                mappedExpression = CreateCollectionMappedExpression(
+                    CollectionMappingKind.Array,
+                    sourceExpression,
+                    sourceTypeName,
+                    sourceElementTypeName,
+                    GetCollectionSourceKind(sourceType),
+                    targetElementTypeName,
+                    mappedElementExpression,
+                    GetReliableCollectionCountExpression(sourceType));
                 return true;
             }
 
             if (CanAssignListToTarget(targetType, targetElementType, compilation))
             {
-                mappedExpression = "global::System.Linq.Enumerable.ToList(" + selectExpression + ")";
+                mappedExpression = CreateCollectionMappedExpression(
+                    CollectionMappingKind.List,
+                    sourceExpression,
+                    sourceTypeName,
+                    sourceElementTypeName,
+                    GetCollectionSourceKind(sourceType),
+                    targetElementTypeName,
+                    mappedElementExpression,
+                    GetCollectionCapacityExpression(sourceType));
                 return true;
             }
 
             if (CanAssignHashSetToTarget(targetType, targetElementType, compilation))
             {
-                mappedExpression = "new global::System.Collections.Generic.HashSet<" +
-                    targetElementType.ToDisplayString(TypeDisplayFormat) +
-                    ">(" +
-                    selectExpression +
-                    ")";
+                mappedExpression = CreateCollectionMappedExpression(
+                    CollectionMappingKind.HashSet,
+                    sourceExpression,
+                    sourceTypeName,
+                    sourceElementTypeName,
+                    GetCollectionSourceKind(sourceType),
+                    targetElementTypeName,
+                    mappedElementExpression,
+                    HasHashSetCapacityConstructor(compilation)
+                        ? GetReliableCollectionCountExpression(sourceType)
+                        : null);
                 return true;
             }
         }
 
         if (CanUseServiceProviderMapper(sourceType, targetType))
         {
-            mappedExpression = ServiceProviderMapperInvocationPrefix +
-                GetNonNullableDisplayName(sourceType) +
-                ", " +
-                GetNonNullableDisplayName(targetType) +
-                ">(" +
-                sourceExpression +
-                ")";
+            mappedExpression = CreateMappedExpression(
+                ServiceProviderMapperInvocationPrefix +
+                    GetNonNullableDisplayName(sourceType) +
+                    ", " +
+                    GetNonNullableDisplayName(targetType) +
+                    ">(" +
+                    sourceExpression +
+                    ")");
             return true;
         }
 
-        mappedExpression = string.Empty;
+        mappedExpression = EmptyMappedExpression();
         return false;
+    }
+
+    private static MappedExpressionModel CreateMappedExpression(string expression)
+    {
+        return new MappedExpressionModel(expression, ImmutableArray<CollectionMappingModel>.Empty);
+    }
+
+    private static MappedExpressionModel EmptyMappedExpression()
+    {
+        return CreateMappedExpression(string.Empty);
+    }
+
+    private static MappedExpressionModel CreateCollectionMappedExpression(
+        CollectionMappingKind kind,
+        string sourceExpression,
+        string sourceType,
+        string sourceElementType,
+        CollectionSourceKind sourceKind,
+        string targetElementType,
+        MappedExpressionModel mappedElementExpression,
+        string? capacityExpression)
+    {
+        var methodName = CreateCollectionMappingMethodName(
+            kind,
+            sourceKind,
+            sourceType,
+            sourceElementType,
+            targetElementType,
+            mappedElementExpression.Expression,
+            capacityExpression);
+        var collectionMapping = new CollectionMappingModel(
+            methodName,
+            kind,
+            sourceKind,
+            sourceType,
+            sourceElementType,
+            targetElementType,
+            mappedElementExpression.Expression,
+            capacityExpression);
+        var collectionMappings = ImmutableArray.CreateBuilder<CollectionMappingModel>();
+        collectionMappings.AddRange(mappedElementExpression.CollectionMappings);
+        collectionMappings.Add(collectionMapping);
+        return new MappedExpressionModel(
+            methodName + "(" + sourceExpression + ")",
+            DeduplicateCollectionMappings(collectionMappings.ToImmutable()));
+    }
+
+    private static CollectionSourceKind GetCollectionSourceKind(ITypeSymbol sourceType)
+    {
+        return GetNonNullableType(sourceType) is IArrayTypeSymbol
+            ? CollectionSourceKind.Array
+            : CollectionSourceKind.Other;
+    }
+
+    private static string? GetCollectionCapacityExpression(ITypeSymbol sourceType)
+    {
+        var nonNullableSourceType = GetNonNullableType(sourceType);
+        if (nonNullableSourceType is IArrayTypeSymbol)
+        {
+            return "source.Length";
+        }
+
+        foreach (var member in EnumerateVisibleMembers(nonNullableSourceType))
+        {
+            if (member is IPropertySymbol
+                {
+                    Name: "Count",
+                    IsStatic: false,
+                    IsIndexer: false,
+                    Type.SpecialType: SpecialType.System_Int32,
+                    GetMethod.DeclaredAccessibility: Accessibility.Public
+                })
+            {
+                return "source.Count";
+            }
+        }
+
+        return null;
+    }
+
+    private static string? GetReliableCollectionCountExpression(ITypeSymbol sourceType)
+    {
+        var nonNullableSourceType = GetNonNullableType(sourceType);
+        if (nonNullableSourceType is IArrayTypeSymbol)
+        {
+            return "source.Length";
+        }
+
+        if (nonNullableSourceType is not INamedTypeSymbol namedSourceType)
+        {
+            return null;
+        }
+
+        if (ValiantSymbolMatching.HasMetadataName(
+                namedSourceType.OriginalDefinition,
+                "System.Collections.Generic",
+                "ICollection`1") ||
+            ValiantSymbolMatching.HasMetadataName(
+                namedSourceType.OriginalDefinition,
+                "System.Collections.Generic",
+                "IReadOnlyCollection`1"))
+        {
+            return "source.Count";
+        }
+
+        foreach (var interfaceType in namedSourceType.AllInterfaces)
+        {
+            if (ValiantSymbolMatching.HasMetadataName(
+                    interfaceType.OriginalDefinition,
+                    "System.Collections.Generic",
+                    "ICollection`1") ||
+                ValiantSymbolMatching.HasMetadataName(
+                    interfaceType.OriginalDefinition,
+                    "System.Collections.Generic",
+                    "IReadOnlyCollection`1"))
+            {
+                return "source.Count";
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasHashSetCapacityConstructor(Compilation compilation)
+    {
+        var hashSetType = compilation.GetTypeByMetadataName("System.Collections.Generic.HashSet`1");
+        return hashSetType is not null &&
+            hashSetType.InstanceConstructors.Any(static constructor =>
+                constructor.DeclaredAccessibility == Accessibility.Public &&
+                constructor.Parameters.Length == 1 &&
+                constructor.Parameters[0].Type.SpecialType == SpecialType.System_Int32);
+    }
+
+    private static string CreateCollectionMappingMethodName(
+        CollectionMappingKind kind,
+        CollectionSourceKind sourceKind,
+        string sourceType,
+        string sourceElementType,
+        string targetElementType,
+        string mappedElementExpression,
+        string? capacityExpression)
+    {
+        const ulong offsetA = 14695981039346656037UL;
+        const ulong offsetB = 1099511628211UL;
+        const ulong prime = 1099511628211UL;
+        var hashA = offsetA;
+        var hashB = offsetB;
+
+        AddHashValue(kind.ToString());
+        AddHashValue(sourceKind.ToString());
+        AddHashValue(sourceType);
+        AddHashValue(sourceElementType);
+        AddHashValue(targetElementType);
+        AddHashValue(mappedElementExpression);
+        AddHashValue(capacityExpression ?? string.Empty);
+
+        return "__ValiantMapCollection_" +
+            hashA.ToString("x16", CultureInfo.InvariantCulture) +
+            hashB.ToString("x16", CultureInfo.InvariantCulture);
+
+        void AddHashValue(string value)
+        {
+            foreach (var character in value)
+            {
+                hashA = (hashA ^ character) * prime;
+                hashB = (hashB ^ (character + 31U)) * prime;
+            }
+
+            hashA = (hashA ^ 0xffU) * prime;
+            hashB = (hashB ^ 0x7fU) * prime;
+        }
+    }
+
+    private static ImmutableArray<CollectionMappingModel> DeduplicateCollectionMappings(
+        ImmutableArray<CollectionMappingModel> collectionMappings)
+    {
+        if (collectionMappings.Length < 2)
+        {
+            return collectionMappings;
+        }
+
+        var methodNames = new HashSet<string>(StringComparer.Ordinal);
+        var deduplicated = ImmutableArray.CreateBuilder<CollectionMappingModel>();
+        foreach (var collectionMapping in collectionMappings)
+        {
+            if (methodNames.Add(collectionMapping.MethodName))
+            {
+                deduplicated.Add(collectionMapping);
+            }
+        }
+
+        return deduplicated.ToImmutable();
     }
 
     private static bool CanUseServiceProviderMapper(ITypeSymbol sourceType, ITypeSymbol targetType)
@@ -2048,10 +2296,12 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
 
     private static bool UsesServiceProviderMapper(
         ConstructorMappingModel constructor,
-        ImmutableArray<MemberAssignmentModel>.Builder assignments)
+        ImmutableArray<MemberAssignmentModel>.Builder assignments,
+        ImmutableArray<CollectionMappingModel> collectionMappings)
     {
         return constructor.Arguments.Any(static argument => UsesServiceProviderMapper(argument.SourceExpression)) ||
-            assignments.Any(static assignment => UsesServiceProviderMapper(assignment.SourceExpression));
+            assignments.Any(static assignment => UsesServiceProviderMapper(assignment.SourceExpression)) ||
+            collectionMappings.Any(static mapping => UsesServiceProviderMapper(mapping.MappedElementExpression));
     }
 
     private static bool UsesServiceProviderMapper(string expression)

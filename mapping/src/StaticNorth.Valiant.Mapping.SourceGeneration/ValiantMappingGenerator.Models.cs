@@ -130,7 +130,8 @@ public sealed partial class ValiantMappingGenerator
         bool hasConfigureMethod,
         bool usesServiceProviderMapper,
         ConstructorMappingModel constructor,
-        ImmutableArray<MemberAssignmentModel> assignments)
+        ImmutableArray<MemberAssignmentModel> assignments,
+        ImmutableArray<CollectionMappingModel> collectionMappings)
     {
         public string SourceType { get; } = sourceType;
 
@@ -147,11 +148,17 @@ public sealed partial class ValiantMappingGenerator
         public ConstructorMappingModel Constructor { get; } = constructor;
 
         public ImmutableArray<MemberAssignmentModel> Assignments { get; } = assignments;
+
+        public ImmutableArray<CollectionMappingModel> CollectionMappings { get; } = collectionMappings;
     }
 
-    private sealed class ConstructorMappingModel(ImmutableArray<ConstructorArgumentModel> arguments)
+    private sealed class ConstructorMappingModel(
+        ImmutableArray<ConstructorArgumentModel> arguments,
+        ImmutableArray<CollectionMappingModel> collectionMappings)
     {
         public ImmutableArray<ConstructorArgumentModel> Arguments { get; } = arguments;
+
+        public ImmutableArray<CollectionMappingModel> CollectionMappings { get; } = collectionMappings;
     }
 
     private enum NullHandlingPolicy
@@ -178,6 +185,55 @@ public sealed partial class ValiantMappingGenerator
         public string SourceExpression { get; } = sourceExpression;
 
         public string? ConditionExpression { get; } = conditionExpression;
+    }
+
+    private sealed class MappedExpressionModel(
+        string expression,
+        ImmutableArray<CollectionMappingModel> collectionMappings)
+    {
+        public string Expression { get; } = expression;
+
+        public ImmutableArray<CollectionMappingModel> CollectionMappings { get; } = collectionMappings;
+    }
+
+    private sealed class CollectionMappingModel(
+        string methodName,
+        CollectionMappingKind kind,
+        CollectionSourceKind sourceKind,
+        string sourceType,
+        string sourceElementType,
+        string targetElementType,
+        string mappedElementExpression,
+        string? capacityExpression)
+    {
+        public string MethodName { get; } = methodName;
+
+        public CollectionMappingKind Kind { get; } = kind;
+
+        public CollectionSourceKind SourceKind { get; } = sourceKind;
+
+        public string SourceType { get; } = sourceType;
+
+        public string SourceElementType { get; } = sourceElementType;
+
+        public string TargetElementType { get; } = targetElementType;
+
+        public string MappedElementExpression { get; } = mappedElementExpression;
+
+        public string? CapacityExpression { get; } = capacityExpression;
+    }
+
+    private enum CollectionMappingKind
+    {
+        List,
+        Array,
+        HashSet
+    }
+
+    private enum CollectionSourceKind
+    {
+        Other,
+        Array
     }
 
     private sealed class SourceMemberModel(string name, ITypeSymbol type, string expression)

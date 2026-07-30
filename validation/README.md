@@ -43,6 +43,23 @@ services.AddValiantValidators(options =>
 });
 ```
 
+## Validation Status
+
+Use `Validate(...)` or `ValidateAsync(...)` when callers need failure codes,
+messages, property names, and severity partitions. In `Fast` mode, generated
+validators build that diagnostic result lazily and avoid allocating a result
+builder for valid inputs.
+
+Use `IsValid(...)` or `IsValidAsync(...)` when callers only need the validity
+status. The generated `Fast` path evaluates rule conditions, predicates,
+severities, and reused validators directly without constructing failure
+objects. Because diagnostics are not requested, failure code, message, and
+property-name expressions are not evaluated. Warning-only results are valid;
+errors and unknown severity values are invalid.
+
+`Debuggable` mode keeps the materialized runtime path so user-authored
+configuration and diagnostic expressions remain available to the debugger.
+
 ## Fluent Rules
 
 Validators inherit `ValidatorDefinition<T>` and override `Configure` to declare rules through `ValidationContext<T>`:
@@ -153,3 +170,11 @@ services.AddMediator(options =>
 ```
 
 Use one Mediator registration path for the Valiant behavior. Do not also call `AddValiantMediatorValidation()` when `ValiantValidationBehavior<,>` is listed in `PipelineBehaviors`.
+
+## Benchmarks
+
+The standalone
+[`StaticNorth.Valiant.Validation.Benchmarks`](benchmarks/StaticNorth.Valiant.Validation.Benchmarks)
+project measures the generated `Fast` path for valid, one-failure, and
+all-failure inputs, with Validly as a pinned relative control. Its README
+documents correctness checks and the repeatable before/after workflow.

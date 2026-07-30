@@ -101,7 +101,12 @@ Important contracts:
 - `ValiantValidatorAttribute` is the generator discovery hook.
 - `ValidatorDefinition<T>` is the recommended authoring surface for both fluent and attribute-based validation. Override `Configure` for fluent rules; omit it for model attributes.
 - `IValidatorDefinition<T>` remains the underlying compatibility contract, but public examples and samples should inherit `ValidatorDefinition<T>`.
-- The generator emits `IValidator<T>`.
+- The generator emits `IValidator<T>` and, for each default validator model in the current
+  compilation, a hidden typed invocation bridge registered by the generated `AddValiantValidators()`.
+- Parameterless Minimal API validation must prefer generated invocation bridges so the normal
+  `[ValiantValidator]` plus `AddValiantValidators()` path remains reflection-free and Native AOT-safe.
+  Raw manual `IValidator<T>` registrations are a JIT compatibility path; the typed endpoint overload
+  is the explicit manual Native AOT path.
 - Recommended examples use the instance `Configure` override, which naturally supports constructor-injected validator dependencies.
 - `ValidatorDefinition<T>` authoring is mutually exclusive: omit `Configure` to use validation attributes, or declare `Configure` for fluent rules on models without validation attributes. Mixing both reports an analyzer error.
 - Do not change `IValidatorDefinition<T>` to `static abstract` without deliberately dropping `netstandard2.0` and instance `Configure` support.

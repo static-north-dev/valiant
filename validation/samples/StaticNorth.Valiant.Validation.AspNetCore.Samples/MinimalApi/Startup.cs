@@ -1,4 +1,3 @@
-using StaticNorth.Valiant.Validation.AspNetCore;
 using StaticNorth.Valiant.Validation.AspNetCore.Samples.Orders;
 using StaticNorth.Valiant.Validation.DependencyInjection;
 
@@ -26,18 +25,18 @@ public sealed class Startup
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapPost("/orders/typed", static (CreateOrder order, HttpContext context) =>
-                {
-                    context.Response.Headers["X-Handler-Reached"] = "true";
-                    return Results.Created($"/orders/{order.CustomerEmail}", order);
-                })
-                .WithValiantValidation<CreateOrder>();
+            {
+                context.Response.Headers["X-Handler-Reached"] = "true";
+                return Results.Created($"/orders/{order.CustomerEmail}", order);
+            })
+            .WithValiantValidation<CreateOrder>();
 
             endpoints.MapPost("/orders/all", static (CreateOrder order, HttpContext context) =>
-                {
-                    context.Response.Headers["X-Handler-Reached"] = "true";
-                    return Results.Ok(order);
-                })
-                .WithValiantValidation();
+            {
+                context.Response.Headers["X-Handler-Reached"] = "true";
+                return Results.Ok(order);
+            })
+            .WithValiantValidation();
         });
     }
 }

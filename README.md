@@ -449,7 +449,18 @@ app.MapPost("/users", (CreateUser user) => Results.Ok())
     .WithValiantValidation<CreateUser>();
 ```
 
-`WithValiantValidation<T>()` validates endpoint arguments assignable to `T`. `WithValiantValidation()` validates all endpoint arguments that have registered `IValidator<T>` services.
+`WithValiantValidation()` uses each argument's exact declared parameter type. `[ValiantValidator]`
+discovery emits the validator, its typed invocation bridge, and their registrations into the generated
+`AddValiantValidators()` method, so the normal path needs no per-model registration or runtime assembly
+scan. The generated method covers default validators discovered in the current compilation.
+Validators are resolved from request services; arguments with the same declared type reuse that
+request's resolved validator sequence while retaining handler-argument execution order. Errors return
+HTTP 400 before the handler runs; warnings and informational failures do not block the handler.
+
+This generated parameterless path supports Native AOT. Manually registered raw `IValidator<T>` services
+without a generated bridge remain compatible through a JIT-only fallback. For an explicit manual
+registration in Native AOT, use `WithValiantValidation<T>()`, which validates every non-null endpoint
+argument assignable to `T`. MVC does not receive this Native AOT guarantee.
 Both extensions add ASP.NET Core `ProducesValidationProblem(400)` endpoint metadata, so the built-in .NET OpenAPI generator can document validation problem responses without Swashbuckle or NSwag-specific hooks.
 
 `StaticNorth.Valiant.Validation.AspNetCore.OpenApi` adds native .NET OpenAPI schema reflection for generated validation metadata:

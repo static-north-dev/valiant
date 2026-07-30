@@ -5,10 +5,12 @@
     <PublishAot>true</PublishAot>
     <PublishAotUsingRuntimePack>true</PublishAotUsingRuntimePack>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL3050</WarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="StaticNorth.Valiant.Mapping" Version="$(StaticNorthValiantPackageVersion)" />
     <PackageReference Include="StaticNorth.Valiant.Settings" Version="$(StaticNorthValiantPackageVersion)" />
     <PackageReference Include="StaticNorth.Valiant.Validation" Version="$(StaticNorthValiantPackageVersion)" />
+    <PackageReference Include="StaticNorth.Valiant.Validation.AspNetCore" Version="$(StaticNorthValiantPackageVersion)" />
   </ItemGroup>
 </Project>

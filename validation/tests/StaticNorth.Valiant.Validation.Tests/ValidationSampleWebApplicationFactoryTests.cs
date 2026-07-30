@@ -3,12 +3,27 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using StaticNorth.Valiant.Validation.AspNetCore.Samples.Orders;
+using StaticNorth.Valiant.Validation.Infrastructure;
 
 namespace StaticNorth.Valiant.Validation.Tests;
 
 public sealed class ValidationSampleWebApplicationFactoryTests
 {
+    [Test]
+    public async Task MinimalApi_Sample_Registers_A_Generated_Invoker_For_The_Route_Model()
+    {
+        await using var factory = new SampleApplicationFactory<
+            global::StaticNorth.Valiant.Validation.AspNetCore.Samples.MinimalApi.Startup>();
+        using var scope = factory.Services.CreateScope();
+
+        var invokers = scope.ServiceProvider.GetServices<IValiantValidatorInvoker>();
+
+        await Assert.That(invokers.Any(static invoker =>
+            invoker.ModelType == typeof(CreateOrder))).IsTrue();
+    }
+
     [Test]
     [Arguments("/orders/typed")]
     [Arguments("/orders/all")]
