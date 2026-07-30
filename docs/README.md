@@ -44,8 +44,8 @@ the site for pushes to `develop`, but never deploys it.
 
 Documentation publication is independent from NuGet releases. Run the
 **Publish Docs** workflow manually whenever the site should be refreshed. It
-pins the current `develop` commit, snapshots the major tracked in
-`current-major.json`, merges it into the complete history on `develop`, ensures
+pins the current `main` commit, snapshots the major tracked in
+`current-major.json`, merges it into the complete history on `main`, ensures
 the `valiant-docs` Cloudflare Pages project exists, and deploys the exact
 persisted commit.
 
@@ -66,8 +66,8 @@ The deployment job also grants its generated `GITHUB_TOKEN`
 and attach the Cloudflare Pages URL.
 
 The snapshot persistence job grants its `GITHUB_TOKEN` only `contents: write`.
-Repository rules for `develop` must allow `github-actions[bot]` to push this
-generated documentation commit. If `develop` requires pull requests, signed
+Repository rules for `main` must allow `github-actions[bot]` to push this
+generated documentation commit. If `main` requires pull requests, signed
 commits, status checks, or another rule the bot cannot satisfy, add a narrow
 ruleset bypass for GitHub Actions or replace the token with a narrowly scoped
 GitHub App credential. A broad personal access token is not recommended.
@@ -125,25 +125,25 @@ version.
 ## Publishing documentation
 
 The **Publish Docs** workflow is manually triggered and always publishes the
-latest `develop` content for the major in `current-major.json`. No GitHub
+latest `main` content for the major in `current-major.json`. No GitHub
 Release is required. The workflow must exist on the repository's default
 branch. To publish:
 
 1. Merge the desired documentation and, when beginning a new major, the
-   `current-major.json` change into `develop`.
+   `current-major.json` change into `main`.
 2. Open **Actions → Publish Docs → Run workflow**.
-3. The workflow pins the starting `develop` SHA, tests and audits the docs,
+3. The workflow pins the starting `main` SHA, tests and audits the docs,
    creates the shared major snapshot, and validates every generated route.
 4. It verifies or creates the Cloudflare Pages project, commits only
-   `versions.json`, `versioned_docs`, and `versioned_sidebars` to `develop`,
+   `versions.json`, `versioned_docs`, and `versioned_sidebars` to `main`,
    rebuilds the exact persisted commit, and deploys that verified artifact.
 
-If `develop` moves before the generated snapshot is persisted, the workflow
+If `main` moves before the generated snapshot is persisted, the workflow
 fails instead of publishing stale documentation on top of newer content. Run it
 again to publish the new head. A no-change rerun still verifies and deploys the
 existing persisted commit.
 
-Repository rules for `develop` must allow `github-actions[bot]` to push the
+Repository rules for `main` must allow `github-actions[bot]` to push the
 generated snapshot commit. The job has only `contents: write`; it cannot bypass
 required pull requests, signed commits, or status checks. Add a narrow ruleset
 bypass for GitHub Actions or replace the token with a narrowly scoped GitHub App

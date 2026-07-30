@@ -118,9 +118,9 @@ test('documentation audits retain a narrow no-fix advisory gate', () => {
   }
 });
 
-test('documentation publication pins the tracked major and develop source SHA', () => {
+test('documentation publication pins the tracked major and main source SHA', () => {
   const prepare = job(docsWorkflow, 'prepare');
-  assert.match(prepare, /ref: develop/);
+  assert.match(prepare, /ref: main/);
   assert.match(prepare, /node docs\/scripts\/current-major\.js/);
   assert.match(prepare, /source_sha: \$\{\{ steps\.source\.outputs\.source_sha \}\}/);
   assert.doesNotMatch(docsWorkflow, /inputs\.major|github\.event\.inputs/);
@@ -163,13 +163,16 @@ test('documentation publication keeps credentials and permissions narrowly scope
   }
 });
 
-test('documentation persistence fails safely when develop moves', () => {
+test('documentation persistence targets main and fails safely when it moves', () => {
   const persist = job(docsWorkflow, 'persist-docs-snapshot');
-  assert.match(persist, /remote_head="\$\(git rev-parse origin\/develop\)"/);
+  assert.match(persist, /remote_head="\$\(git rev-parse origin\/main\)"/);
   assert.match(persist, /\[ "\$remote_head" != "\$DOCS_SOURCE_SHA" \]/);
   assert.match(persist, /Run the Publish Docs workflow again/);
   assert.match(persist, /current_major="\$\(node docs\/scripts\/current-major\.js\)"/);
   assert.match(persist, /docs_commit="\$DOCS_SOURCE_SHA"/);
+  assert.match(persist, /git push origin HEAD:main/);
+  assert.match(persist, /git rev-parse origin\/main/);
+  assert.doesNotMatch(persist, /origin\/develop|HEAD:develop/);
   assert.match(
     persist,
     /git add \\\n\s+docs\/versions\.json \\\n\s+docs\/versioned_docs \\\n\s+docs\/versioned_sidebars/,
