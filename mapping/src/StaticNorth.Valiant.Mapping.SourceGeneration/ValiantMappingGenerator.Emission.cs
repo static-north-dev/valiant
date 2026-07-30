@@ -152,6 +152,7 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("{");
 
         AppendMappingOptionsMembers(builder, namespaceName, declaration, mapping);
+        AppendResolveMappingModeMember(builder, namespaceName);
         builder.AppendLine();
         AppendMapMethod(builder, namespaceName, mapping);
         if (mapping.HasConfigureMethod)
@@ -586,6 +587,8 @@ public sealed partial class ValiantMappingGenerator
             "The mapped target instance.",
             ("source", "The source instance."));
         AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+        AppendIndent(builder, 1, namespaceName);
         builder.Append("public ")
             .Append(mapping.TargetType)
             .Append(" Map(")
@@ -687,13 +690,20 @@ public sealed partial class ValiantMappingGenerator
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
 
+        foreach (var collectionMapping in mapping.CollectionMappings)
+        {
+            AppendCollectionMappingMethod(builder, namespaceName, collectionMapping);
+        }
+
         builder.AppendLine();
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("private global::StaticNorth.Valiant.Mapping.ValiantNullHandling GetEffectiveNullHandling()");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return _valiantMappingOptions?.NullHandling ?? global::StaticNorth.Valiant.Mapping.ValiantNullHandling.MapNulls;");
+        builder.AppendLine("return _valiantNullHandling;");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
 
@@ -703,10 +713,303 @@ public sealed partial class ValiantMappingGenerator
         }
     }
 
+    private static void AppendCollectionMappingMethod(
+        StringBuilder builder,
+        string? namespaceName,
+        CollectionMappingModel collectionMapping)
+    {
+        var returnType = collectionMapping.Kind switch
+        {
+            CollectionMappingKind.Array => collectionMapping.TargetElementType + "[]",
+            CollectionMappingKind.HashSet => "global::System.Collections.Generic.HashSet<" + collectionMapping.TargetElementType + ">",
+            _ => "global::System.Collections.Generic.List<" + collectionMapping.TargetElementType + ">"
+        };
+
+        builder.AppendLine();
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+        AppendIndent(builder, 1, namespaceName);
+        builder.Append("private ")
+            .Append(returnType)
+            .Append(' ')
+            .Append(collectionMapping.MethodName)
+            .Append('(')
+            .Append(collectionMapping.SourceType)
+            .AppendLine(" source)");
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("if (source is null)");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("throw new global::System.ArgumentNullException(nameof(source));");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+
+        if (collectionMapping.Kind == CollectionMappingKind.Array)
+        {
+            AppendArrayCollectionMappingBody(builder, namespaceName, collectionMapping);
+        }
+        else
+        {
+            AppendAddCollectionMappingBody(builder, namespaceName, collectionMapping);
+        }
+
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("}");
+    }
+
+    private static void AppendAddCollectionMappingBody(
+        StringBuilder builder,
+        string? namespaceName,
+        CollectionMappingModel collectionMapping)
+    {
+        AppendIndent(builder, 2, namespaceName);
+        builder.Append("var target = new global::System.Collections.Generic.")
+            .Append(collectionMapping.Kind == CollectionMappingKind.HashSet ? "HashSet" : "List")
+            .Append('<')
+            .Append(collectionMapping.TargetElementType)
+            .Append('>');
+        if (collectionMapping.CapacityExpression is null)
+        {
+            builder.AppendLine("();");
+        }
+        else
+        {
+            builder.Append('(')
+                .Append(collectionMapping.CapacityExpression)
+                .AppendLine(");");
+        }
+
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("foreach (var item in source)");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 3, namespaceName);
+        builder.Append("target.Add(")
+            .Append(collectionMapping.MappedElementExpression)
+            .AppendLine(");");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("return target;");
+    }
+
+    private static void AppendArrayCollectionMappingBody(
+        StringBuilder builder,
+        string? namespaceName,
+        CollectionMappingModel collectionMapping)
+    {
+        if (collectionMapping.SourceKind == CollectionSourceKind.Array)
+        {
+            AppendIndexedArrayCollectionMappingBody(builder, namespaceName, collectionMapping);
+            return;
+        }
+
+        if (collectionMapping.CapacityExpression is null)
+        {
+            AppendRuntimeSizedArrayCollectionMappingBody(builder, namespaceName, collectionMapping);
+
+            AppendIndent(builder, 2, namespaceName);
+            builder.Append("var target = new global::System.Collections.Generic.List<")
+                .Append(collectionMapping.TargetElementType)
+                .AppendLine(">();");
+            AppendIndent(builder, 2, namespaceName);
+            builder.AppendLine("foreach (var item in source)");
+            AppendIndent(builder, 2, namespaceName);
+            builder.AppendLine("{");
+            AppendIndent(builder, 3, namespaceName);
+            builder.Append("target.Add(")
+                .Append(collectionMapping.MappedElementExpression)
+                .AppendLine(");");
+            AppendIndent(builder, 2, namespaceName);
+            builder.AppendLine("}");
+            builder.AppendLine();
+            AppendIndent(builder, 2, namespaceName);
+            builder.AppendLine("return target.ToArray();");
+            return;
+        }
+
+        AppendIndent(builder, 2, namespaceName);
+        builder.Append("var target = new ")
+            .Append(collectionMapping.TargetElementType)
+            .Append('[')
+            .Append(collectionMapping.CapacityExpression)
+            .AppendLine("];");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("var targetIndex = 0;");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("foreach (var item in source)");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("if (targetIndex == target.Length)");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 4, namespaceName);
+        builder.AppendLine("global::System.Array.Resize(ref target, target.Length == 0 ? 4 : checked(target.Length * 2));");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+        AppendIndent(builder, 3, namespaceName);
+        builder.Append("target[targetIndex++] = ")
+            .Append(collectionMapping.MappedElementExpression)
+            .AppendLine(";");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("if (targetIndex != target.Length)");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("global::System.Array.Resize(ref target, targetIndex);");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("return target;");
+    }
+
+    private static void AppendIndexedArrayCollectionMappingBody(
+        StringBuilder builder,
+        string? namespaceName,
+        CollectionMappingModel collectionMapping)
+    {
+        AppendIndent(builder, 2, namespaceName);
+        builder.Append("var target = new ")
+            .Append(collectionMapping.TargetElementType)
+            .AppendLine("[source.Length];");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("for (var sourceIndex = 0; sourceIndex < source.Length; sourceIndex++)");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("var item = source[sourceIndex];");
+        AppendIndent(builder, 3, namespaceName);
+        builder.Append("target[sourceIndex] = ")
+            .Append(collectionMapping.MappedElementExpression)
+            .AppendLine(";");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("return target;");
+    }
+
+    private static void AppendRuntimeSizedArrayCollectionMappingBody(
+        StringBuilder builder,
+        string? namespaceName,
+        CollectionMappingModel collectionMapping)
+    {
+        AppendIndent(builder, 2, namespaceName);
+        builder.Append("if (source is ")
+            .Append(collectionMapping.SourceElementType)
+            .AppendLine("[] sourceArray)");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 3, namespaceName);
+        builder.Append("var arrayTarget = new ")
+            .Append(collectionMapping.TargetElementType)
+            .AppendLine("[sourceArray.Length];");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("for (var sourceIndex = 0; sourceIndex < sourceArray.Length; sourceIndex++)");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 4, namespaceName);
+        builder.AppendLine("var item = sourceArray[sourceIndex];");
+        AppendIndent(builder, 4, namespaceName);
+        builder.Append("arrayTarget[sourceIndex] = ")
+            .Append(collectionMapping.MappedElementExpression)
+            .AppendLine(";");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("return arrayTarget;");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("var sourceCount = -1;");
+        AppendIndent(builder, 2, namespaceName);
+        builder.Append("if (source is global::System.Collections.Generic.ICollection<")
+            .Append(collectionMapping.SourceElementType)
+            .AppendLine("> sourceCollection)");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("sourceCount = sourceCollection.Count;");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("}");
+        AppendIndent(builder, 2, namespaceName);
+        builder.Append("else if (source is global::System.Collections.Generic.IReadOnlyCollection<")
+            .Append(collectionMapping.SourceElementType)
+            .AppendLine("> sourceReadOnlyCollection)");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("sourceCount = sourceReadOnlyCollection.Count;");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("if (sourceCount >= 0)");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 3, namespaceName);
+        builder.Append("var countedTarget = new ")
+            .Append(collectionMapping.TargetElementType)
+            .AppendLine("[sourceCount];");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("var targetIndex = 0;");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("foreach (var item in source)");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 4, namespaceName);
+        builder.AppendLine("if (targetIndex == countedTarget.Length)");
+        AppendIndent(builder, 4, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 5, namespaceName);
+        builder.AppendLine("global::System.Array.Resize(ref countedTarget, countedTarget.Length == 0 ? 4 : checked(countedTarget.Length * 2));");
+        AppendIndent(builder, 4, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+        AppendIndent(builder, 4, namespaceName);
+        builder.Append("countedTarget[targetIndex++] = ")
+            .Append(collectionMapping.MappedElementExpression)
+            .AppendLine(";");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("if (targetIndex != countedTarget.Length)");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 4, namespaceName);
+        builder.AppendLine("global::System.Array.Resize(ref countedTarget, targetIndex);");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("return countedTarget;");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+    }
+
     private static void AppendMappingOptionsMembers(StringBuilder builder, string? namespaceName, MapperDeclarationModel declaration, MappingModel mapping)
     {
         AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("private readonly global::StaticNorth.Valiant.Mapping.ValiantMappingOptions? _valiantMappingOptions = null;");
+        builder.AppendLine("private readonly global::StaticNorth.Valiant.Mapping.ValiantMappingMode _valiantMappingMode = ResolveMappingMode(global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Auto);");
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("private readonly global::StaticNorth.Valiant.Mapping.ValiantNullHandling _valiantNullHandling = global::StaticNorth.Valiant.Mapping.ValiantNullHandling.MapNulls;");
         if (mapping.UsesServiceProviderMapper)
         {
             AppendIndent(builder, 1, namespaceName);
@@ -748,7 +1051,11 @@ public sealed partial class ValiantMappingGenerator
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("_valiantMappingOptions = valiantMappingOptions ?? throw new global::System.ArgumentNullException(nameof(valiantMappingOptions));");
+        builder.AppendLine("_ = valiantMappingOptions ?? throw new global::System.ArgumentNullException(nameof(valiantMappingOptions));");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("_valiantMappingMode = ResolveMappingMode(valiantMappingOptions.Mode);");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("_valiantNullHandling = valiantMappingOptions.NullHandling;");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
 
@@ -789,7 +1096,11 @@ public sealed partial class ValiantMappingGenerator
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("_valiantMappingOptions = valiantMappingOptions ?? throw new global::System.ArgumentNullException(nameof(valiantMappingOptions));");
+        builder.AppendLine("_ = valiantMappingOptions ?? throw new global::System.ArgumentNullException(nameof(valiantMappingOptions));");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("_valiantMappingMode = ResolveMappingMode(valiantMappingOptions.Mode);");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("_valiantNullHandling = valiantMappingOptions.NullHandling;");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("_valiantServiceProvider = valiantServiceProvider ?? throw new global::System.ArgumentNullException(nameof(valiantServiceProvider));");
         AppendIndent(builder, 1, namespaceName);
@@ -1004,7 +1315,11 @@ public sealed partial class ValiantMappingGenerator
         if (includeOptions)
         {
             AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("_valiantMappingOptions = __valiantMappingOptions ?? throw new global::System.ArgumentNullException(nameof(__valiantMappingOptions));");
+            builder.AppendLine("_ = __valiantMappingOptions ?? throw new global::System.ArgumentNullException(nameof(__valiantMappingOptions));");
+            AppendIndent(builder, 2, namespaceName);
+            builder.AppendLine("_valiantMappingMode = ResolveMappingMode(__valiantMappingOptions.Mode);");
+            AppendIndent(builder, 2, namespaceName);
+            builder.AppendLine("_valiantNullHandling = __valiantMappingOptions.NullHandling;");
         }
 
         if (includeServiceProvider)
@@ -1066,15 +1381,13 @@ public sealed partial class ValiantMappingGenerator
         return constructor.Parameters.Any(parameter => string.Equals(parameter.TypeName, typeName, StringComparison.Ordinal));
     }
 
-    private static void AppendRuntimeMappingMembers(StringBuilder builder, string? namespaceName, MappingModel mapping)
+    private static void AppendResolveMappingModeMember(StringBuilder builder, string? namespaceName)
     {
         builder.AppendLine();
         AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("private global::StaticNorth.Valiant.Mapping.ValiantMappingMode GetEffectiveMappingMode()");
+        builder.AppendLine("private static global::StaticNorth.Valiant.Mapping.ValiantMappingMode ResolveMappingMode(global::StaticNorth.Valiant.Mapping.ValiantMappingMode mode)");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("var mode = _valiantMappingOptions?.Mode ?? global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Auto;");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("if (mode != global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Auto)");
         AppendIndent(builder, 2, namespaceName);
@@ -1090,6 +1403,21 @@ public sealed partial class ValiantMappingGenerator
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("return global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Fast;");
         builder.AppendLine("#endif");
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("}");
+    }
+
+    private static void AppendRuntimeMappingMembers(StringBuilder builder, string? namespaceName, MappingModel mapping)
+    {
+        builder.AppendLine();
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("private global::StaticNorth.Valiant.Mapping.ValiantMappingMode GetEffectiveMappingMode()");
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("return _valiantMappingMode;");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
 

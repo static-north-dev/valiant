@@ -26,9 +26,9 @@ public sealed class ValidationResult
         }
 
         var failures = new ValidationFailure[errors.Count];
-        List<ValidationFailure>? validationErrors = null;
-        List<ValidationFailure>? warnings = null;
-        List<ValidationFailure>? infos = null;
+        var errorCount = 0;
+        var warningCount = 0;
+        var infoCount = 0;
 
         for (var index = 0; index < errors.Count; index++)
         {
@@ -37,21 +37,27 @@ public sealed class ValidationResult
             switch (failure.Severity)
             {
                 case ValiantSeverity.Warning:
-                    (warnings ??= []).Add(failure);
+                    warningCount++;
                     break;
                 case ValiantSeverity.Info:
-                    (infos ??= []).Add(failure);
+                    infoCount++;
                     break;
                 default:
-                    (validationErrors ??= []).Add(failure);
+                    errorCount++;
                     break;
             }
         }
 
-        Failures = failures;
-        Errors = ToReadOnlyArray(validationErrors);
-        Warnings = ToReadOnlyArray(warnings);
-        Infos = ToReadOnlyArray(infos);
+        Initialize(failures, errorCount, warningCount, infoCount);
+    }
+
+    private ValidationResult(
+        ValidationFailure[] failures,
+        int errorCount,
+        int warningCount,
+        int infoCount)
+    {
+        Initialize(failures, errorCount, warningCount, infoCount);
     }
 
     /// <summary>
@@ -62,22 +68,22 @@ public sealed class ValidationResult
     /// <summary>
     /// Gets every validation failure, including warnings and informational failures.
     /// </summary>
-    public IReadOnlyList<ValidationFailure> Failures { get; }
+    public IReadOnlyList<ValidationFailure> Failures { get; private set; } = [];
 
     /// <summary>
     /// Gets validation failures with <see cref="ValiantSeverity.Error" /> severity.
     /// </summary>
-    public IReadOnlyList<ValidationFailure> Errors { get; }
+    public IReadOnlyList<ValidationFailure> Errors { get; private set; } = [];
 
     /// <summary>
     /// Gets validation failures with <see cref="ValiantSeverity.Warning" /> severity.
     /// </summary>
-    public IReadOnlyList<ValidationFailure> Warnings { get; }
+    public IReadOnlyList<ValidationFailure> Warnings { get; private set; } = [];
 
     /// <summary>
     /// Gets validation failures with <see cref="ValiantSeverity.Info" /> severity.
     /// </summary>
-    public IReadOnlyList<ValidationFailure> Infos { get; }
+    public IReadOnlyList<ValidationFailure> Infos { get; private set; } = [];
 
     /// <summary>
     /// Throws a <see cref="ValiantValidationException" /> when this result contains validation errors.
@@ -93,8 +99,126 @@ public sealed class ValidationResult
         return this;
     }
 
-    private static IReadOnlyList<ValidationFailure> ToReadOnlyArray(List<ValidationFailure>? failures)
+    internal static ValidationResult CreateOwned(
+        ValidationFailure[] failures,
+        int errorCount,
+        int warningCount,
+        int infoCount)
     {
-        return failures is null ? [] : failures.ToArray();
+        _ = failures ?? throw new ArgumentNullException(nameof(failures));
+        if (errorCount < 0 ||
+            warningCount < 0 ||
+            infoCount < 0 ||
+            errorCount + warningCount + infoCount != failures.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(errorCount));
+        }
+
+        return failures.Length == 0
+            ? Valid
+            : new ValidationResult(failures, errorCount, warningCount, infoCount);
+    }
+
+    private void Initialize(
+        ValidationFailure[] failures,
+        int errorCount,
+        int warningCount,
+        int infoCount)
+    {
+        var readOnlyFailures = Array.AsReadOnly(failures);
+        if (errorCount == failures.Length)
+        {
+            Failures = readOnlyFailures;
+            Errors = readOnlyFailures;
+            Warnings = [];
+            Infos = [];
+            return;
+        }
+
+        if (warningCount == failures.Length)
+        {
+            Failures = readOnlyFailures;
+            Errors = [];
+            Warnings = readOnlyFailures;
+            Infos = [];
+            return;
+        }
+
+        if (infoCount == failures.Length)
+        {
+            Failures = readOnlyFailures;
+            Errors = [];
+            Warnings = [];
+            Infos = readOnlyFailures;
+            return;
+        }
+
+        var indexes = new int[failures.Length];
+        var errorIndex = 0;
+        var warningIndex = errorCount;
+        var infoIndex = errorCount + warningCount;
+
+        for (var index = 0; index < failures.Length; index++)
+        {
+            var failure = failures[index];
+            switch (failure.Severity)
+            {
+                case ValiantSeverity.Warning:
+                    indexes[warningIndex++] = index;
+                    break;
+                case ValiantSeverity.Info:
+                    indexes[infoIndex++] = index;
+                    break;
+                default:
+                    indexes[errorIndex++] = index;
+                    break;
+            }
+        }
+
+        Failures = readOnlyFailures;
+        Errors = errorCount == 0
+            ? []
+            : new ValidationFailurePartition(failures, indexes, 0, errorCount);
+        Warnings = warningCount == 0
+            ? []
+            : new ValidationFailurePartition(failures, indexes, errorCount, warningCount);
+        Infos = infoCount == 0
+            ? []
+            : new ValidationFailurePartition(failures, indexes, errorCount + warningCount, infoCount);
+    }
+
+    private sealed class ValidationFailurePartition(
+        ValidationFailure[] failures,
+        int[] indexes,
+        int offset,
+        int count) : IReadOnlyList<ValidationFailure>
+    {
+        public int Count { get; } = count;
+
+        public ValidationFailure this[int index]
+        {
+            get
+            {
+                if ((uint)index >= (uint)Count)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(index));
+                }
+
+                return failures[indexes[offset + index]];
+            }
+        }
+
+        public IEnumerator<ValidationFailure> GetEnumerator()
+        {
+            for (var index = 0; index < Count; index++)
+            {
+                yield return failures[indexes[offset + index]];
+            }
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
     }
 }

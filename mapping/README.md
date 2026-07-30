@@ -77,6 +77,32 @@ var factory = provider.GetRequiredService<IMapperFactory>();
 var typedMapper = factory.CreateMapper<User, UserDto>();
 ```
 
+Mapping options are startup configuration. Each generated mapper snapshots
+`Mode` and `NullHandling` when it is constructed, so mutating the shared options
+instance later does not change an existing mapper's behavior. Construct or
+resolve a new mapper after changing options in tests or dynamic host setup.
+
+## Collection Mapping
+
+Generated `Fast` mappings write directly into the destination collection shape:
+
+- arrays use exact-size indexed loops when the source is an array;
+- `HashSet<T>` targets are populated directly and pre-sized when the target
+  framework exposes the capacity constructor;
+- unknown `IEnumerable<T>` sources use runtime array/count checks when possible,
+  then fall back to a single-pass growable buffer.
+
+These paths do not use LINQ projection intermediates and preserve one-shot
+enumerable behavior.
+
 Runnable, selectable examples live in
 `mapping/samples/StaticNorth.Valiant.Mapping.Samples`. Each feature folder contains its
 models, mapper, and a documented `Sample` entry point.
+
+## Benchmarks
+
+The standalone
+[`StaticNorth.Valiant.Mapping.Benchmarks`](benchmarks/StaticNorth.Valiant.Mapping.Benchmarks)
+project measures generated `Fast` flat and nested collection mapping, with
+Mapperly as a pinned relative control. Its README documents correctness checks
+and the repeatable before/after workflow.

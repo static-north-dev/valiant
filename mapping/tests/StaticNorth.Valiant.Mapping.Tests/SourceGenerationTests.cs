@@ -93,7 +93,8 @@ public sealed class SourceGenerationTests
         await Assert.That(generated).Contains("return MapRuntime(source);");
         await Assert.That(generated).Contains("Name = source.Name");
         await Assert.That(generated).Contains(
-            "var mode = _valiantMappingOptions?.Mode ?? global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Auto;");
+            "private readonly global::StaticNorth.Valiant.Mapping.ValiantMappingMode _valiantMappingMode = ResolveMappingMode(global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Auto);");
+        await Assert.That(generated).Contains("return _valiantMappingMode;");
         await Assert.That(generated).Contains("#if DEBUG");
         await Assert.That(generated).Contains(
             "return global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Debuggable;");
@@ -1439,6 +1440,224 @@ public sealed class SourceGenerationTests
         var firstAddressDto = addressDtos.GetType().GetProperty("Item")!.GetValue(addressDtos, [0])!;
 
         await Assert.That(addressDtoType.GetProperty("Line1")!.GetValue(firstAddressDto)).IsEqualTo("Main");
+    }
+
+    [Test]
+    public async Task Collection_List_Mapping_Emits_PreSized_Direct_Loop()
+    {
+        var result = RunGenerator(
+            """
+            using System.Collections.Generic;
+            using StaticNorth.Valiant.Mapping;
+
+            [ValiantMapper]
+            public sealed partial class AddressMapper : MapperDefinition<Address, AddressDto>;
+
+            [ValiantMapper]
+            public sealed partial class PersonMapper(AddressMapper addressMapper)
+                : MapperDefinition<Person, PersonDto>
+            {
+                public override void Configure(MappingContext<Person, PersonDto> context)
+                {
+                    context.UseMapper(addressMapper);
+                    context.Map(source => source.Addresses, target => target.Addresses);
+                }
+            }
+
+            public sealed class Person
+            {
+                public List<Address> Addresses { get; init; } = [];
+            }
+
+            public sealed class PersonDto
+            {
+                public List<AddressDto> Addresses { get; init; } = [];
+            }
+
+            public sealed class Address;
+            public sealed class AddressDto;
+            """);
+
+        var generated = result.GeneratedSources
+            .Single(static source => source.HintName.EndsWith("PersonMapper.Mapper.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+
+        await Assert.That(generated).Contains("new global::System.Collections.Generic.List<global::AddressDto>(source.Count)");
+        await Assert.That(generated).Contains("foreach (var item in source)");
+        await Assert.That(generated).Contains("target.Add(addressMapper.Map(item));");
+        await Assert.That(generated).DoesNotContain("global::System.Linq.Enumerable.ToList");
+        await Assert.That(generated).DoesNotContain("global::System.Linq.Enumerable.Select");
+    }
+
+    [Test]
+    public async Task Collection_Array_And_HashSet_Mapping_Emit_Direct_Loops()
+    {
+        var result = RunGenerator(
+            """
+            using System.Collections.Generic;
+            using StaticNorth.Valiant.Mapping;
+
+            [ValiantMapper]
+            public sealed partial class AddressMapper : MapperDefinition<Address, AddressDto>;
+
+            [ValiantMapper]
+            public sealed partial class PersonMapper(AddressMapper addressMapper)
+                : MapperDefinition<Person, PersonDto>
+            {
+                public override void Configure(MappingContext<Person, PersonDto> context)
+                {
+                    context.UseMapper(addressMapper);
+                    context.Map(source => source.Addresses, target => target.Addresses);
+                    context.Map(source => source.UniqueAddresses, target => target.UniqueAddresses);
+                }
+            }
+
+            public sealed class Person
+            {
+                public Address[] Addresses { get; init; } = [];
+                public List<Address> UniqueAddresses { get; init; } = [];
+            }
+
+            public sealed class PersonDto
+            {
+                public AddressDto[] Addresses { get; set; } = [];
+                public HashSet<AddressDto> UniqueAddresses { get; set; } = [];
+            }
+
+            public sealed class Address;
+            public sealed class AddressDto;
+            """);
+
+        var generated = result.GeneratedSources
+            .Single(static source => source.HintName.EndsWith("PersonMapper.Mapper.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+
+        await Assert.That(generated).Contains("var target = new global::AddressDto[source.Length];");
+        await Assert.That(generated).Contains("for (var sourceIndex = 0; sourceIndex < source.Length; sourceIndex++)");
+        await Assert.That(generated).Contains("target[sourceIndex] = addressMapper.Map(item);");
+        await Assert.That(generated).Contains("new global::System.Collections.Generic.HashSet<global::AddressDto>(source.Count)");
+        await Assert.That(generated).Contains("target.Add(addressMapper.Map(item));");
+        await Assert.That(generated).DoesNotContain("global::System.Linq.Enumerable.Select");
+        await Assert.That(generated).DoesNotContain("global::System.Linq.Enumerable.ToArray");
+    }
+
+    [Test]
+    public async Task Collection_Array_Mapping_Consumes_Unknown_Enumerables_Once()
+    {
+        var result = RunGenerator(
+            """
+            using System.Collections.Generic;
+            using StaticNorth.Valiant.Mapping;
+
+            [ValiantMapper]
+            public sealed partial class AddressMapper : MapperDefinition<Address, AddressDto>;
+
+            [ValiantMapper]
+            public sealed partial class PersonMapper(AddressMapper addressMapper)
+                : MapperDefinition<Person, PersonDto>
+            {
+                public override void Configure(MappingContext<Person, PersonDto> context)
+                {
+                    context.UseMapper(addressMapper);
+                    context.Map(source => source.Addresses, target => target.Addresses);
+                }
+            }
+
+            public sealed class Person
+            {
+                public IEnumerable<Address> Addresses { get; init; } = [];
+            }
+
+            public sealed class PersonDto
+            {
+                public AddressDto[] Addresses { get; set; } = [];
+            }
+
+            public sealed class Address;
+            public sealed class AddressDto;
+            """);
+
+        var generated = result.GeneratedSources
+            .Single(static source => source.HintName.EndsWith("PersonMapper.Mapper.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+
+        await Assert.That(generated).Contains("if (source is global::Address[] sourceArray)");
+        await Assert.That(generated).Contains("if (source is global::System.Collections.Generic.ICollection<global::Address> sourceCollection)");
+        await Assert.That(generated).Contains("var countedTarget = new global::AddressDto[sourceCount];");
+        await Assert.That(generated).Contains("var target = new global::System.Collections.Generic.List<global::AddressDto>();");
+        await Assert.That(generated).Contains("foreach (var item in source)");
+        await Assert.That(generated).Contains("return target.ToArray();");
+        await Assert.That(generated).DoesNotContain("global::System.Linq.Enumerable.Select");
+    }
+
+    [Test]
+    public async Task Collection_List_Mapping_Works_For_Constructor_And_Recursive_Lists()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using System.Collections.Generic;
+            using StaticNorth.Valiant.Mapping;
+
+            [ValiantMapper]
+            public sealed partial class AddressMapper : MapperDefinition<Address, AddressDto>;
+
+            [ValiantMapper]
+            public sealed partial class PersonMapper(AddressMapper addressMapper)
+                : MapperDefinition<Person, PersonDto>
+            {
+                public override void Configure(MappingContext<Person, PersonDto> context)
+                {
+                    context.UseMapper(addressMapper);
+                    context.Map(source => source.AddressGroups, target => target.AddressGroups);
+                }
+            }
+
+            public sealed class Person
+            {
+                public List<List<Address>> AddressGroups { get; init; } = [];
+            }
+
+            public sealed class PersonDto(List<List<AddressDto>> addressGroups)
+            {
+                public List<List<AddressDto>> AddressGroups { get; } = addressGroups;
+            }
+
+            public sealed class Address
+            {
+                public string? Line1 { get; init; }
+            }
+
+            public sealed class AddressDto
+            {
+                public string? Line1 { get; init; }
+            }
+            """);
+
+        var personType = assembly.GetType("Person", throwOnError: true)!;
+        var addressType = assembly.GetType("Address", throwOnError: true)!;
+        var addressMapperType = assembly.GetType("AddressMapper", throwOnError: true)!;
+        var mapperType = assembly.GetType("PersonMapper", throwOnError: true)!;
+        var targetType = assembly.GetType("PersonDto", throwOnError: true)!;
+        var source = Activator.CreateInstance(personType)!;
+        var address = Activator.CreateInstance(addressType)!;
+        addressType.GetProperty("Line1")!.SetValue(address, "Main");
+        var groups = personType.GetProperty("AddressGroups")!.GetValue(source)!;
+        var innerListType = groups.GetType().GetGenericArguments()[0];
+        var innerList = Activator.CreateInstance(innerListType)!;
+        innerListType.GetMethod("Add")!.Invoke(innerList, [address]);
+        groups.GetType().GetMethod("Add")!.Invoke(groups, [innerList]);
+
+        var addressMapper = Activator.CreateInstance(addressMapperType)!;
+        var mapper = Activator.CreateInstance(mapperType, [addressMapper])!;
+        var target = mapperType.GetMethod("Map")!.Invoke(mapper, [source])!;
+        var targetGroups = targetType.GetProperty("AddressGroups")!.GetValue(target)!;
+        var firstGroup = targetGroups.GetType().GetProperty("Item")!.GetValue(targetGroups, [0])!;
+        var firstAddress = firstGroup.GetType().GetProperty("Item")!.GetValue(firstGroup, [0])!;
+
+        await Assert.That(firstAddress.GetType().GetProperty("Line1")!.GetValue(firstAddress)).IsEqualTo("Main");
     }
 
     [Test]

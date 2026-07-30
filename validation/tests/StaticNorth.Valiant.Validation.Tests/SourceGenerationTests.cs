@@ -88,6 +88,44 @@ public sealed class SourceGenerationTests
         await Assert.That(generated).Contains("var value0 = instance.Name;");
         await Assert.That(generated).Contains(
             "global::System.String.IsNullOrWhiteSpace(value0)");
+        await Assert.That(generated).Contains(
+            "global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultBuilder? failures = null;");
+        await Assert.That(generated).Contains("var hasErrors = false;");
+        await Assert.That(generated).Contains("return !hasErrors;");
+    }
+
+    [Test]
+    public async Task Generated_Validator_Precomputes_Only_Culture_Invariant_Integer_Literal_Messages()
+    {
+        var result = RunGenerator(
+            """
+            using StaticNorth.Valiant.Validation;
+
+            [ValiantValidator]
+            public sealed partial class PersonValidator : ValidatorDefinition<Person>
+            {
+                public override void Configure(ValidationContext<Person> context)
+                {
+                    var minimumScore = 10;
+                    context.Property(x => x.Age).InclusiveBetween(18, 99);
+                    context.Property(x => x.Score).GreaterThan(minimumScore);
+                }
+            }
+
+            public sealed class Person
+            {
+                public int Age { get; init; }
+                public int Score { get; init; }
+            }
+            """);
+
+        var generated = result.GeneratedSources.Single(static source =>
+            source.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+
+        await Assert.That(generated).Contains("\"'Age' must be between 18 and 99.\"");
+        await Assert.That(generated).Contains("\" must be greater than \" + (minimumScore) + \".\"");
     }
 
     [Test]
@@ -1393,7 +1431,11 @@ public sealed class SourceGenerationTests
 
                     public static ServiceDescriptor Scoped(System.Type serviceType, System.Type implementationType) => new();
 
+                    public static ServiceDescriptor Scoped<TService, TImplementation>() => new();
+
                     public static ServiceDescriptor Transient(System.Type serviceType, System.Type implementationType) => new();
+
+                    public static ServiceDescriptor Transient<TService, TImplementation>() => new();
                 }
 
                 namespace Extensions
@@ -1419,8 +1461,8 @@ public sealed class SourceGenerationTests
         await Assert.That(generated.Contains("var propertyValidatorResult0 = _addressPropertyValidator.Validate(value0);", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("var propertyValidatorResult0 = await _addressPropertyValidator.ValidateAsync(value0, cancellationToken).ConfigureAwait(false);", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("CombinePropertyPath(\"Address\", propertyValidatorFailure0.PropertyName)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("CreateValidatorDescriptor(typeof(global::AddressPropertyValidator), typeof(global::AddressPropertyValidator), valiantValidationOptions.Lifetime)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("CreateValidatorDescriptor(typeof(global::StaticNorth.Valiant.Validation.IPropertyValidator<global::Address>), typeof(global::AddressPropertyValidator), valiantValidationOptions.Lifetime)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("CreateValidatorDescriptor<global::AddressPropertyValidator, global::AddressPropertyValidator>(valiantValidationOptions.Lifetime)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("CreateValidatorDescriptor<global::StaticNorth.Valiant.Validation.IPropertyValidator<global::Address>, global::AddressPropertyValidator>(valiantValidationOptions.Lifetime)", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -1534,7 +1576,11 @@ public sealed class SourceGenerationTests
 
                     public static ServiceDescriptor Scoped(System.Type serviceType, System.Type implementationType) => new();
 
+                    public static ServiceDescriptor Scoped<TService, TImplementation>() => new();
+
                     public static ServiceDescriptor Transient(System.Type serviceType, System.Type implementationType) => new();
+
+                    public static ServiceDescriptor Transient<TService, TImplementation>() => new();
                 }
 
                 namespace Extensions
@@ -1556,9 +1602,10 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName == "StaticNorth.Valiant.Validation.DependencyInjection.g.cs").SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("CreateValidatorDescriptor(typeof(global::PersonValidator), typeof(global::PersonValidator), valiantValidationOptions.Lifetime)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("CreateValidatorDescriptor<global::PersonValidator, global::PersonValidator>(valiantValidationOptions.Lifetime)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("ServiceDescriptor.Singleton<global::StaticNorth.Valiant.Validation.Infrastructure.IValiantValidatorInvoker, global::StaticNorth.Valiant.Validation.Infrastructure.ValiantValidatorInvoker<global::Person>>()", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("case global::StaticNorth.Valiant.Validation.ValiantValidatorLifetime.Scoped:", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("return global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Transient(serviceType, implementationType);", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated.Contains("return global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Transient<TService, TImplementation>();", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -1582,7 +1629,11 @@ public sealed class SourceGenerationTests
 
                     public static ServiceDescriptor Scoped(System.Type serviceType, System.Type implementationType) => new();
 
+                    public static ServiceDescriptor Scoped<TService, TImplementation>() => new();
+
                     public static ServiceDescriptor Transient(System.Type serviceType, System.Type implementationType) => new();
+
+                    public static ServiceDescriptor Transient<TService, TImplementation>() => new();
                 }
 
                 namespace Extensions
@@ -1611,7 +1662,8 @@ public sealed class SourceGenerationTests
         await Assert.That(generated.Contains("AddValiantValidators", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("AddValiantValidations", StringComparison.Ordinal)).IsFalse();
         await Assert.That(generated.Contains("ValiantValidationOptions", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("CreateValidatorDescriptor(typeof(", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(generated.Contains("TryAdd(services, CreateValidatorDescriptor<", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(generated.Contains("IValiantValidatorInvoker", StringComparison.Ordinal)).IsFalse();
     }
 
     [Test]
@@ -1775,7 +1827,7 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
-    public async Task Generated_Failure_List_Uses_Minimal_Capacity_For_FailFast()
+    public async Task Generated_Result_Builder_Uses_Minimal_Capacity_For_FailFast()
     {
         var result = RunGenerator(
             """
@@ -1821,7 +1873,11 @@ public sealed class SourceGenerationTests
 
                     public static ServiceDescriptor Scoped(System.Type serviceType, System.Type implementationType) => new();
 
+                    public static ServiceDescriptor Scoped<TService, TImplementation>() => new();
+
                     public static ServiceDescriptor Transient(System.Type serviceType, System.Type implementationType) => new();
+
+                    public static ServiceDescriptor Transient<TService, TImplementation>() => new();
                 }
 
                 namespace Extensions

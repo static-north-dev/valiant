@@ -1,8 +1,12 @@
 namespace StaticNorth.Valiant.Mapping;
 
 /// <summary>
-/// Configures runtime behavior for generated Valiant mappers.
+/// Configures behavior captured when a generated Valiant mapper is constructed.
 /// </summary>
+/// <remarks>
+/// Configure these options during application startup. Existing mapper instances retain the values
+/// captured by their constructor and do not observe later mutations.
+/// </remarks>
 public sealed class ValiantMappingOptions
 {
     /// <summary>

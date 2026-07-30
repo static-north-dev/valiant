@@ -23,7 +23,15 @@ app.MapPost("/users", (CreateUser request) => Results.Created())
     .WithValiantValidation();
 ```
 
-The non-generic overload validates every eligible handler argument with a registered validator. Use the typed overload to select one request type explicitly:
+The non-generic overload uses each non-null argument's exact declared parameter type.
+`[ValiantValidator]` discovery emits the validator, its typed invocation bridge, and their registrations
+into the generated `AddValiantValidators()` method. The normal path therefore needs no per-model
+registration or runtime assembly scan. The generated method covers default validators discovered in
+the current compilation. Arguments with the same declared type reuse the validators resolved for that
+request while retaining handler-argument execution order.
+
+Use the typed overload to resolve `IValidator<T>` and validate every non-null handler argument
+assignable to `T`:
 
 ```csharp
 app.MapPost("/users", (CreateUser request, CancellationToken cancellationToken) =>
@@ -31,7 +39,12 @@ app.MapPost("/users", (CreateUser request, CancellationToken cancellationToken) 
     .WithValiantValidation<CreateUser>();
 ```
 
-Failures return HTTP validation problem details before the handler runs.
+The generated parameterless path supports Native AOT. Manually registered raw `IValidator<T>` services
+without a generated bridge remain compatible through a JIT-only fallback. For an explicit manual
+registration in Native AOT, use the typed overload. MVC does not receive this Native AOT guarantee.
+
+Errors return HTTP validation problem details before the handler runs. Warnings and informational
+failures do not block the handler.
 
 ## MVC
 

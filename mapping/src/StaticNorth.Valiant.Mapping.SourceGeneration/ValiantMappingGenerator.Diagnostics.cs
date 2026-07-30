@@ -65,6 +65,18 @@ public sealed partial class ValiantMappingGenerator
                 AppendFingerprintValue(builder, assignment.SourceExpression);
                 AppendFingerprintValue(builder, assignment.ConditionExpression);
             }
+
+            foreach (var collectionMapping in mapping.CollectionMappings)
+            {
+                AppendFingerprintValue(builder, collectionMapping.MethodName);
+                AppendFingerprintValue(builder, collectionMapping.Kind.ToString());
+                AppendFingerprintValue(builder, collectionMapping.SourceKind.ToString());
+                AppendFingerprintValue(builder, collectionMapping.SourceType);
+                AppendFingerprintValue(builder, collectionMapping.SourceElementType);
+                AppendFingerprintValue(builder, collectionMapping.TargetElementType);
+                AppendFingerprintValue(builder, collectionMapping.MappedElementExpression);
+                AppendFingerprintValue(builder, collectionMapping.CapacityExpression);
+            }
         }
 
         foreach (var diagnostic in diagnostics)

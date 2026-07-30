@@ -1,5 +1,6 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
+using StaticNorth.Valiant.Validation.Infrastructure;
 using StaticNorth.Valiant.Validation.Samples.AttributeValidation;
 using StaticNorth.Valiant.Validation.Samples.Basic;
 using StaticNorth.Valiant.Validation.Samples.Catalog;
@@ -60,6 +61,7 @@ public sealed class ValidationSampleTests
             options.Lifetime = ValiantValidatorLifetime.Scoped;
             options.FailureBehavior = ValiantFailureBehavior.ValidateAll;
         });
+        SampleServiceRegistration.AddValidators(services);
 
         await Assert.That(services.Single(static descriptor =>
                 descriptor.ServiceType == typeof(IValidator<CatalogItem>)).Lifetime)
@@ -71,12 +73,17 @@ public sealed class ValidationSampleTests
             descriptor.ImplementationType == typeof(CatalogItemRulesValidator))).IsFalse();
         await Assert.That(services.Any(static descriptor =>
             descriptor.ServiceType == typeof(IPropertyValidator<Address>))).IsTrue();
+        await Assert.That(services.Count(static descriptor =>
+            descriptor.ServiceType == typeof(IValiantValidatorInvoker) &&
+            descriptor.ImplementationType == typeof(ValiantValidatorInvoker<CatalogItem>))).IsEqualTo(1);
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         var options = scope.ServiceProvider.GetRequiredService<ValiantValidationOptions>();
         var metadata = scope.ServiceProvider.GetServices<IValiantValidationMetadataProvider>()
             .Single(provider => provider.ModelType == typeof(CatalogItem));
+        var invoker = scope.ServiceProvider.GetServices<IValiantValidatorInvoker>()
+            .Single(item => item.ModelType == typeof(CatalogItem));
 
         await Assert.That(options.Mode).IsEqualTo(ValiantValidationMode.Fast);
         await Assert.That(options.Lifetime).IsEqualTo(ValiantValidatorLifetime.Scoped);
@@ -87,6 +94,7 @@ public sealed class ValidationSampleTests
             .IsNotNull();
         await Assert.That(scope.ServiceProvider.GetRequiredService<SampleAddressPropertyValidator>())
             .IsNotNull();
+        await Assert.That(invoker).IsTypeOf<ValiantValidatorInvoker<CatalogItem>>();
         await Assert.That(metadata.Properties).IsNotEmpty();
     }
 

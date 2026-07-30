@@ -116,6 +116,25 @@ public sealed class MappingSampleTests
     }
 
     [Test]
+    public async Task Mapper_Captures_Options_When_It_Is_Constructed()
+    {
+        var options = new ValiantMappingOptions
+        {
+            Mode = ValiantMappingMode.Fast,
+            NullHandling = ValiantNullHandling.MapNulls
+        };
+        var existingMapper = new NullProfileMapper(options);
+
+        options.NullHandling = ValiantNullHandling.IgnoreSourceNulls;
+
+        var existingTarget = existingMapper.Map(new NullProfile());
+        var newTarget = new NullProfileMapper(options).Map(new NullProfile());
+
+        await Assert.That(existingTarget.DefaultValue).IsNull();
+        await Assert.That(newTarget.DefaultValue).IsEqualTo("existing default");
+    }
+
+    [Test]
     public async Task Flattening_And_Enums_Sample_Covers_Both_Path_Directions_And_Enum_Conversion()
     {
         var flattened = new FlatteningOfficeMapper().Map(
