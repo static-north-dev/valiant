@@ -40,7 +40,7 @@ npm run docs:check-llms
 ## Cloudflare Pages
 
 The site builds static files, so no Cloudflare adapter is required. CI builds
-the site for pushes to `develop`, but never deploys it.
+the site for pushes and pull requests targeting `main`, but never deploys it.
 
 Documentation publication is independent from NuGet releases. Run the
 **Publish Docs** workflow manually whenever the site should be refreshed. It
@@ -109,7 +109,7 @@ remaining history.
 
 Production builds set `DOCS_INCLUDE_CURRENT=false`, so only released numeric
 major versions appear. Normal local and CI builds retain the `current` docs
-version for previewing changes on `develop`.
+version for previewing changes before they merge to `main`.
 
 The newest released major uses `/validation/`, `/endpoints/`, `/mapping/`, and
 `/settings/`. Older majors use `/<major>/<section>/`, such as
@@ -173,6 +173,12 @@ separate documentation workflow.
 
 Rerunning a partially failed release is safe because NuGet publication uses
 `--skip-duplicate`. CI and documentation publication fail on high or critical
-npm advisories. The current Docusaurus development-server dependency graph
-still reports a moderate `uuid` advisory with no upstream fix; it is build
-tooling and is not shipped in the static Cloudflare Pages output.
+npm advisories except for two explicitly reviewed `image-size` denial-of-service
+advisories, `GHSA-W3RX-R6R6-PGPR` and `GHSA-5P2G-FCMC-QVQQ`. Docusaurus 3.10.2
+is the current release and has no compatible fix. The affected image parsers
+run only in isolated documentation builds, every workflow job that invokes a
+Docusaurus build has a 20-minute timeout, and the parsers are not shipped in
+the static Cloudflare Pages output. Remove these exceptions as soon as a
+compatible Docusaurus or `image-size` fix is available. The development-server
+dependency graph also reports a moderate `uuid` advisory with no upstream fix;
+it is build tooling and is not shipped in the static site.

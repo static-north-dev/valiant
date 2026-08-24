@@ -2,8 +2,12 @@ const {spawnSync} = require('node:child_process');
 
 const allowedNoFixAdvisories = new Map([
   [
-    'GHSA-MH99-V99M-4GVG',
-    'Docusaurus 3.10.2 has no compatible fix for its serve-handler/minimatch dependency chain.',
+    'GHSA-W3RX-R6R6-PGPR',
+    'Docusaurus 3.10.2 has no compatible image-size fix for the ICNS parser denial of service; Docusaurus builds run on isolated, time-bounded runners and the parser is not shipped in the static site.',
+  ],
+  [
+    'GHSA-5P2G-FCMC-QVQQ',
+    'Docusaurus 3.10.2 has no compatible image-size fix for the JXL and HEIF parser denial of service; Docusaurus builds run on isolated, time-bounded runners and the parser is not shipped in the static site.',
   ],
 ]);
 

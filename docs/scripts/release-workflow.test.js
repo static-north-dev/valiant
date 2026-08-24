@@ -44,6 +44,14 @@ function jobNames(workflow) {
   return [...jobs.matchAll(/^  ([a-z0-9-]+):$/gm)].map((match) => match[1]);
 }
 
+test('CI validates pushes and pull requests on main', () => {
+  assert.match(
+    ciWorkflow,
+    /^on:\n  push:\n    branches:\n      - main\n  pull_request:\n    branches:\n      - main$/m,
+  );
+  assert.doesNotMatch(ciWorkflow, /branches:\n\s+- develop/);
+});
+
 test('published releases only verify and publish NuGet packages', () => {
   assert.match(
     releaseWorkflow,
@@ -108,13 +116,24 @@ test('documentation publication is a separate manual workflow', () => {
   ]);
 });
 
+test('production publication jobs use the production environment', () => {
+  assert.match(job(releaseWorkflow, 'publish-nuget'), /^    environment: production$/m);
+  assert.match(job(docsWorkflow, 'deploy-docs'), /^    environment: production$/m);
+});
+
 test('documentation audits retain a narrow no-fix advisory gate', () => {
-  assert.match(job(ciWorkflow, 'build-docs'), /npm run audit:dependencies/);
-  assert.doesNotMatch(job(ciWorkflow, 'build-docs'), /npm audit/);
+  const ciDocsJob = job(ciWorkflow, 'build-docs');
+  assert.match(ciDocsJob, /timeout-minutes: 20/);
+  assert.match(ciDocsJob, /npm run audit:dependencies/);
+  assert.doesNotMatch(ciDocsJob, /npm audit/);
 
   for (const name of ['generate-docs-snapshot', 'verify-docs']) {
     assert.match(job(docsWorkflow, name), /npm run audit:dependencies/);
     assert.doesNotMatch(job(docsWorkflow, name), /npm audit/);
+  }
+
+  for (const name of ['verify-docs-candidate', 'verify-docs']) {
+    assert.match(job(docsWorkflow, name), /timeout-minutes: 20/);
   }
 });
 

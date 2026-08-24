@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a reproducible problem in Valiant.
+title: "[Bug] "
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Validation
+        - Endpoints
+        - Mapping
+        - Settings
+        - Packaging or source generation
+        - Documentation or automation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Valiant package and version
+      placeholder: StaticNorth.Valiant.Validation 1.1.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the .NET SDK/runtime, target framework, operating system, and relevant host framework.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide a small repository, code sample, or exact steps that reproduce the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics or generated output
+      description: Remove credentials and personal data before pasting logs or generated source.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and tested the latest stable Valiant release.
+          required: true
+        - label: This report does not contain a security vulnerability or sensitive data.
+          required: true

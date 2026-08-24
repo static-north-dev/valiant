@@ -114,6 +114,7 @@ jobs:
     name: publish NuGet packages
     needs: prepare
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: read
       id-token: write

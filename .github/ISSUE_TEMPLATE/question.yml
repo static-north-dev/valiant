@@ -1,0 +1,36 @@
+name: Usage question
+description: Ask about using or integrating Valiant.
+title: "[Question] "
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Validation
+        - Endpoints
+        - Mapping
+        - Settings
+        - Packaging or source generation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Valiant package and version
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: Include the goal, relevant code, what you tried, and what happened.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I reviewed the current documentation and searched existing issues.
+          required: true

@@ -1,8 +1,10 @@
 /**
- * Based on Docusaurus theme-classic 3.10.2:
- * theme/NavbarItem/DocsVersionDropdownNavbarItem.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * Intentional differences:
+ * Adapted from Docusaurus theme-classic 3.10.2 under the MIT License.
+ * See THIRD_PARTY_NOTICES.md in the repository root.
+ *
+ * Valiant changes:
  * - keep a real dropdown when only one released docs version exists;
  * - present numeric major labels as "Version N".
  *

@@ -624,3 +624,12 @@ verification targets pack serially, inspect NuGet and symbol-package contents,
 and run leaf-only applications that restore the produced packages from the
 local feed. `StaticNorth.Valiant.Endpoints` is an internal contract assembly bundled inside
 `StaticNorth.Valiant.Endpoints.AspNetCore`; it is not a standalone package.
+
+## Contributing and security
+
+Contributions target `main` through pull requests. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for development and verification guidance and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+for community expectations.
+
+Do not report vulnerabilities in public issues. Follow [SECURITY.md](SECURITY.md)
+to submit a private report.

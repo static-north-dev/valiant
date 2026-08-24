@@ -1,0 +1,42 @@
+name: Feature request
+description: Propose a focused change to Valiant behavior or public API.
+title: "[Feature] "
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Validation
+        - Endpoints
+        - Mapping
+        - Settings
+        - Packaging or source generation
+        - Documentation or automation
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Describe the user problem before proposing an API shape.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Include a concise example when useful.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and documentation for this capability.
+          required: true

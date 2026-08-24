@@ -260,7 +260,7 @@ the ten expected NuGet and symbol packages, package metadata, dependencies,
 analyzers, `buildTransitive`/content assets, and the bundled endpoint contracts.
 Leaf-only consumer applications verify transitive package and analyzer delivery.
 
-CI runs only for pushes to `develop`. Publishing is owned by
+CI runs for pushes and pull requests targeting `main`. Publishing is owned by
 `.github/workflows/release.yml`, which runs when a GitHub Release is published.
 Release tags must be SemVer with an optional leading `v`; the normalized tag
 version is applied to compiled assemblies and NuGet packages. Releases verify

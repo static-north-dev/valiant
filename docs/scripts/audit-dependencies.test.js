@@ -5,20 +5,22 @@ const {classifyHighAdvisories} = require('./audit-dependencies');
 test('allows only the documented no-fix Docusaurus advisory chain', () => {
   const result = classifyHighAdvisories({
     vulnerabilities: {
-      '@docusaurus/core': {
+      '@docusaurus/mdx-loader': {
         severity: 'high',
-        via: ['serve-handler'],
+        via: ['image-size'],
       },
-      'serve-handler': {
+      'image-size': {
         severity: 'high',
-        via: ['minimatch'],
-      },
-      minimatch: {
-        severity: 'high',
-        via: [{
-          severity: 'high',
-          url: 'https://github.com/advisories/GHSA-mh99-v99m-4gvg',
-        }],
+        via: [
+          {
+            severity: 'high',
+            url: 'https://github.com/advisories/GHSA-w3rx-r6r6-pgpr',
+          },
+          {
+            severity: 'high',
+            url: 'https://github.com/advisories/GHSA-5p2g-fcmc-qvqq',
+          },
+        ],
       },
     },
   });
@@ -33,7 +35,7 @@ test('rejects new high-severity advisories and untraceable findings', () => {
         severity: 'high',
         via: [{
           severity: 'high',
-          url: 'https://github.com/advisories/GHSA-mh99-v99m-4gvg',
+          url: 'https://github.com/advisories/GHSA-w3rx-r6r6-pgpr',
         }],
       },
       unknown: {

@@ -20,7 +20,7 @@
     <PackageVersion Condition="'$(PackageVersion)' == ''">$(VersionPrefix)</PackageVersion>
     <Authors>Valiant contributors</Authors>
     <Company>Static North</Company>
-    <Copyright>Copyright © Static North</Copyright>
+    <Copyright>Copyright © Artjoms Petrosovs</Copyright>
     <PackageProjectUrl>https://github.com/static-north-dev/valiant</PackageProjectUrl>
     <RepositoryUrl>https://github.com/static-north-dev/valiant.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

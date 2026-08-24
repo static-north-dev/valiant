@@ -126,6 +126,7 @@ jobs:
       - prepare
       - generate-docs-snapshot
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout pinned documentation history
@@ -310,6 +311,7 @@ jobs:
       - prepare
       - persist-docs-snapshot
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout persisted documentation commit
@@ -389,6 +391,7 @@ jobs:
       - persist-docs-snapshot
       - verify-docs
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: read
       deployments: write
