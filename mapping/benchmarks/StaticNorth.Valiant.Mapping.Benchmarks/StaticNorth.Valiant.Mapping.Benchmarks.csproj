@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
     <PackageReference Include="Riok.Mapperly" PrivateAssets="all" />
     <ProjectReference Include="../../src/StaticNorth.Valiant.Mapping/StaticNorth.Valiant.Mapping.csproj" />
