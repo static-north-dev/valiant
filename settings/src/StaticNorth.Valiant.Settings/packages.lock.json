@@ -4,9 +4,9 @@
     ".NETStandard,Version=v2.0": {
       "Microsoft.Net.Compilers.Toolset": {
         "type": "Direct",
-        "requested": "[5.6.0, )",
-        "resolved": "5.6.0",
-        "contentHash": "9zNchixeYg1+Gqwvv/tPbExDrF7Q6OfL222GCVls6M/q0Vng2LQ55WxossnyJ/rQAFmEXnSVY7c/MFjPr48/Mg=="
+        "requested": "[5.9.0, )",
+        "resolved": "5.9.0",
+        "contentHash": "W0fkdgbm+RTf2jyNetGFJpiZ66bpJe4eu6zrSnsAOqad5QLPaU/nWuRAgiRHIVzkpPJzSlS3cKFD+CzzUUS0pg=="
       },
       "NETStandard.Library": {
         "type": "Direct",
@@ -26,9 +26,9 @@
     "net8.0": {
       "Microsoft.Net.Compilers.Toolset": {
         "type": "Direct",
-        "requested": "[5.6.0, )",
-        "resolved": "5.6.0",
-        "contentHash": "9zNchixeYg1+Gqwvv/tPbExDrF7Q6OfL222GCVls6M/q0Vng2LQ55WxossnyJ/rQAFmEXnSVY7c/MFjPr48/Mg=="
+        "requested": "[5.9.0, )",
+        "resolved": "5.9.0",
+        "contentHash": "W0fkdgbm+RTf2jyNetGFJpiZ66bpJe4eu6zrSnsAOqad5QLPaU/nWuRAgiRHIVzkpPJzSlS3cKFD+CzzUUS0pg=="
       },
       "Microsoft.NET.ILLink.Tasks": {
         "type": "Direct",
