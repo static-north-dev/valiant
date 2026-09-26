@@ -173,12 +173,10 @@ separate documentation workflow.
 
 Rerunning a partially failed release is safe because NuGet publication uses
 `--skip-duplicate`. CI and documentation publication fail on high or critical
-npm advisories except for two explicitly reviewed `image-size` denial-of-service
-advisories, `GHSA-W3RX-R6R6-PGPR` and `GHSA-5P2G-FCMC-QVQQ`. Docusaurus 3.10.2
-is the current release and has no compatible fix. The affected image parsers
-run only in isolated documentation builds, every workflow job that invokes a
-Docusaurus build has a 20-minute timeout, and the parsers are not shipped in
-the static Cloudflare Pages output. Remove these exceptions as soon as a
-compatible Docusaurus or `image-size` fix is available. The development-server
+npm advisories, with no advisory exceptions. Compatible security patches for
+transitive dependencies are pinned in `package.json` overrides and the lockfile,
+including `image-size` 2.0.4, which replaces the previously exempt vulnerable
+image parsers. Every workflow job that invokes a Docusaurus build has a
+20-minute timeout. The development-server
 dependency graph also reports a moderate `uuid` advisory with no upstream fix;
 it is build tooling and is not shipped in the static site.

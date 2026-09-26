@@ -121,7 +121,7 @@ test('production publication jobs use the production environment', () => {
   assert.match(job(docsWorkflow, 'deploy-docs'), /^    environment: production$/m);
 });
 
-test('documentation audits retain a narrow no-fix advisory gate', () => {
+test('documentation workflows run the dependency audit gate with bounded builds', () => {
   const ciDocsJob = job(ciWorkflow, 'build-docs');
   assert.match(ciDocsJob, /timeout-minutes: 20/);
   assert.match(ciDocsJob, /npm run audit:dependencies/);

@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {classifyHighAdvisories} = require('./audit-dependencies');
 
-test('allows only the documented no-fix Docusaurus advisory chain', () => {
+test('rejects the formerly exempt image-size advisories through the Docusaurus dependency chain', () => {
   const result = classifyHighAdvisories({
     vulnerabilities: {
       '@docusaurus/mdx-loader': {
@@ -25,7 +25,10 @@ test('allows only the documented no-fix Docusaurus advisory chain', () => {
     },
   });
 
-  assert.deepEqual(result, {unapprovedAdvisories: [], unresolvedPackages: []});
+  assert.deepEqual(result, {
+    unapprovedAdvisories: ['GHSA-W3RX-R6R6-PGPR', 'GHSA-5P2G-FCMC-QVQQ'],
+    unresolvedPackages: [],
+  });
 });
 
 test('rejects new high-severity advisories and untraceable findings', () => {
@@ -53,7 +56,7 @@ test('rejects new high-severity advisories and untraceable findings', () => {
   });
 
   assert.deepEqual(result, {
-    unapprovedAdvisories: ['GHSA-AAAA-BBBB-CCCC'],
+    unapprovedAdvisories: ['GHSA-W3RX-R6R6-PGPR', 'GHSA-AAAA-BBBB-CCCC'],
     unresolvedPackages: ['untraceable'],
   });
 });
