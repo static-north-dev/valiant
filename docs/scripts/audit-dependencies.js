@@ -1,16 +1,5 @@
 const {spawnSync} = require('node:child_process');
 
-const allowedNoFixAdvisories = new Map([
-  [
-    'GHSA-W3RX-R6R6-PGPR',
-    'Docusaurus 3.10.2 has no compatible image-size fix for the ICNS parser denial of service; Docusaurus builds run on isolated, time-bounded runners and the parser is not shipped in the static site.',
-  ],
-  [
-    'GHSA-5P2G-FCMC-QVQQ',
-    'Docusaurus 3.10.2 has no compatible image-size fix for the JXL and HEIF parser denial of service; Docusaurus builds run on isolated, time-bounded runners and the parser is not shipped in the static site.',
-  ],
-]);
-
 function advisoryId(advisory) {
   return advisory.url?.match(/GHSA-[a-z0-9-]+/i)?.[0]?.toUpperCase();
 }
@@ -56,7 +45,7 @@ function classifyHighAdvisories(report) {
     unresolvedPackages: highOrCritical
       .filter(([name]) => collectAdvisories(vulnerabilities, name).length === 0)
       .map(([name]) => name),
-    unapprovedAdvisories: [...advisories].filter((id) => !allowedNoFixAdvisories.has(id)),
+    unapprovedAdvisories: [...advisories],
   };
 }
 
@@ -88,10 +77,7 @@ function main() {
   }
 
   if (result.status === 1) {
-    console.warn('Accepted known no-fix dependency advisory:');
-    for (const [id, reason] of allowedNoFixAdvisories) {
-      console.warn(`- ${id}: ${reason}`);
-    }
+    console.warn('Dependency audit passed the high/critical gate; lower-severity findings remain.');
   }
 }
 
