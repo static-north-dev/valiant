@@ -1,9 +1,46 @@
+using System.Text.Json;
 using StaticNorth.Valiant.Validation.Infrastructure;
 
 namespace StaticNorth.Valiant.Validation.Tests;
 
 public sealed class ValidationResultTests
 {
+    [Test]
+    [Arguments(0, 0)]
+    [Arguments(1, 96)]
+    [Arguments(5, 256)]
+    public async Task Accumulator_Allocates_Only_The_Owned_Result(int failureCount, int maximumBytesPerResult)
+    {
+        const int iterations = 1_000;
+        var failure = new ValidationFailure("Name", "Required", "required");
+
+        for (var iteration = 0; iteration < iterations; iteration++)
+        {
+            GC.KeepAlive(BuildResult());
+        }
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var iteration = 0; iteration < iterations; iteration++)
+        {
+            GC.KeepAlive(BuildResult());
+        }
+
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        await Assert.That(allocated).IsLessThanOrEqualTo((long)maximumBytesPerResult * iterations);
+
+        ValidationResult BuildResult()
+        {
+            var accumulator = new ValidationResultAccumulator(5);
+            for (var index = 0; index < failureCount; index++)
+            {
+                accumulator.Add(failure);
+            }
+
+            return accumulator.Build();
+        }
+    }
+
     [Test]
     public async Task Constructor_Snapshots_Replaced_Input_Items()
     {
@@ -17,6 +54,51 @@ public sealed class ValidationResultTests
 
         await Assert.That(result.Failures[0].ErrorCode).IsEqualTo("Original");
         await Assert.That(result.Errors[0].ErrorCode).IsEqualTo("Original");
+    }
+
+    [Test]
+    [Arguments(ValiantSeverity.Error)]
+    [Arguments(ValiantSeverity.Warning)]
+    [Arguments(ValiantSeverity.Info)]
+    public async Task Single_Failure_Preserves_Severity_Order_And_ReadOnly_Access(ValiantSeverity severity)
+    {
+        var builder = new ValidationResultBuilder(5);
+        builder.Add(new ValidationFailure("Name", "Required", "required", severity));
+        var result = builder.Build();
+
+        await Assert.That(result.IsValid).IsEqualTo(severity != ValiantSeverity.Error);
+        await Assert.That(result.Failures.Count).IsEqualTo(1);
+        await Assert.That(result.Failures.Single().ErrorCode).IsEqualTo("Required");
+        await Assert.That(result.Failures[0].Severity).IsEqualTo(severity);
+        await Assert.That(result.Errors.Count).IsEqualTo(severity == ValiantSeverity.Error ? 1 : 0);
+        await Assert.That(result.Warnings.Count).IsEqualTo(severity == ValiantSeverity.Warning ? 1 : 0);
+        await Assert.That(result.Infos.Count).IsEqualTo(severity == ValiantSeverity.Info ? 1 : 0);
+        await Assert.That(result.Failures as ValidationFailure[]).IsNull();
+        await Assert.That(result.Failures as IList<ValidationFailure>).IsNull();
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => Task.Run(() => result.Failures[-1]));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => Task.Run(() => result.Failures[1]));
+    }
+
+    [Test]
+    [Arguments(1)]
+    [Arguments(5)]
+    public async Task Result_Preserves_Its_Json_Object_And_Failure_Array_Shape(int count)
+    {
+        var builder = new ValidationResultBuilder(count);
+        for (var index = 0; index < count; index++)
+        {
+            builder.Add(new ValidationFailure("Name", "Required", "required"));
+        }
+
+        var json = JsonSerializer.SerializeToElement(builder.Build());
+
+        await Assert.That(json.ValueKind).IsEqualTo(JsonValueKind.Object);
+        await Assert.That(json.GetProperty("IsValid").GetBoolean()).IsFalse();
+        await Assert.That(json.GetProperty("Failures").GetArrayLength()).IsEqualTo(count);
+        await Assert.That(json.GetProperty("Errors").GetArrayLength()).IsEqualTo(count);
+        await Assert.That(json.GetProperty("Warnings").GetArrayLength()).IsEqualTo(0);
+        await Assert.That(json.GetProperty("Infos").GetArrayLength()).IsEqualTo(0);
+        await Assert.That(json.GetProperty("Errors")[0].GetProperty("ErrorCode").GetString()).IsEqualTo("Required");
     }
 
     [Test]

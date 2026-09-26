@@ -5,6 +5,8 @@ namespace StaticNorth.Valiant.Validation;
 /// </summary>
 public sealed class ValidationResult
 {
+    private IReadOnlyList<ValidationFailure>? _errors;
+
     /// <summary>
     /// Gets the shared valid result used by generated validators when no failures are present.
     /// </summary>
@@ -19,9 +21,15 @@ public sealed class ValidationResult
         if (errors.Count == 0)
         {
             Failures = [];
-            Errors = [];
+            _errors = null;
             Warnings = [];
             Infos = [];
+            return;
+        }
+
+        if (errors.Count == 1)
+        {
+            Initialize(errors[0]);
             return;
         }
 
@@ -60,30 +68,35 @@ public sealed class ValidationResult
         Initialize(failures, errorCount, warningCount, infoCount);
     }
 
+    private ValidationResult(ValidationFailure failure)
+    {
+        Initialize(failure);
+    }
+
     /// <summary>
     /// Gets a value indicating whether validation succeeded.
     /// </summary>
-    public bool IsValid => Errors.Count == 0;
+    public bool IsValid => _errors is null;
 
     /// <summary>
     /// Gets every validation failure, including warnings and informational failures.
     /// </summary>
-    public IReadOnlyList<ValidationFailure> Failures { get; private set; } = [];
+    public IReadOnlyList<ValidationFailure> Failures { get; private set; } = null!;
 
     /// <summary>
     /// Gets validation failures with <see cref="ValiantSeverity.Error" /> severity.
     /// </summary>
-    public IReadOnlyList<ValidationFailure> Errors { get; private set; } = [];
+    public IReadOnlyList<ValidationFailure> Errors => _errors ?? [];
 
     /// <summary>
     /// Gets validation failures with <see cref="ValiantSeverity.Warning" /> severity.
     /// </summary>
-    public IReadOnlyList<ValidationFailure> Warnings { get; private set; } = [];
+    public IReadOnlyList<ValidationFailure> Warnings { get; private set; } = null!;
 
     /// <summary>
     /// Gets validation failures with <see cref="ValiantSeverity.Info" /> severity.
     /// </summary>
-    public IReadOnlyList<ValidationFailure> Infos { get; private set; } = [];
+    public IReadOnlyList<ValidationFailure> Infos { get; private set; } = null!;
 
     /// <summary>
     /// Throws a <see cref="ValiantValidationException" /> when this result contains validation errors.
@@ -105,18 +118,34 @@ public sealed class ValidationResult
         int warningCount,
         int infoCount)
     {
-        _ = failures ?? throw new ArgumentNullException(nameof(failures));
-        if (errorCount < 0 ||
-            warningCount < 0 ||
-            infoCount < 0 ||
-            errorCount + warningCount + infoCount != failures.Length)
-        {
-            throw new ArgumentOutOfRangeException(nameof(errorCount));
-        }
-
+        // The accumulator owns this array and has already counted its severities.
         return failures.Length == 0
             ? Valid
             : new ValidationResult(failures, errorCount, warningCount, infoCount);
+    }
+
+    internal static ValidationResult CreateSingle(ValidationFailure failure) => new(failure);
+
+    private void Initialize(ValidationFailure failure)
+    {
+        var failures = new SingleValidationFailureList(failure);
+        Failures = failures;
+        _errors = null;
+        Warnings = [];
+        Infos = [];
+
+        switch (failure.Severity)
+        {
+            case ValiantSeverity.Warning:
+                Warnings = failures;
+                break;
+            case ValiantSeverity.Info:
+                Infos = failures;
+                break;
+            default:
+                _errors = failures;
+                break;
+        }
     }
 
     private void Initialize(
@@ -129,7 +158,7 @@ public sealed class ValidationResult
         if (errorCount == failures.Length)
         {
             Failures = readOnlyFailures;
-            Errors = readOnlyFailures;
+            _errors = readOnlyFailures;
             Warnings = [];
             Infos = [];
             return;
@@ -138,7 +167,7 @@ public sealed class ValidationResult
         if (warningCount == failures.Length)
         {
             Failures = readOnlyFailures;
-            Errors = [];
+            _errors = null;
             Warnings = readOnlyFailures;
             Infos = [];
             return;
@@ -147,7 +176,7 @@ public sealed class ValidationResult
         if (infoCount == failures.Length)
         {
             Failures = readOnlyFailures;
-            Errors = [];
+            _errors = null;
             Warnings = [];
             Infos = readOnlyFailures;
             return;
@@ -176,8 +205,8 @@ public sealed class ValidationResult
         }
 
         Failures = readOnlyFailures;
-        Errors = errorCount == 0
-            ? []
+        _errors = errorCount == 0
+            ? null
             : new ValidationFailurePartition(failures, indexes, 0, errorCount);
         Warnings = warningCount == 0
             ? []

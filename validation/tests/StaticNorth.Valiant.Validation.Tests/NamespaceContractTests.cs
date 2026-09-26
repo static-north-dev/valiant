@@ -41,7 +41,9 @@ public sealed class NamespaceContractTests
         [
             typeof(IValiantValidatorInvoker),
             typeof(ValiantValidatorInvoker<>),
-            typeof(ValidationResultBuilder)
+            typeof(ValidationResultBuilder),
+            typeof(ValidationResultAccumulator),
+            typeof(ValidationResultCache)
         ];
 
         foreach (var type in infrastructureTypes)

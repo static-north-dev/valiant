@@ -5,6 +5,8 @@ Validly. Both implementations validate five independent properties with one
 equivalent rule per property.
 
 - `ValidationBenchmarks` measures full diagnostic result creation.
+- `ValidationFailurePatternBenchmarks` alternates one/all failures or cycles
+  through all 32 combinations, measuring result lookup after every rule executes.
 - `ValidationStatusBenchmarks` measures status-only validation.
 - `ValidationResultConstructionBenchmarks` isolates result construction for
   homogeneous and mixed severities.
@@ -19,8 +21,11 @@ equivalent rule per property.
 
 `GlobalSetup` validates the result status, exact failure count, and failed
 property names before timing begins. Validator construction and input creation
-are excluded. Result creation is measured, and Validly result disposal is
-included because its result is pool-backed.
+are excluded. Full validation includes result creation or reuse, and Validly
+result disposal is included because its result is pool-backed. Generated Valiant
+validators with at most six checks and fixed default failure content lazily reuse
+immutable results. These benchmarks warm those results; first-use allocations
+are excluded. Dynamic content and larger validators use owned result construction.
 
 ## Run
 

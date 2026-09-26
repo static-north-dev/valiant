@@ -31,6 +31,8 @@ The model schema contains its CLR type, display name, section path, and ordered 
 - secret flag and known default value;
 - nested object properties or collection item schema.
 
+Public instance properties with public getters are included, including inherited properties. The most derived declaration wins when a property is overridden or hidden. Overrides retain an inherited `[ValiantSecret]` marker.
+
 ## Property kinds
 
 | Kind | Represents |
@@ -70,4 +72,3 @@ public string? ClientSecret { get; init; }
 :::info Deterministic output
 Generated schemas are stable enough for tooling to sort, diff, cache, and render. No runtime type scan is required to discover marked settings models.
 :::
-

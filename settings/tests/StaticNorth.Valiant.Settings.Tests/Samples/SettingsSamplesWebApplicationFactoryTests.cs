@@ -95,6 +95,8 @@ public sealed class SettingsSamplesWebApplicationFactoryTests
         var maskedResponse = await client.GetAsync(SecretRevealStartup.Path + "/schemas");
         var revealedResponse = await client.GetAsync(SecretRevealStartup.Path + "/schemas?revealSecrets=true");
 
+        await Assert.That(maskedResponse.Headers.CacheControl?.NoStore).IsTrue();
+        await Assert.That(revealedResponse.Headers.CacheControl?.NoStore).IsTrue();
         await Assert.That(maskedResponse.StatusCode).IsEqualTo(HttpStatusCode.OK);
         await Assert.That(revealedResponse.StatusCode).IsEqualTo(HttpStatusCode.OK);
         using var maskedDocument = await ReadJson(maskedResponse);

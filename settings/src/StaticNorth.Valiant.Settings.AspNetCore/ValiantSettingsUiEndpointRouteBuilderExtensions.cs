@@ -37,6 +37,7 @@ public static class ValiantSettingsUiEndpointRouteBuilderExtensions
         group.MapGet("", static () => Results.Content(ValiantSettingsUiPage.Html, "text/html; charset=utf-8"));
         group.MapGet("/schemas", (HttpContext httpContext, IEnumerable<IValiantSettingsSchemaProvider> providers, IServiceProvider serviceProvider) =>
         {
+            httpContext.Response.Headers.CacheControl = "no-store";
             var revealSecrets = options.AllowSecretReveal &&
                 string.Equals(httpContext.Request.Query["revealSecrets"], "true", StringComparison.OrdinalIgnoreCase);
 

@@ -50,6 +50,7 @@ public static class ValiantSettingsSchemaDocumentFactory
         bool canRevealSecrets)
     {
         _ = providers ?? throw new ArgumentNullException(nameof(providers));
+        revealSecrets = includeRuntimeValues && canRevealSecrets && revealSecrets;
 
         var schemas = providers
             .Select(provider => CreateSchema(provider.Schema, serviceProvider, includeRuntimeValues, revealSecrets))
@@ -139,9 +140,10 @@ internal static class ValiantSettingsRuntimeValueFactory
 
             return CreateObject(value, schema.Properties, revealSecrets);
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            error = exception.InnerException?.Message ?? exception.Message;
+            // Options factories, validators and getters can include credentials in exception messages.
+            error = "Runtime values could not be loaded. Check the application's options configuration and validation.";
             return null;
         }
     }
@@ -154,6 +156,12 @@ internal static class ValiantSettingsRuntimeValueFactory
         var values = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var property in properties)
         {
+            if (!revealSecrets && ShouldMask(property))
+            {
+                values[property.ConfigurationKey] = Mask;
+                continue;
+            }
+
             var propertyInfo = instance.GetType().GetProperty(property.Name);
             if (propertyInfo is null)
             {
@@ -190,12 +198,18 @@ internal static class ValiantSettingsRuntimeValueFactory
             return items;
         }
 
-        if (property.Properties.Count > 0)
+        if (property.Kind == ValiantSettingsPropertyKind.Object || property.Properties.Count > 0)
         {
             return CreateObject(value, property.Properties, revealSecrets);
         }
 
-        return value;
+        // Never hand arbitrary objects to the JSON serializer: recursive or opaque
+        // values have no complete schema with which to enforce secret masking.
+        var type = value.GetType();
+        return type.IsPrimitive || type.IsEnum || value is string or decimal or DateTime or
+            DateTimeOffset or DateOnly or TimeOnly or TimeSpan or Guid or Uri
+            ? value
+            : null;
     }
 
     private static bool ShouldMask(ValiantSettingsPropertySchema property)

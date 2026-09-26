@@ -50,6 +50,13 @@ messages, property names, and severity partitions. In `Fast` mode, generated
 validators build that diagnostic result lazily and avoid allocating a result
 builder for valid inputs.
 
+Small generated validators with at most six checks and fixed default failure
+content reuse immutable results after each failure combination is first seen.
+Every check still runs on each call. Reuse requires no disposal and retains at
+most 63 nonempty combinations per validator type. Custom diagnostic expressions,
+culture-dependent messages, composition, async checks, and larger validators keep
+the owned-result path.
+
 Use `IsValid(...)` or `IsValidAsync(...)` when callers only need the validity
 status. The generated `Fast` path evaluates rule conditions, predicates,
 severities, and reused validators directly without constructing failure
@@ -178,21 +185,24 @@ the pinned Validly 1.3.0 control. The workload applies five equivalent property
 rules to valid, one-failure, and all-failure inputs. It measures both a
 materialized diagnostic result and the separate status-only API.
 
-This local reference snapshot was captured on 2026-07-30 with BenchmarkDotNet
-0.15.8 and .NET 10.0.10 Arm64. Lower ratios are faster.
+This local reference snapshot was captured on 2026-09-26 with BenchmarkDotNet
+0.15.8 and .NET 10.0.11 Arm64, using five warmups and ten measured iterations
+in the in-process runner. Lower ratios are faster.
 
-| Covered operation | Valiant | Validly | Valiant / Validly |
-| --- | ---: | ---: | ---: |
-| Materialized result, valid input | 4.228 ns | 56.999 ns | 0.07 |
-| Materialized result, one failure | 28.785 ns | 57.879 ns | 0.50 |
-| Materialized result, all failures | 39.874 ns | 60.882 ns | 0.66 |
-| Status-only result, valid to all-failure range | 2.0–2.5 ns | 55.9–59.9 ns | 0.03–0.04 |
+| Covered operation | Valiant | Validly | Valiant / Validly | Allocation, both implementations |
+| --- | ---: | ---: | ---: | ---: |
+| Full result, valid input | 2.530 ns | 56.698 ns | 0.04 | 0 B |
+| Full result, one failure | 3.457 ns | 58.104 ns | 0.06 | 0 B |
+| Full result, all failures | 4.927 ns | 69.369 ns | 0.07 | 0 B |
 
-The status-only row intentionally measures `IsValid` work without materializing
-diagnostics; it is not equivalent to a materialized-result call. Results are
-workload- and machine-dependent, not a performance guarantee. Refresh or
-remove this snapshot when the benchmark workload, pinned control, target
-runtime, or performance-sensitive implementation changes.
+These measurements include the full result API after warmup: this small validator
+reuses immutable failure content, while Validly reuses pooled storage and requires
+disposal. First-use allocation is excluded. Results are workload- and
+machine-dependent, not a performance guarantee. See the
+[allocation report](../docs/audits/2026-09-26-validation-allocation-optimization.md)
+for changing-input benchmarks, cold-allocation bounds, and eligibility limits.
+Refresh or remove this snapshot when the benchmark workload, pinned control,
+target runtime, or performance-sensitive implementation changes.
 
 ## Benchmarks
 

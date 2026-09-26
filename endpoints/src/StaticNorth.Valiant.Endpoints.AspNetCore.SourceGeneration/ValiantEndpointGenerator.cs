@@ -415,6 +415,9 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         foreach (var mapMethod in GetMapMethodDeclarations(endpointType, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var methodSemanticModel = mapMethod.SyntaxTree == semanticModel.SyntaxTree
+                ? semanticModel
+                : semanticModel.Compilation.GetSemanticModel(mapMethod.SyntaxTree);
 
             foreach (var invocation in mapMethod
                 .DescendantNodes(static node => node is not LambdaExpressionSyntax)
@@ -422,13 +425,13 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                foreach (var handlerExpression in GetAspNetCoreRouteHandlerExpressions(semanticModel, invocation, cancellationToken))
+                foreach (var handlerExpression in GetAspNetCoreRouteHandlerExpressions(methodSemanticModel, invocation, cancellationToken))
                 {
                     foreach (var parameter in GetHandlerParameters(handlerExpression))
                     {
                         if (parameter.AttributeLists.Count == 0)
                         {
-                            if (semanticModel.GetDeclaredSymbol(parameter) is IParameterSymbol parameterWithoutAttributes &&
+                            if (methodSemanticModel.GetDeclaredSymbol(parameter, cancellationToken) is IParameterSymbol parameterWithoutAttributes &&
                                 UnwrapNullable(parameterWithoutAttributes.Type) is INamedTypeSymbol unannotatedRequestType &&
                                 HasFromQueryProperties(unannotatedRequestType))
                             {
@@ -445,7 +448,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
                             continue;
                         }
 
-                        if (semanticModel.GetDeclaredSymbol(parameter) is not IParameterSymbol parameterSymbol)
+                        if (methodSemanticModel.GetDeclaredSymbol(parameter, cancellationToken) is not IParameterSymbol parameterSymbol)
                         {
                             continue;
                         }
@@ -487,6 +490,16 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         InvocationExpressionSyntax invocation,
         CancellationToken cancellationToken)
     {
+        // Query metadata comes only from inline handler parameters. Avoid binding
+        // overloads for unrelated invocations and parameterless route handlers.
+        if (!invocation.ArgumentList.Arguments.Any(static argument => argument.Expression is
+            SimpleLambdaExpressionSyntax or
+            ParenthesizedLambdaExpressionSyntax { ParameterList.Parameters.Count: > 0 } or
+            AnonymousMethodExpressionSyntax { ParameterList.Parameters.Count: > 0 }))
+        {
+            yield break;
+        }
+
         if (semanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol is not IMethodSymbol method ||
             !IsAspNetCoreRouteMappingMethod(method))
         {

@@ -5,6 +5,50 @@ namespace StaticNorth.Valiant.Endpoints.Tests.QueryBinding;
 public sealed class QueryStringParserTests
 {
     [Test]
+    public async Task Sparse_Array_Indices_Do_Not_Allocate_By_The_Untrusted_Index()
+    {
+        var result = QueryStringParser.Parse<ArrayQuery>("?ids[2147483647]=2&ids[0]=1", AllParsingFormats());
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(result.Value!.Ids).IsEquivalentTo([1, 2]);
+    }
+
+    [Test]
+    [Arguments("?year=2147483648")]
+    [Arguments("?year=%00")]
+    [Arguments("?year=%FF")]
+    [Arguments("?year=1e999")]
+    public async Task Malformed_Scalar_Values_Return_Errors_Without_Throwing(string query)
+    {
+        var result = QueryStringParser.Parse<FlatFilterQuery>(query);
+
+        await Assert.That(result.IsSuccess).IsFalse();
+        await Assert.That(result.Errors).IsNotEmpty();
+    }
+
+    [Test]
+    public void Query_Parser_Performance_Sample()
+    {
+        const string query = "?ids=1&ids=2&brand=tesla";
+        for (var index = 0; index < 100; index++)
+        {
+            _ = QueryStringParser.Parse<MixedQuery>(query);
+        }
+
+        const int iterations = 10_000;
+        var allocated = GC.GetAllocatedBytesForCurrentThread();
+        var start = System.Diagnostics.Stopwatch.GetTimestamp();
+        for (var index = 0; index < iterations; index++)
+        {
+            _ = QueryStringParser.Parse<MixedQuery>(query);
+        }
+
+        var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(start);
+        allocated = GC.GetAllocatedBytesForCurrentThread() - allocated;
+        Console.WriteLine(FormattableString.Invariant($"RUNTIME,Endpoints,query,{elapsed.TotalNanoseconds / iterations:F1} ns/op,{allocated / iterations} B/op"));
+    }
+
+    [Test]
     public async Task Parser_Accepts_Repeated_Array_Params_By_Default()
     {
         var result = QueryStringParser.Parse<ArrayQuery>("?ids=1&ids=2&ids=3");
