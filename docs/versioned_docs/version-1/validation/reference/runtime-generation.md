@@ -34,6 +34,13 @@ Choose validator lifetime based on constructor dependencies. A singleton validat
 
 `ValidationResult` exposes all failures as well as `Errors`, `Warnings`, and `Infos`. Only error severity makes `IsValid` false. Each `ValidationFailure` includes `PropertyName`, `ErrorCode`, `ErrorMessage`, and `Severity`.
 
+Results are immutable and do not need disposal. In `Fast` mode, simple validators
+with at most six checks and fixed default failure content reuse results after
+each failure combination is first seen. All checks still run on every call.
+Reuse is bounded to 63 nonempty combinations per validator type. Custom diagnostic
+expressions, culture-dependent messages, composition, async checks, and larger
+validators keep the owned-result path.
+
 ## Generator scope
 
 `[ValiantValidator]` is the discovery hook. Only marked validator declarations enter the incremental pipeline. Generated output can include:

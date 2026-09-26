@@ -62,6 +62,10 @@ settings.RequireAuthorization("SettingsAdministrators");
 
 Secret values remain masked until a user selects reveal. The JSON endpoint accepts `?revealSecrets=true` only when `AllowSecretReveal` is enabled.
 
+Masked secret getters are not evaluated. Runtime values are projected through the generated schema: recursive objects beyond the schema boundary become empty objects, and unsupported opaque values become `null`. Options or getter failures return a generic message so exception text cannot expose credentials. Schema responses use `Cache-Control: no-store`, including when secrets are revealed.
+
+Direct callers of `ValiantSettingsSchemaDocumentFactory.Create` must also enable both `revealSecrets` and `canRevealSecrets` to reveal values.
+
 :::danger Treat the explorer as an administrative endpoint
 The package does not decide your authorization policy. Protect the returned `RouteGroupBuilder`, especially when runtime values or secret reveal are enabled.
 :::
