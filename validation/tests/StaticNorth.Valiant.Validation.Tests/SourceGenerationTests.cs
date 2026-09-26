@@ -9,6 +9,42 @@ namespace StaticNorth.Valiant.Validation.Tests;
 public sealed class SourceGenerationTests
 {
     [Test]
+    [Arguments("context.Property(x => x.Name).Required();", true)]
+    [Arguments("context.Property(x => x.Name).Required().Required().Required().Required().Required().Required();", true)]
+    [Arguments("context.Property(x => x.Name).Required().Required().Required().Required().Required().Required().Required();", false)]
+    [Arguments("context.Property(x => x.Name).Required(message: \"custom\");", false)]
+    [Arguments("context.Property(x => x.Name).Required(code: \"custom\");", false)]
+    [Arguments("context.Property(x => x.Name).Required(severity: ValiantSeverity.Warning);", false)]
+    [Arguments("context.Property(x => x.Amount).GreaterThan(0.5m);", false)]
+    [Arguments("if (true) { context.Property(x => x.Name).Required(); }", false)]
+    [Arguments("context.Property(x => x.Name).SatisfiesAsync(static (_, _) => new System.Threading.Tasks.ValueTask<bool>(false));", false)]
+    public async Task Immutable_Failure_Reuse_Is_Bounded_And_Excludes_Dynamic_Content(string rules, bool expectedCache)
+    {
+        var source = $$"""
+            using StaticNorth.Valiant.Validation;
+            [ValiantValidator]
+            public sealed partial class PersonValidator : ValidatorDefinition<Person>
+            {
+                public override void Configure(ValidationContext<Person> context)
+                {
+                    {{rules}}
+                }
+            }
+            public sealed class Person
+            {
+                public string? Name { get; init; }
+                public decimal Amount { get; init; }
+            }
+            """;
+        var result = RunGenerator(source);
+        var generated = result.GeneratedSources.Single(static source =>
+            source.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
+
+        await Assert.That(generated.Contains("__valiantFixedFailureCache", StringComparison.Ordinal)).IsEqualTo(expectedCache);
+        await Assert.That(RunCompilation(source).Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
     public async Task Marker_Attribute_With_Interface_Generates_Validator()
     {
         var result = RunGenerator(
@@ -89,7 +125,7 @@ public sealed class SourceGenerationTests
         await Assert.That(generated).Contains(
             "global::System.String.IsNullOrWhiteSpace(value0)");
         await Assert.That(generated).Contains(
-            "global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultBuilder? failures = null;");
+            "var failures = new global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultAccumulator(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : 2);");
         await Assert.That(generated).Contains("var hasErrors = false;");
         await Assert.That(generated).Contains("return !hasErrors;");
     }
@@ -1838,7 +1874,7 @@ public sealed class SourceGenerationTests
             {
                 public static void Configure(ValidationContext<Person> context)
                 {
-                    context.Property(x => x.Name).Required().MaxLength(100);
+                    context.Property(x => x.Name).Required(message: "required").MaxLength(100);
                 }
             }
 

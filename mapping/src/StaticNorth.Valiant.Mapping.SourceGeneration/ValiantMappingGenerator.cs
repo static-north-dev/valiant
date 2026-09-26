@@ -130,9 +130,9 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
     {
         var mappers = CreateMapperProvider(
             context,
-            MappingApi.Namespace + "." + MappingApi.MapperAttributeMetadataName);
+            MappingApi.Namespace + "." + MappingApi.MapperAttributeMetadataName)
+            .WithComparer(MapperModelComparer.Instance);
         var generatedMappers = mappers
-            .WithComparer(MapperModelComparer.Instance)
             .WithTrackingName("Mapping.Mapper");
         var dependencyInjectionMappers = generatedMappers
             .Where(static mapper => IsValidMapper(mapper))

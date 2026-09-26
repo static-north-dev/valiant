@@ -9,7 +9,6 @@
     <NoWarn>$(NoWarn);CA1050</NoWarn>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(MSBuildProjectName)' != 'StaticNorth.Valiant.PackageVerifier'">
-    <PackageReference Include="Microsoft.Net.Compilers.Toolset" Version="5.6.0" PrivateAssets="all" />
-  </ItemGroup>
+  <!-- Use the compiler from the exact global.json SDK. An independent compiler
+       pin can prevent both SDK analyzers and packaged generators from loading. -->
 </Project>

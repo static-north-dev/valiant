@@ -50,11 +50,11 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
                 static (node, _) => IsSettingsCandidate(node),
                 static (context, cancellationToken) => CreateSettingsModel(context, cancellationToken))
             .Where(static model => model is not null)
-            .Select(static (model, _) => model!);
+            .Select(static (model, _) => model!)
+            .WithComparer(SettingsModelComparer.Instance);
 
         var validSettingsModels = settingsModels
             .Where(static model => model.IsValid)
-            .WithComparer(SettingsModelComparer.Instance)
             .WithTrackingName("Settings.Model");
         var schemaProviders = validSettingsModels
             .Select(static (model, _) => new SettingsSchemaProviderRegistrationModel(model.FullTypeName, model.ProviderTypeName))
@@ -477,20 +477,23 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         CancellationToken cancellationToken)
     {
         var properties = ImmutableArray.CreateBuilder<SettingsPropertyModel>();
-        foreach (var member in type.GetMembers())
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        for (var current = type; current is not null; current = current.BaseType)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (member is IPropertySymbol property &&
-                IsSettingsProperty(property))
+            foreach (var member in current.GetMembers())
             {
-                properties.Add(CreatePropertyModel(
-                    property.Type,
-                    property.Name,
-                    property.Name,
-                    property.IsRequired,
-                    HasSecretAttribute(property),
-                    visitedTypes,
-                    cancellationToken));
+                cancellationToken.ThrowIfCancellationRequested();
+                if (member is IPropertySymbol property && names.Add(property.Name) && IsSettingsProperty(property))
+                {
+                    properties.Add(CreatePropertyModel(
+                        property.Type,
+                        property.Name,
+                        property.Name,
+                        property.IsRequired,
+                        HasSecretAttribute(property),
+                        visitedTypes,
+                        cancellationToken));
+                }
             }
         }
 
@@ -499,7 +502,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
 
     private static bool IsSettingsProperty(IPropertySymbol property)
     {
-        return property is { IsStatic: false, Parameters.Length: 0, GetMethod: not null, DeclaredAccessibility: Accessibility.Public };
+        return property is { IsStatic: false, Parameters.Length: 0, GetMethod.DeclaredAccessibility: Accessibility.Public, DeclaredAccessibility: Accessibility.Public };
     }
 
     private static SettingsPropertyModel CreatePropertyModel(
@@ -571,11 +574,14 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
 
     private static bool HasSecretAttribute(IPropertySymbol property)
     {
-        foreach (var attribute in property.GetAttributes())
+        for (var current = property; current is not null; current = current.OverriddenProperty)
         {
-            if (attribute.AttributeClass?.ToDisplayString() == SecretAttributeMetadataName)
+            foreach (var attribute in current.GetAttributes())
             {
-                return true;
+                if (attribute.AttributeClass?.ToDisplayString() == SecretAttributeMetadataName)
+                {
+                    return true;
+                }
             }
         }
 
@@ -930,6 +936,8 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             }
 
             return x.IsValid == y.IsValid &&
+                Equals(x.Diagnostic, y.Diagnostic) &&
+                x.Location.Equals(y.Location) &&
                 string.Equals(x.Name, y.Name, StringComparison.Ordinal) &&
                 string.Equals(x.FullTypeName, y.FullTypeName, StringComparison.Ordinal) &&
                 string.Equals(x.SectionPath, y.SectionPath, StringComparison.Ordinal) &&
@@ -943,6 +951,8 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             unchecked
             {
                 var hashCode = obj.IsValid.GetHashCode();
+                hashCode = (hashCode * 397) ^ (obj.Diagnostic?.GetHashCode() ?? 0);
+                hashCode = (hashCode * 397) ^ obj.Location.GetHashCode();
                 hashCode = (hashCode * 397) ^ StringComparer.Ordinal.GetHashCode(obj.Name);
                 hashCode = (hashCode * 397) ^ StringComparer.Ordinal.GetHashCode(obj.FullTypeName);
                 hashCode = (hashCode * 397) ^ (obj.SectionPath is null ? 0 : StringComparer.Ordinal.GetHashCode(obj.SectionPath));

@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace StaticNorth.Valiant.Validation;
 
 /// <summary>
@@ -8,6 +10,7 @@ public readonly struct ValidationFailure
     /// <summary>
     /// Initializes a validation failure.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ValidationFailure(
         string propertyName,
         string errorCode,

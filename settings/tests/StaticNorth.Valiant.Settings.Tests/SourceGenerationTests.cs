@@ -59,6 +59,36 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
+    public async Task Inherited_Properties_Preserve_Secrets_Overrides_And_Public_Getter_Visibility()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using StaticNorth.Valiant.Settings;
+            [ValiantSettings("Inherited")]
+            public sealed class Derived : Base
+            {
+                public override string Credential { get; set; } = "";
+                public new int Hidden { get; set; }
+                public string Unreadable { private get; set; } = "";
+            }
+            public class Base
+            {
+                [ValiantSecret] public virtual string Credential { get; set; } = "";
+                public string Hidden { get; set; } = "";
+                public string Visible { get; set; } = "";
+            }
+            """);
+        var registry = assembly.GetType("StaticNorth.Valiant.Settings.ValiantSettingsSchemas", throwOnError: true)!;
+        var provider = ((IReadOnlyList<IValiantSettingsSchemaProvider>)registry.GetProperty("All")!.GetValue(null)!).Single();
+        var properties = provider.Schema.Properties;
+
+        await Assert.That(properties).Count().IsEqualTo(3);
+        await Assert.That(properties.Single(static property => property.Name == "Credential").IsSecret).IsTrue();
+        await Assert.That(properties.Single(static property => property.Name == "Hidden").Kind).IsEqualTo(ValiantSettingsPropertyKind.Integer);
+        await Assert.That(properties.Select(static property => property.Name)).Contains("Visible");
+    }
+
+    [Test]
     public async Task Settings_Model_Generates_Nested_Object_Schema()
     {
         var assembly = CompileAndLoad(
@@ -361,6 +391,69 @@ public sealed class SourceGenerationTests
         await Assert.That(revealedDocument.CanRevealSecrets).IsTrue();
         await Assert.That(revealedDocument.SecretsRevealed).IsTrue();
         await Assert.That(revealedRuntimeValues["Password"]).IsEqualTo("super-secret");
+    }
+
+    [Test]
+    public async Task Secret_Reveal_Requires_Permission_In_The_Document_Factory()
+    {
+        var provider = CreateSecretProvider();
+        var services = new ServiceCollection();
+        services.Configure<TestSettings>(options => options.Password = "sensitive-test-value");
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var document = ValiantSettingsSchemaDocumentFactory.Create(
+            [provider], serviceProvider, includeRuntimeValues: true, revealSecrets: true, canRevealSecrets: false);
+        var values = (IReadOnlyDictionary<string, object?>)document.Schemas[0].RuntimeValues!;
+
+        await Assert.That(values["Password"]).IsEqualTo("********");
+        await Assert.That(document.SecretsRevealed).IsFalse();
+    }
+
+    [Test]
+    public async Task Options_Failures_Do_Not_Expose_Secret_Exception_Messages()
+    {
+        var provider = CreateSecretProvider();
+        var services = new ServiceCollection();
+        services.Configure<TestSettings>(_ => throw new InvalidOperationException("Password=sensitive-test-value"));
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var document = ValiantSettingsSchemaDocumentFactory.Create([provider], serviceProvider, includeRuntimeValues: true);
+
+        await Assert.That(document.Schemas[0].RuntimeValues).IsNull();
+        await Assert.That(document.Schemas[0].RuntimeValuesError).IsNotNull();
+        await Assert.That(document.Schemas[0].RuntimeValuesError!).DoesNotContain("sensitive-test-value");
+    }
+
+    private static TestSettingsSchemaProvider CreateSecretProvider() => new(
+        new ValiantSettingsSchema(typeof(TestSettings), nameof(TestSettings), "Tests:Settings",
+        [
+            new ValiantSettingsPropertySchema("Password", "Password", "string",
+                ValiantSettingsPropertyKind.String, isRequired: false, isNullable: true, isSecret: true)
+        ]));
+
+    [Test]
+    public void Runtime_Schema_Document_Performance_Sample()
+    {
+        IValiantSettingsSchemaProvider[] providers = [CreateSecretProvider()];
+        var services = new ServiceCollection();
+        services.Configure<TestSettings>(options => options.Password = "sensitive-test-value");
+        using var serviceProvider = services.BuildServiceProvider();
+        for (var index = 0; index < 100; index++)
+        {
+            _ = ValiantSettingsSchemaDocumentFactory.Create(providers, serviceProvider, includeRuntimeValues: true);
+        }
+
+        const int iterations = 10_000;
+        var allocated = GC.GetAllocatedBytesForCurrentThread();
+        var start = System.Diagnostics.Stopwatch.GetTimestamp();
+        for (var index = 0; index < iterations; index++)
+        {
+            _ = ValiantSettingsSchemaDocumentFactory.Create(providers, serviceProvider, includeRuntimeValues: true);
+        }
+
+        var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(start);
+        allocated = GC.GetAllocatedBytesForCurrentThread() - allocated;
+        Console.WriteLine(FormattableString.Invariant($"RUNTIME,Settings,document,{elapsed.TotalNanoseconds / iterations:F1} ns/op,{allocated / iterations} B/op"));
     }
 
     [Test]

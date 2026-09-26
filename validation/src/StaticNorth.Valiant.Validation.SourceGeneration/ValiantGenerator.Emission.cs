@@ -89,6 +89,7 @@ public sealed partial class ValiantGenerator
         var hasAsyncChecks = HasAsyncChecks(validator.Nodes);
         var requiresAsyncValidationBody = hasAsyncChecks || HasValidatorReuse(validator.Nodes);
         var totalChecks = Math.Max(CountChecks(validator.Nodes), 1);
+        var cacheFixedFailures = CanCacheFixedFailures(validator.Nodes, totalChecks);
 
         AppendGeneratedFileHeader(builder);
         if (!validator.Usings.IsDefaultOrEmpty)
@@ -123,6 +124,11 @@ public sealed partial class ValiantGenerator
         builder.AppendLine("{");
 
         AppendValidationOptionsMembers(builder, namespaceName, validator);
+        if (cacheFixedFailures)
+        {
+            AppendFixedFailureCache(builder, namespaceName, validator.Nodes);
+        }
+
         if (validator.ImplementsValidatorDefinition && !validator.InheritsValidatorBase)
         {
             AppendValidatorDefinitionImplementation(builder, namespaceName, modelType, validator);
@@ -197,16 +203,39 @@ public sealed partial class ValiantGenerator
         }
 
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultBuilder? failures = null;");
-        AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("var validationFailureBehavior = GetEffectiveFailureBehavior();");
+        AppendIndent(builder, 2, namespaceName);
+        if (cacheFixedFailures)
+        {
+            builder.AppendLine("var failures = 0;");
+        }
+        else
+        {
+            builder.Append("var failures = new global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultAccumulator(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
+                .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
+                .AppendLine(");");
+        }
 
         var ruleIndex = 0;
-        AppendValidationNodes(builder, namespaceName, 2, validator.Nodes, ref ruleIndex, totalChecks, false);
+        if (cacheFixedFailures)
+        {
+            var failureIndex = 0;
+            foreach (RuleNode node in validator.Nodes)
+            {
+                AppendRule(builder, namespaceName, 2, node.Rule, ref ruleIndex, totalChecks, false, false, failureIndex);
+                failureIndex += node.Rule.Checks.Length;
+            }
+        }
+        else
+        {
+            AppendValidationNodes(builder, namespaceName, 2, validator.Nodes, ref ruleIndex, totalChecks, false);
+        }
 
         builder.AppendLine();
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return failures?.Build() ?? global::StaticNorth.Valiant.Validation.ValidationResult.Valid;");
+        builder.AppendLine(cacheFixedFailures
+            ? "return failures == 0 ? global::StaticNorth.Valiant.Validation.ValidationResult.Valid : __valiantFixedFailureCache.Get(failures);"
+            : "return failures.Count == 0 ? global::StaticNorth.Valiant.Validation.ValidationResult.Valid : failures.Build();");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
         AppendCommonMembers(
@@ -931,16 +960,18 @@ public sealed partial class ValiantGenerator
 
         builder.AppendLine();
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultBuilder? failures = null;");
-        AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("var validationFailureBehavior = GetEffectiveFailureBehavior();");
+        AppendIndent(builder, 2, namespaceName);
+        builder.Append("var failures = new global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultAccumulator(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
+            .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
+            .AppendLine(");");
 
         var ruleIndex = 0;
         AppendValidationNodes(builder, namespaceName, 2, validator.Nodes, ref ruleIndex, totalChecks, true);
 
         builder.AppendLine();
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return failures?.Build() ?? global::StaticNorth.Valiant.Validation.ValidationResult.Valid;");
+        builder.AppendLine("return failures.Count == 0 ? global::StaticNorth.Valiant.Validation.ValidationResult.Valid : failures.Build();");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
 
@@ -1055,7 +1086,7 @@ public sealed partial class ValiantGenerator
         builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Validation.ValiantValidationOptions), valiantValidationOptions));");
         builder.AppendLine();
 
-        foreach (var validator in validators)
+        foreach (var validator in validators.OrderBy(static validator => validator.ValidatorType, StringComparer.Ordinal))
         {
             builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, CreateValidatorDescriptor<")
                 .Append(validator.ValidatorType)
@@ -1088,7 +1119,7 @@ public sealed partial class ValiantGenerator
                 .AppendLine(">>());");
         }
 
-        foreach (var propertyValidator in propertyValidators)
+        foreach (var propertyValidator in propertyValidators.OrderBy(static validator => validator.ValidatorType, StringComparer.Ordinal))
         {
             builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, CreateValidatorDescriptor<")
                 .Append(propertyValidator.ValidatorType)
@@ -1298,6 +1329,64 @@ public sealed partial class ValiantGenerator
         return count;
     }
 
+    private static bool CanCacheFixedFailures(ImmutableArray<ValidationNode> nodes, int totalChecks)
+    {
+        // Bound retained results to 63 combinations. Composition and dynamic failure content
+        // keep the owned accumulator path; no validation decisions or model values are cached.
+        if (nodes.IsDefaultOrEmpty || totalChecks > 6)
+        {
+            return false;
+        }
+
+        var cachedCheckCount = 0;
+        foreach (var node in nodes)
+        {
+            if (node is not RuleNode ruleNode)
+            {
+                return false;
+            }
+
+            foreach (var check in ruleNode.Rule.Checks)
+            {
+                cachedCheckCount++;
+                if (check.IsAsync || check.Kind == "UseValidator" ||
+                    check.Code is not null || check.Message is not null || check.Severity is not null ||
+                    !TryGetStringLiteralValue(ruleNode.Rule.PropertyNameExpression, out _) ||
+                    !TryGetStringLiteralValue(GetDefaultMessageExpression(ruleNode.Rule, check), out _))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return cachedCheckCount > 0;
+    }
+
+    private static void AppendFixedFailureCache(
+        StringBuilder builder,
+        string? namespaceName,
+        ImmutableArray<ValidationNode> nodes)
+    {
+        builder.AppendLine();
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("private static readonly global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultCache __valiantFixedFailureCache = new(new global::StaticNorth.Valiant.Validation.ValidationFailure[]");
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("{");
+        foreach (RuleNode node in nodes)
+        {
+            foreach (var check in node.Rule.Checks)
+            {
+                AppendIndent(builder, 2, namespaceName);
+                builder.Append("new global::StaticNorth.Valiant.Validation.ValidationFailure(").Append(node.Rule.PropertyNameExpression).Append(", ")
+                    .Append(GetFailureCodeExpression(check)).Append(", ")
+                    .Append(GetFailureMessageExpression(node.Rule, check)).AppendLine("),");
+            }
+        }
+
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("});");
+    }
+
     private static void AppendValidationNodes(
         StringBuilder builder,
         string? namespaceName,
@@ -1354,7 +1443,8 @@ public sealed partial class ValiantGenerator
         ref int ruleIndex,
         int totalChecks,
         bool emitAsync,
-        bool emitStatusOnly)
+        bool emitStatusOnly,
+        int? cachedFailureIndex = null)
     {
         var localName = "value" + ruleIndex.ToString(CultureInfo.InvariantCulture);
         var ruleFailedName = rule.FailureBehaviorExpression == "global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast"
@@ -1395,7 +1485,12 @@ public sealed partial class ValiantGenerator
                 ruleFailedName,
                 totalChecks,
                 emitAsync,
-                emitStatusOnly);
+                emitStatusOnly,
+                cachedFailureIndex);
+            if (cachedFailureIndex is not null)
+            {
+                cachedFailureIndex++;
+            }
         }
 
         if (ruleCondition is not null)
@@ -1508,9 +1603,7 @@ public sealed partial class ValiantGenerator
         if (node.PropertyPathPrefixExpression is null)
         {
             AppendIndent(builder, indentLevel + 1, namespaceName);
-            builder.Append("(failures ??= new global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultBuilder(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
-                .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
-                .Append(")).AddRange(")
+            builder.Append("failures.AddRange(")
                 .Append(resultName)
                 .AppendLine(".Failures);");
         }
@@ -1525,9 +1618,7 @@ public sealed partial class ValiantGenerator
             AppendIndent(builder, indentLevel + 2, namespaceName);
             builder.Append("var ").Append(propertyName).Append(" = ").Append(failureName).AppendLine(".PropertyName;");
             AppendIndent(builder, indentLevel + 2, namespaceName);
-            builder.Append("(failures ??= new global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultBuilder(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
-                .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
-                .Append(")).Add(new global::StaticNorth.Valiant.Validation.ValidationFailure(global::System.String.IsNullOrEmpty(")
+            builder.Append("failures.Add(new global::StaticNorth.Valiant.Validation.ValidationFailure(global::System.String.IsNullOrEmpty(")
                 .Append(propertyName)
                 .Append(") ? (")
                 .Append(node.PropertyPathPrefixExpression)
@@ -1785,7 +1876,8 @@ public sealed partial class ValiantGenerator
         string? ruleFailedName,
         int totalChecks,
         bool emitAsync,
-        bool emitStatusOnly)
+        bool emitStatusOnly,
+        int? cachedFailureIndex = null)
     {
         if (check.IsAsync && !emitAsync)
         {
@@ -1867,17 +1959,22 @@ public sealed partial class ValiantGenerator
         }
 
         AppendIndent(builder, indentLevel + 1, namespaceName);
-        builder.Append("(failures ??= new global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultBuilder(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
-            .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
-            .Append(")).Add(new global::StaticNorth.Valiant.Validation.ValidationFailure(")
-            .Append(rule.PropertyNameExpression)
-            .Append(", ")
-            .Append(GetFailureCodeExpression(check))
-            .Append(", ")
-            .Append(GetFailureMessageExpression(rule, check))
-            .Append(", ")
-            .Append(GetFailureSeverityExpression(check))
-            .AppendLine("));");
+        if (cachedFailureIndex is not null)
+        {
+            builder.Append("failures |= ").Append((1 << cachedFailureIndex.Value).ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+        }
+        else
+        {
+            builder.Append("failures.Add(new global::StaticNorth.Valiant.Validation.ValidationFailure(")
+                .Append(rule.PropertyNameExpression)
+                .Append(", ")
+                .Append(GetFailureCodeExpression(check))
+                .Append(", ")
+                .Append(GetFailureMessageExpression(rule, check))
+                .Append(", ")
+                .Append(GetFailureSeverityExpression(check))
+                .AppendLine("));");
+        }
         AppendIndent(builder, indentLevel + 1, namespaceName);
         if (check.Severity is null)
         {
@@ -1892,7 +1989,9 @@ public sealed partial class ValiantGenerator
         AppendIndent(builder, indentLevel + 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, indentLevel + 2, namespaceName);
-        builder.AppendLine("return failures.Build();");
+        builder.AppendLine(cachedFailureIndex is not null
+            ? "return __valiantFixedFailureCache.Get(failures);"
+            : "return failures.Build();");
         AppendIndent(builder, indentLevel + 1, namespaceName);
         builder.AppendLine("}");
         AppendIndent(builder, indentLevel, namespaceName);
@@ -1976,9 +2075,7 @@ public sealed partial class ValiantGenerator
         AppendIndent(builder, indentLevel + 2, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, indentLevel + 3, namespaceName);
-        builder.Append("(failures ??= new global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultBuilder(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
-            .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
-            .Append(")).Add(new global::StaticNorth.Valiant.Validation.ValidationFailure(CombinePropertyPath(")
+        builder.Append("failures.Add(new global::StaticNorth.Valiant.Validation.ValidationFailure(CombinePropertyPath(")
             .Append(rule.PropertyNameExpression)
             .Append(", ")
             .Append(failureName)
