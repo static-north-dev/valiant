@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
     <PackageReference Include="Validly" />
     <PackageReference Include="Validly.Extensions.Validators" />
