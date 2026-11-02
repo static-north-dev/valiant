@@ -1,6 +1,7 @@
 # Valiant documentation for agents
 
 Valiant publishes public, read-only documentation. No account, API key, or OAuth token is required.
+The [public access policy](https://valiant.staticnorth.dev/auth.md) explains authentication and agent registration.
 
 - Start at [llms.txt](https://valiant.staticnorth.dev/llms.txt).
 - Read [the document index](https://valiant.staticnorth.dev/agents/documents.json) to find available versions and exact page paths. The default is the latest published major. Select `current` explicitly for development docs.

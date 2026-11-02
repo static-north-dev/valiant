@@ -26,6 +26,11 @@ npm run docs:check-agent-http -- http://127.0.0.1:3091
 The static site publishes these root files:
 
 - `/llms.txt`: a concise, curated entry point for language models and agents;
+- `/auth.md`: the public access policy. Authentication and agent registration
+  are not required or offered; the OpenAPI contract explicitly supports
+  anonymous access through `security: [{}]`. This policy does not claim an
+  OAuth server or a WorkOS Auth.md registration implementation, and does not
+  guarantee a passing result for scanners that require those capabilities;
 - `/llms-full.txt`: the complete default published documentation in one Markdown
   context, with an explicit version and source revision;
 - `/llms-{validation,endpoints,mapping,settings}.txt`: smaller contexts for the
@@ -107,6 +112,14 @@ Publication then runs `docs:check-agent-http` against the live custom domain,
 including Markdown and HTML variants, exact skill digests, and MCP protocol
 calls. It verifies the index's source revision matches the persisted docs
 commit. The built Worker includes license notices for its bundled dependencies.
+
+The deploy job uses Node.js 22, matching the other documentation jobs. HTTP
+verification reports the method, URL, response type, Cloudflare Ray ID and
+challenge/error markers on failure without dumping the response body. Access
+denials (401/403) fail immediately; deployment readiness failures still retry.
+An access denial from a GitHub runner can occur even when the same public URL
+works from another network. Use the Ray ID to investigate the host's access
+and bot rules; a successful deployment is not proof that every client can read it.
 
 Cloudflare Pages can reject library-default HTTP user agents with error 1010
 before the Worker runs. Custom clients should send a descriptive application

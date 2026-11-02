@@ -92,7 +92,7 @@ function openApi(siteUrl) {
     openapi: '3.1.0',
     info: {title: 'Valiant Documentation API', version: serverInfo.version, description: 'Public, read-only access to versioned Valiant documentation. No authentication or account is required.'},
     servers: [{url: siteUrl}],
-    security: [],
+    security: [{}],
     paths: {
       '/api/docs': get('listDocuments', 'List documentation pages and available versions.', 'DocumentList', filterParameters),
       '/api/docs/search': get('searchDocuments', 'Search documentation with bounded excerpts.', 'SearchResults', [
@@ -265,6 +265,7 @@ export async function buildAgentArtifacts({siteDir, outDir, versions, siteUrl, s
   const headers = [
     '/*', `  Link: ${discoveryLinks}`, `  Content-Signal: ${contentSignal}`, '  X-Content-Type-Options: nosniff',
     '/markdown/*', '  Content-Type: text/markdown; charset=utf-8', '  Access-Control-Allow-Origin: *',
+    '/auth.md', '  Content-Type: text/markdown; charset=utf-8', '  Access-Control-Allow-Origin: *',
     '/.well-known/*', '  Access-Control-Allow-Origin: *',
     '/.well-known/api-catalog', '  Content-Type: application/linkset+json',
     ...['/mcp/server-card', '/.well-known/mcp/server-card.json'].flatMap((url) => [
@@ -283,7 +284,7 @@ export async function buildAgentArtifacts({siteDir, outDir, versions, siteUrl, s
   await write('/_headers', headers);
   await write('/_routes.json', {version: 1, include: ['/*'], exclude: [
     '/assets/*', '/img/*', '/markdown/*', '/llms*.txt', '/agents/documents.json',
-    '/openapi.json', '/robots.txt', '/sitemap.xml',
+    '/openapi.json', '/auth.md', '/robots.txt', '/sitemap.xml',
     '/.well-known/agent-skills/*', '/.well-known/api-catalog',
     '/.well-known/ard.json', '/.well-known/ai-catalog.json', '/.well-known/poppy.json',
   ]});
