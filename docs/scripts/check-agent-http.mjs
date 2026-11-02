@@ -4,13 +4,30 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 export async function verifyAgentHttp(baseUrl, {expectedRevision} = {}) {
-  const get = async (route, options = {}) => {
+  const get = async (route, options = {}, expectedStatus = 200) => {
     const response = await fetch(new URL(route, baseUrl), {
       ...options,
       headers: {'User-Agent': 'ValiantDocsVerification/1.0', 'Cache-Control': 'no-cache', ...options.headers},
       signal: AbortSignal.timeout(15000),
     });
-    assert.equal(response.status, 200, `${route} returned ${response.status}`);
+    if (response.status !== expectedStatus) {
+      const details = ['server', 'content-type', 'cf-ray', 'cf-mitigated']
+        .filter((name) => response.headers.has(name))
+        .map((name) => `${name}=${response.headers.get(name)}`);
+      const body = await response.text().catch(() => '');
+      const title = body.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+      const cloudflareCode = body.replace(/<[^>]*>/g, ' ').match(/\berror(?:\s+code)?\s*:?\s*(1\d{3,4})\b/i)?.[1];
+      if (title) {
+        details.push(`page=${JSON.stringify(title.replace(/\s+/g, ' ').trim().slice(0, 160))}`);
+      }
+      if (cloudflareCode) {
+        details.push(`edge-error=${cloudflareCode}`);
+      }
+      const accessDenied = [401, 403].includes(response.status);
+      const error = new Error(`${options.method ?? 'GET'} ${new URL(route, baseUrl)} returned ${response.status}; expected ${expectedStatus}. ${details.join('; ')}${accessDenied ? '. Access denied: check the host access/bot rules for this runner.' : ''}`);
+      error.retryable = !accessDenied;
+      throw error;
+    }
     return response;
   };
   const json = async (route) => {
@@ -56,8 +73,7 @@ export async function verifyAgentHttp(baseUrl, {expectedRevision} = {}) {
     const card = await get(route);
     assert.ok(card.headers.get('Content-Type')?.includes('application/mcp-server-card+json'));
     assert.ok(card.headers.get('Access-Control-Expose-Headers')?.includes('ETag'));
-    const preflight = await fetch(new URL(route, baseUrl), {method: 'OPTIONS', headers: {'User-Agent': 'ValiantDocsVerification/1.0', Origin: 'https://agent-client.example', 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'If-None-Match'}, signal: AbortSignal.timeout(15000)});
-    assert.equal(preflight.status, 204);
+    const preflight = await get(route, {method: 'OPTIONS', headers: {Origin: 'https://agent-client.example', 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'If-None-Match'}}, 204);
     assert.ok(preflight.headers.get('Access-Control-Allow-Headers')?.includes('If-None-Match'));
   }
   const rpc = async (id, method, params, protocolVersion) => {
@@ -71,13 +87,11 @@ export async function verifyAgentHttp(baseUrl, {expectedRevision} = {}) {
     return message.result;
   };
   const initialization = await rpc(1, 'initialize', {protocolVersion: '2025-11-25', capabilities: {}, clientInfo: {name: 'valiant-deployment-verification', version: '1.0.0'}});
-  const initialized = await fetch(new URL('/mcp', baseUrl), {
+  await get('/mcp', {
     method: 'POST',
-    headers: {'User-Agent': 'ValiantDocsVerification/1.0', 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': initialization.protocolVersion},
+    headers: {'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': initialization.protocolVersion},
     body: JSON.stringify({jsonrpc: '2.0', method: 'notifications/initialized'}),
-    signal: AbortSignal.timeout(15000),
-  });
-  assert.equal(initialized.status, 202);
+  }, 202);
   const tools = await rpc(2, 'tools/list', {}, initialization.protocolVersion);
   assert.equal(tools.tools.length, 3);
   const read = await rpc(3, 'tools/call', {name: 'read_document', arguments: {path: page.path}}, initialization.protocolVersion);
@@ -86,21 +100,22 @@ export async function verifyAgentHttp(baseUrl, {expectedRevision} = {}) {
   return {version: index.defaultVersion, documents: docs.documents.length, skills: skills.skills.length, mcpTools: tools.tools.length};
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const baseUrl = process.argv[2] ?? 'https://valiant.staticnorth.dev';
-  const expectedRevision = process.env.DOCS_EXPECTED_REVISION;
-  let result;
+export async function verifyAgentDeployment(baseUrl, options) {
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      result = await verifyAgentHttp(baseUrl, {expectedRevision});
-      break;
+      return await verifyAgentHttp(baseUrl, options);
     } catch (error) {
-      if (attempt === 4) {
+      if (error.retryable === false || attempt === 4) {
         throw error;
       }
       console.log(`Agent HTTP verification is waiting for the deployment (${error.message}).`);
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
   }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const baseUrl = process.argv[2] ?? 'https://valiant.staticnorth.dev';
+  const result = await verifyAgentDeployment(baseUrl, {expectedRevision: process.env.DOCS_EXPECTED_REVISION});
   console.log(`Verified agent HTTP access at ${baseUrl}: ${JSON.stringify(result)}`);
 }
