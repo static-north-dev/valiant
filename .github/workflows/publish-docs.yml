@@ -437,7 +437,9 @@ jobs:
           workingDirectory: docs
           command: pages deploy build --project-name=${{ env.CLOUDFLARE_PAGES_PROJECT }} --branch=${{ env.CLOUDFLARE_PAGES_PRODUCTION_BRANCH }}
 
-      - name: Verify deployed agent documentation
+      - name: Verify deployed Pages documentation
+        shell: bash
         env:
+          DOCS_DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
           DOCS_EXPECTED_REVISION: ${{ needs.persist-docs-snapshot.outputs.docs_commit }}
-        run: node docs/scripts/check-agent-http.mjs https://valiant.staticnorth.dev
+        run: node docs/scripts/check-agent-http.mjs "${DOCS_DEPLOYMENT_URL:?Wrangler did not return a deployment URL}"

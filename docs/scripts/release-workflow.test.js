@@ -209,6 +209,10 @@ test('the final docs artifact is built and deployed from the persisted SHA', () 
   assert.match(verify, /Upload verified documentation site/);
   assert.match(deploy, persistedReference);
   assert.match(deploy, /Download verified documentation site/);
+  assert.match(deploy, /DOCS_DEPLOYMENT_URL: \$\{\{ steps\.deploy\.outputs\.deployment-url \}\}/);
+  assert.match(deploy, /DOCS_EXPECTED_REVISION: \$\{\{ needs\.persist-docs-snapshot\.outputs\.docs_commit \}\}/);
+  assert.match(deploy, /node docs\/scripts\/check-agent-http\.mjs "\$\{DOCS_DEPLOYMENT_URL:\?Wrangler did not return a deployment URL\}"/);
+  assert.doesNotMatch(deploy, /check-agent-http\.mjs https:\/\/valiant\.staticnorth\.dev/);
   assert.doesNotMatch(deploy, /npm (ci|run build)/);
 });
 
