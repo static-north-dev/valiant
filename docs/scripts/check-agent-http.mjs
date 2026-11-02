@@ -28,7 +28,21 @@ export async function verifyAgentHttp(baseUrl, {expectedRevision} = {}) {
       error.retryable = !accessDenied;
       throw error;
     }
+    assert.equal(response.headers.get('X-Frame-Options'), 'DENY', `${route} is missing clickjacking protection`);
+    assert.match(response.headers.get('Content-Security-Policy') ?? '', /(?:^|;)\s*frame-ancestors 'none'(?:;|$)/, `${route} is missing CSP framing protection`);
     return response;
+  };
+  const htmlNonce = async (response) => {
+    const policy = response.headers.get('Content-Security-Policy');
+    const scripts = policy.split(';').find((directive) => directive.trim().startsWith('script-src '));
+    assert.ok(scripts && !scripts.includes("'unsafe-inline'") && !scripts.includes("'unsafe-eval'"));
+    const nonce = scripts.match(/'nonce-([^']+)'/)?.[1];
+    assert.ok(nonce, 'HTML response is missing a CSP nonce.');
+    assert.ok(response.headers.get('Cache-Control')?.includes('no-store'));
+    for (const script of (await response.text()).matchAll(/<script\b([^>]*)>/gi)) {
+      assert.ok(script[1].includes(`nonce="${nonce}"`), 'HTML script nonce does not match the CSP header.');
+    }
+    return nonce;
   };
   const json = async (route) => {
     const response = await get(route);
@@ -39,6 +53,7 @@ export async function verifyAgentHttp(baseUrl, {expectedRevision} = {}) {
   assert.ok(html.headers.get('Content-Type')?.includes('text/html'));
   assert.ok(html.headers.get('Link')?.includes('/llms.txt'));
   assert.ok(html.headers.get('Vary')?.includes('Accept'));
+  const homeNonce = await htmlNonce(html);
   const markdown = await get('/', {headers: {Accept: 'text/markdown'}});
   assert.ok(markdown.headers.get('Content-Type')?.includes('text/markdown'));
   assert.ok((await markdown.text()).startsWith('# Valiant'));
@@ -54,6 +69,8 @@ export async function verifyAgentHttp(baseUrl, {expectedRevision} = {}) {
   assert.ok(docs.documents.length > 0 && docs.documents.every((document) => document.version === index.defaultVersion));
   const page = docs.documents.find((document) => document.id === 'validation/quick-start');
   assert.ok(page);
+  const pageHtml = await get(page.path, {headers: {Accept: 'text/html', 'If-None-Match': '"previous-document"'}});
+  assert.notEqual(await htmlNonce(pageHtml), homeNonce, 'HTML responses reused a CSP nonce.');
   const pageMarkdown = await get(page.path, {headers: {Accept: 'text/markdown'}});
   assert.ok(pageMarkdown.headers.get('Content-Type')?.includes('text/markdown'));
   assert.ok((await pageMarkdown.text()).includes('```csharp'));

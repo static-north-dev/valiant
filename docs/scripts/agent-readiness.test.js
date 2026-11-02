@@ -11,9 +11,16 @@ let fixture;
 let index;
 let worker;
 let env;
+let originalHtmlRewriter;
 const assetRequests = [];
 
 before(async () => {
+  originalHtmlRewriter = globalThis.HTMLRewriter;
+  // Node has no HTMLRewriter. Real script rewriting is checked by the Pages HTTP verifier.
+  globalThis.HTMLRewriter = class {
+    on() {return this;}
+    transform(response) {return response;}
+  };
   fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'valiant-agent-docs-'));
   await fs.mkdir(path.join(fixture, 'static'));
   await fs.copyFile(path.join(docsRoot, 'static/llms.txt'), path.join(fixture, 'static/llms.txt'));
@@ -65,6 +72,11 @@ before(async () => {
 });
 
 after(async () => {
+  if (originalHtmlRewriter === undefined) {
+    delete globalThis.HTMLRewriter;
+  } else {
+    globalThis.HTMLRewriter = originalHtmlRewriter;
+  }
   if (fixture) {
     await fs.rm(fixture, {recursive: true, force: true});
   }
@@ -114,6 +126,50 @@ test('known pages return real Markdown, preserve cache variants, and support HEA
   assert.equal((await request('/unknown/', {headers: {Accept: 'text/markdown'}})).status, 404);
   const asset = await request('/markdown/validation.md');
   assert.equal(asset.status, 200);
+});
+
+test('HTML, Markdown, API, preflight, and error responses carry CSP and framing protection', async () => {
+  for (const [route, options] of [
+    ['/', {headers: {Accept: 'text/html'}}],
+    ['/validation/', {headers: {Accept: 'text/markdown'}}],
+    ['/validation/', {method: 'HEAD'}],
+    ['/api/docs'], ['/api/docs?version=missing'], ['/missing'], ['/mcp'],
+    ['/mcp/server-card', {method: 'OPTIONS'}],
+  ]) {
+    const response = await request(route, options);
+    assert.equal(response.headers.get('X-Frame-Options'), 'DENY', route);
+    assert.match(response.headers.get('Content-Security-Policy'), /frame-ancestors 'none'/, route);
+    assert.match(response.headers.get('Content-Security-Policy'), /object-src 'none'/, route);
+  }
+  const headers = await fs.readFile(path.join(fixture, 'build/_headers'), 'utf8');
+  assert.match(headers, /Content-Security-Policy: [^\n]*frame-ancestors 'none'/);
+  assert.match(headers, /X-Frame-Options: DENY/);
+});
+
+test('HTML uses fresh nonces and discards stale validators while Markdown retains caching', async () => {
+  const htmlEnv = {ASSETS: {fetch: async (request) => {
+    assert.equal(request.headers.get('If-None-Match'), null);
+    assert.equal(request.headers.get('If-Modified-Since'), null);
+    return new Response('<html>Documentation</html>', {headers: {
+      'Content-Type': 'text/html', 'Cache-Control': 'public, max-age=3600', ETag: '"original"',
+      'Content-Length': '26', 'Last-Modified': 'Wed, 01 Jan 2025 00:00:00 GMT',
+    }});
+  }}};
+  const htmlRequest = new Request('https://valiant.staticnorth.dev/validation/', {headers: {
+    Accept: 'text/html', 'If-None-Match': '"original"', 'If-Modified-Since': 'Wed, 01 Jan 2025 00:00:00 GMT',
+  }});
+  const first = await worker.fetch(htmlRequest, htmlEnv);
+  const second = await worker.fetch(htmlRequest, htmlEnv);
+  const nonce = (response) => response.headers.get('Content-Security-Policy').match(/'nonce-([^']+)'/)[1];
+  assert.equal(Buffer.from(nonce(first), 'base64').length, 16);
+  assert.notEqual(nonce(first), nonce(second));
+  assert.equal(first.headers.get('Cache-Control'), 'private, no-store');
+  for (const name of ['ETag', 'Last-Modified', 'Content-Length']) {
+    assert.equal(first.headers.get(name), null, name);
+  }
+  const markdown = await request('/validation/', {headers: {Accept: 'text/markdown'}});
+  assert.equal(markdown.headers.get('ETag'), '"asset"');
+  assert.equal(markdown.headers.get('Cache-Control'), 'public, max-age=0');
 });
 
 test('documentation API defaults to stable, bounds searches, and never fetches caller paths', async () => {

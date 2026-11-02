@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {build} from 'esbuild';
 import {contentSignal, discoveryLinks, moduleNames} from '../src/agents/documentation.mjs';
 import {serverInfo} from '../src/agents/mcp.mjs';
+import {contentSecurityPolicy} from '../src/agents/security.mjs';
 
 const require = createRequire(import.meta.url);
 const {DEFAULT_PARSE_FRONT_MATTER} = require('@docusaurus/utils');
@@ -264,6 +265,7 @@ export async function buildAgentArtifacts({siteDir, outDir, versions, siteUrl, s
   const markdownRoutes = Object.fromEntries([['/', '/markdown/index.md'], ['/agents', '/markdown/agents.md'], ...documents.map((document) => [document.path.replace(/\/$/, ''), document.markdownUrl])]);
   const headers = [
     '/*', `  Link: ${discoveryLinks}`, `  Content-Signal: ${contentSignal}`, '  X-Content-Type-Options: nosniff',
+    `  Content-Security-Policy: ${contentSecurityPolicy()}`, '  X-Frame-Options: DENY',
     '/markdown/*', '  Content-Type: text/markdown; charset=utf-8', '  Access-Control-Allow-Origin: *',
     '/auth.md', '  Content-Type: text/markdown; charset=utf-8', '  Access-Control-Allow-Origin: *',
     '/.well-known/*', '  Access-Control-Allow-Origin: *',

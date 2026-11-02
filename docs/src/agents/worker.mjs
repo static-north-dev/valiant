@@ -1,5 +1,13 @@
 import {contentSignal, discoveryLinks, listDocuments, readDocument, searchDocuments} from './documentation.mjs';
 import {handleMcpRequest} from './mcp.mjs';
+import {withSecurityHeaders} from './security.mjs';
+
+function withoutConditionalHeaders(request) {
+  const headers = new Headers(request.headers);
+  headers.delete('If-None-Match');
+  headers.delete('If-Modified-Since');
+  return new Request(request, {headers});
+}
 
 export function prefersMarkdown(accept = '') {
   const ranges = accept.toLowerCase().split(',').map((range) => {
@@ -43,7 +51,7 @@ function withHeaders(response, {markdownPath, varyAccept = false, cors = false, 
 }
 
 export function createWorker({markdownRoutes}) {
-  return {
+  const worker = {
     async fetch(request, env) {
       const url = new URL(request.url);
       if (['/mcp/server-card', '/.well-known/mcp/server-card.json'].includes(url.pathname)) {
@@ -129,9 +137,14 @@ export function createWorker({markdownRoutes}) {
           }
           return result;
         }
-        return withHeaders(await env.ASSETS.fetch(request), {markdownPath, varyAccept: true});
+        return withHeaders(await env.ASSETS.fetch(withoutConditionalHeaders(request)), {markdownPath, varyAccept: true});
       }
-      return env.ASSETS.fetch(request);
+      const html = ['GET', 'HEAD'].includes(request.method) &&
+        (url.pathname.endsWith('.html') || request.headers.get('Accept')?.includes('text/html'));
+      return env.ASSETS.fetch(html ? withoutConditionalHeaders(request) : request);
     },
   };
+  return {async fetch(request, env) {
+    return withSecurityHeaders(await worker.fetch(request, env));
+  }};
 }

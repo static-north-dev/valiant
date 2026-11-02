@@ -18,6 +18,9 @@ export function validateAgentArtifacts(outDir) {
   for (const file of required) {
     assert.ok(read(file).length > 0, `Missing or empty agent artifact: ${file}`);
   }
+  const headers = read('/_headers');
+  assert.match(headers, /Content-Security-Policy: [^\n]*frame-ancestors 'none'/);
+  assert.match(headers, /X-Frame-Options: DENY/);
   const index = json('/agents/documents.json');
   assert.ok(index.versions.some((version) => version.name === index.defaultVersion && version.isDefault));
   const paths = new Set();

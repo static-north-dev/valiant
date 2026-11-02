@@ -97,6 +97,21 @@ zero. Ordinary browser and wildcard requests retain HTML. Both variants use
 `_headers` rules do not apply to Function-generated responses. Static assets
 bypass the Worker where possible through `_routes.json`.
 
+Both static assets and Worker responses publish `X-Frame-Options: DENY` and a
+Content Security Policy with `frame-ancestors 'none'`, `object-src 'none'`,
+same-origin resource defaults, and restricted base/form destinations. HTML
+responses receive a fresh 128-bit nonce on every script through HTMLRewriter;
+their CSP permits same-origin scripts and that nonce, with inline event handlers
+and eval disabled. This also lets Cloudflare attach the nonce to its injected
+bot-detection scripts. Styles allow inline declarations used by React and Prism.
+Child frames are limited to this origin and Cloudflare's challenge origin.
+
+HTML is served with `Cache-Control: private, no-store` and without conditional
+asset validators so a cached page cannot reuse a nonce or receive mismatched
+script/CSP values after a 304. Other assets and Markdown retain their caching.
+The Pages HTTP verifier checks security headers and matching, distinct HTML
+nonces against the real Worker runtime.
+
 `npm run serve` previews **static files only**. Use `npm run preview:pages` to
 exercise negotiation and the HTTP/MCP endpoints in Wrangler/workerd. It uses
 the same pinned Wrangler version as deployment. `wrangler.toml` pins a supported
@@ -108,10 +123,23 @@ the deploy job runs the same dependency-free check on the downloaded artifact.
 The site artifact explicitly includes hidden files so `.well-known` survives
 upload/download. Repository tests cover version isolation, HTTP negotiation,
 invalid input, SDK client calls, WebMCP registration, and missing/tampered files.
-Publication then runs `docs:check-agent-http` against the live custom domain,
-including Markdown and HTML variants, exact skill digests, and MCP protocol
-calls. It verifies the index's source revision matches the persisted docs
-commit. The built Worker includes license notices for its bundled dependencies.
+Publication then runs `docs:check-agent-http` against the exact `pages.dev`
+deployment URL returned by Wrangler, including Markdown and HTML variants,
+exact skill digests, and MCP protocol calls. It verifies the index's source
+revision matches the persisted docs commit and fails if Wrangler returns no
+deployment URL. This validates the deployed artifact and runtime independently
+of the custom domain's bot protection. The built Worker includes license
+notices for its bundled dependencies.
+
+Custom-domain access is checked separately:
+
+```bash
+npm run docs:check-agent-http -- https://valiant.staticnorth.dev
+```
+
+Bot Fight Mode can remain enabled on `staticnorth.dev`. A successful Pages
+deployment check does not establish that the custom domain accepts every bot
+or CI runner; its browser challenges remain visible in the separate check.
 
 The deploy job uses Node.js 22, matching the other documentation jobs. HTTP
 verification reports the method, URL, response type, Cloudflare Ray ID and
