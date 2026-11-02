@@ -148,6 +148,10 @@ jobs:
         run: npm run build
         working-directory: docs
 
+      - name: Validate generated agent documentation
+        run: npm run docs:check-agent-artifacts
+        working-directory: docs
+
   dependency-audit:
     name: dependency advisory audit
     runs-on: ubuntu-latest

@@ -157,13 +157,37 @@
 
 .declaration {
   background: #111f34;
-  border: 1px solid #2b3b54;
+  border: 1px solid color-mix(in srgb, var(--module-accent) 30%, #2b3b54);
   border-radius: 0.35rem;
   display: flex;
   flex-direction: column;
   gap: 0.28rem;
   min-width: 0;
   padding: 0.65rem 0.75rem;
+  text-decoration: none;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.declaration.validation { --module-accent: #73b7ff; }
+.declaration.endpoints { --module-accent: #ffb35d; }
+.declaration.mapping { --module-accent: #b49aff; }
+.declaration.settings { --module-accent: #5ad6b5; }
+
+.declaration:hover,
+.declaration:focus-visible,
+:global(body:has(.navbar-module-validation:is(:hover, :focus-visible))) .declaration.validation,
+:global(body:has(.navbar-module-endpoints:is(:hover, :focus-visible))) .declaration.endpoints,
+:global(body:has(.navbar-module-mapping:is(:hover, :focus-visible))) .declaration.mapping,
+:global(body:has(.navbar-module-settings:is(:hover, :focus-visible))) .declaration.settings {
+  background: color-mix(in srgb, var(--module-accent) 12%, #111f34);
+  border-color: var(--module-accent);
+  box-shadow: 0 0 0 1px var(--module-accent);
+  text-decoration: none;
+}
+
+.declaration:focus-visible {
+  outline: 2px solid var(--module-accent);
+  outline-offset: 3px;
 }
 
 .declarationModule {
@@ -177,7 +201,7 @@
 .declaration code {
   background: transparent;
   border: 0;
-  color: #ffd479;
+  color: var(--module-accent);
   font-size: clamp(0.65rem, 1vw, 0.76rem);
   overflow: hidden;
   padding: 0;
@@ -391,6 +415,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .declaration,
   .moduleCard,
   .moduleCard::before { transition: none; }
 }

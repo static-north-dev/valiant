@@ -2,6 +2,9 @@
 
 This directory contains the Docusaurus documentation site for StaticNorth.Valiant.
 
+Use Node.js 22 or newer. The pinned Wrangler CLI used by both local previews
+and deployment requires Node.js 22.
+
 The site uses one docs plugin instance for the complete Valiant release.
 Validation, Endpoints, Mapping, and Settings remain separate navigation
 sections, but share one version inventory, snapshot, and version selector.
@@ -13,6 +16,9 @@ npm install
 npm run start
 npm run build
 npm run serve
+npm run preview:pages
+npm run docs:check-agent-artifacts
+npm run docs:check-agent-http -- http://127.0.0.1:3091
 ```
 
 ## LLM and crawler files
@@ -20,26 +26,99 @@ npm run serve
 The static site publishes these root files:
 
 - `/llms.txt`: a concise, curated entry point for language models and agents;
-- `/llms-full.txt`: the complete **current** documentation in one generated
-  Markdown context; it deliberately excludes `versioned_docs` so it does not
-  mix historical APIs with the current package family;
+- `/llms-full.txt`: the complete default published documentation in one Markdown
+  context, with an explicit version and source revision;
+- `/llms-{validation,endpoints,mapping,settings}.txt`: smaller contexts for the
+  same default published version;
+- `/agents/documents.json`: an index of every public document in every built
+  version, including canonical page paths, Markdown URLs, and complete content;
+- `/markdown/...`: individual Markdown pages generated from the exact sources
+  used for the corresponding HTML routes, including older majors and local
+  development previews;
 - `/robots.txt`: allows indexing and points at Docusaurus's generated
-  `/sitemap.xml`.
+  `/sitemap.xml` and agent catalog. Content Signals permit search and AI input;
+  training permission is deliberately left unspecified.
 
-`static/llms-full.txt` is generated from `content` in the same Validation →
-Endpoints → Mapping → Settings order as `sidebars.js`. It is committed rather
-than regenerated during builds, so a production build is reproducible from its
-pinned source commit. Run these commands before committing a content or sidebar
-change:
+`static/llms-full.txt` remains a committed **authoring** context generated from
+`content` in sidebar order. Run these commands before committing a content or
+sidebar change:
 
 ```bash
 npm run docs:generate-llms
 npm run docs:check-llms
 ```
 
+During builds, `plugins/agent-docs` uses Docusaurus's loaded version metadata
+to generate the deployed index and overwrite the built `llms-full.txt` with the
+actual default version. Production never serves development content under a
+stable URL merely because `content` has advanced past a published snapshot.
+Relative Markdown links resolve within their source version; fenced code is
+preserved. Draft and unlisted pages are excluded from all agent exports.
+
+Four source-controlled module skills live in `agent-skills`. The build copies
+them to `/.well-known/agent-skills/` and computes the v0.2.0 discovery index's
+SHA-256 digests from the exact published bytes. The build also publishes an
+API Catalog, an MCP server card, and an ARD manifest. `ard.json` is the current
+ARD discovery path; `ai-catalog.json` is a compatibility alias for scanners using
+the predecessor path. The Poppy draft 0.3 manifest advertises only ordinary
+signed-out website browsing (`web: {}`); it does not claim OAuth or sessions.
+
+## Documentation tools
+
+The build bundles a stateless Pages Worker into `_worker.js`. It uses only the
+default `ASSETS` binding and needs no KV, database, credentials, or external
+service. All tool data comes from the built documentation index:
+
+- `GET /api/docs?module=validation&version=1`: list page metadata and versions;
+- `GET /api/docs/search?query=composition&limit=8`: search with bounded excerpts;
+- `GET /api/docs/read?path=/validation/quick-start`: read one indexed page;
+- `GET /api/docs/status`: check index availability;
+- `POST /mcp`: the same list/search/read tools through the official MCP SDK's
+  stateless Streamable HTTP transport;
+- WebMCP-capable browsers register the same three read-only tools at page load.
+
+The HTTP API contract is `/openapi.json`; `/agents` explains the public client
+interfaces. List and search default to the published major. Other versions,
+including `current` in local builds, must be selected explicitly. Read accepts
+only paths present in the generated index and never fetches a caller's URL.
+The MCP endpoint accepts no session state, limits input bodies to 16 KiB,
+validates origins, and does not offer a persistent GET/SSE stream. Unknown paths
+and failed index loads return explicit errors.
+
+Requests for published HTML pages with `Accept: text/markdown` receive the
+matching Markdown when its quality is at least the HTML preference and is not
+zero. Ordinary browser and wildcard requests retain HTML. Both variants use
+`Vary: Accept`, and the Worker adds response headers directly because Pages
+`_headers` rules do not apply to Function-generated responses. Static assets
+bypass the Worker where possible through `_routes.json`.
+
+`npm run serve` previews **static files only**. Use `npm run preview:pages` to
+exercise negotiation and the HTTP/MCP endpoints in Wrangler/workerd. It uses
+the same pinned Wrangler version as deployment. `wrangler.toml` pins a supported
+compatibility date instead of implicitly changing runtime behavior each day.
+
+`npm run docs:check-agent-artifacts` validates the built files, version metadata,
+skill digests, and discovery targets. CI and publication run it after building;
+the deploy job runs the same dependency-free check on the downloaded artifact.
+The site artifact explicitly includes hidden files so `.well-known` survives
+upload/download. Repository tests cover version isolation, HTTP negotiation,
+invalid input, SDK client calls, WebMCP registration, and missing/tampered files.
+Publication then runs `docs:check-agent-http` against the live custom domain,
+including Markdown and HTML variants, exact skill digests, and MCP protocol
+calls. It verifies the index's source revision matches the persisted docs
+commit. The built Worker includes license notices for its bundled dependencies.
+
+Cloudflare Pages can reject library-default HTTP user agents with error 1010
+before the Worker runs. Custom clients should send a descriptive application
+User-Agent. This repository cannot change Cloudflare-managed bot filtering or
+publish DNS-AID records. The live scanner's score must be verified after the
+normal **Publish Docs** deployment; draft-protocol checks may lag the versions
+published here.
+
 ## Cloudflare Pages
 
-The site builds static files, so no Cloudflare adapter is required. CI builds
+The site builds static files plus its bundled Pages request handler; no
+Cloudflare adapter or additional binding configuration is required. CI builds
 the site for pushes and pull requests targeting `main`, but never deploys it.
 
 Documentation publication is independent from NuGet releases. Run the
@@ -176,7 +255,11 @@ Rerunning a partially failed release is safe because NuGet publication uses
 npm advisories, with no advisory exceptions. Compatible security patches for
 transitive dependencies are pinned in `package.json` overrides and the lockfile,
 including `image-size` 2.0.4, which replaces the previously exempt vulnerable
-image parsers. Every workflow job that invokes a Docusaurus build has a
-20-minute timeout. The development-server
-dependency graph also reports a moderate `uuid` advisory with no upstream fix;
-it is build tooling and is not shipped in the static site.
+image parsers. Overrides for packages such as `brace-expansion` and `nanoid`
+stay on the latest compatible release line required by their consumers;
+forcing their newest majors would change the APIs expected by the build tools.
+Tinypool 2.2.0 replaces Docusaurus's older worker pool to remove its critical
+advisories; its major-version migration drops Node.js 18 and is covered by the
+docs builds. Every workflow job that invokes a Docusaurus build has a 20-minute
+timeout. Lower-severity findings in Docusaurus's build/development dependency
+tree remain visible in `npm audit`; they are not added to an exception list.
