@@ -26,6 +26,8 @@ const config = {
     locales: ['en'],
   },
 
+  plugins: ['./plugins/agent-docs'],
+
   presets: [
     [
       'classic',
@@ -58,24 +60,28 @@ const config = {
           sidebarId: 'validationSidebar',
           position: 'left',
           label: 'Validation',
+          className: 'navbar-module-validation',
         },
         {
           type: 'docSidebar',
           sidebarId: 'endpointsSidebar',
           position: 'left',
           label: 'Endpoints',
+          className: 'navbar-module-endpoints',
         },
         {
           type: 'docSidebar',
           sidebarId: 'mappingSidebar',
           position: 'left',
           label: 'Mapping',
+          className: 'navbar-module-mapping',
         },
         {
           type: 'docSidebar',
           sidebarId: 'settingsSidebar',
           position: 'left',
           label: 'Settings',
+          className: 'navbar-module-settings',
         },
         {
           type: 'docsVersionDropdown',
@@ -86,6 +92,7 @@ const config = {
     },
     footer: {
       style: 'light',
+      links: [{label: 'Documentation for agents', to: '/agents'}],
       copyright:
         'Valiant is an open-source project from <a class="static-north-footer-link" href="https://staticnorth.dev/">Static North</a>.',
     },

@@ -1,4 +1,6 @@
 User-agent: *
+Content-Signal: search=yes, ai-input=yes
 Allow: /
 
 Sitemap: https://valiant.staticnorth.dev/sitemap.xml
+Agentmap: https://valiant.staticnorth.dev/.well-known/ard.json

@@ -56,6 +56,6 @@ test('llms generator check detects the committed current context', () => {
 test('robots allows crawling and points to the generated sitemap', () => {
   assert.equal(
     readStatic('robots.txt'),
-    'User-agent: *\nAllow: /\n\nSitemap: https://valiant.staticnorth.dev/sitemap.xml\n',
+    'User-agent: *\nContent-Signal: search=yes, ai-input=yes\nAllow: /\n\nSitemap: https://valiant.staticnorth.dev/sitemap.xml\nAgentmap: https://valiant.staticnorth.dev/.well-known/ard.json\n',
   );
 });

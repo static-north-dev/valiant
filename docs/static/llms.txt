@@ -20,3 +20,11 @@ Use the current documentation for the `StaticNorth.Valiant.*` package and C# nam
 ## Optional
 
 - [Full current documentation](https://valiant.staticnorth.dev/llms-full.txt): Complete current documentation in one generated Markdown context; excludes historical version snapshots.
+
+## Agent access
+
+- [Agent documentation](https://valiant.staticnorth.dev/agents): Markdown access, version selection, skills, MCP, WebMCP, and HTTP documentation tools.
+- [Versioned document index](https://valiant.staticnorth.dev/agents/documents.json): Available documentation versions, exact page paths, Markdown URLs, and source revision. Select the installed package major before using examples.
+- [Authoring skills](https://valiant.staticnorth.dev/.well-known/agent-skills/index.json): Validation, Endpoints, Mapping, and Settings guidance with SHA-256 digests.
+- [Documentation API](https://valiant.staticnorth.dev/openapi.json): Public read-only list, search, and read operations. No authentication is required.
+- [MCP server card](https://valiant.staticnorth.dev/mcp/server-card): Connect to the real documentation MCP endpoint using Streamable HTTP.

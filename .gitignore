@@ -200,6 +200,7 @@ AutoTest.Net/
 node_modules/
 .astro/
 .docusaurus/
+.wrangler/
 dist/
 docs/build/
 

@@ -50,10 +50,13 @@ function SourceFlow() {
           <span className={styles.flowLabel}>explicit C# declarations</span>
           <div className={styles.declarationGrid}>
             {modules.map((module) => (
-              <div className={styles.declaration} key={module.key}>
+              <Link
+                className={`${styles.declaration} ${styles[module.key]}`}
+                to={module.href}
+                key={module.key}>
                 <span className={styles.declarationModule}>{module.label}</span>
                 <code>{module.marker}</code>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
