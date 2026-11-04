@@ -45,6 +45,8 @@ app.Run();
 
 Registration discovers generated registrar metadata from the calling and entry assemblies. Mapping resolves those registrars and invokes each generated route plan.
 
+For Native AOT, pass endpoint assemblies explicitly: `builder.Services.AddValiantEndpoints(typeof(HealthEndpoint).Assembly)`. See [Native AOT registration](./reference/registration-generation.md#native-aot).
+
 ## 4. Put endpoints in a group
 
 ```csharp

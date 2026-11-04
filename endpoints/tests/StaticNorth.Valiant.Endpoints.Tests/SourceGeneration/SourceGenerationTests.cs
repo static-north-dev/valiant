@@ -727,9 +727,49 @@ public sealed class SourceGenerationTests
             enableQueryBinding: false);
 
         await Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id)).DoesNotContain("VLE010");
+        await Assert.That(GetGeneratedSource(result)).Contains("MapEndpointWithoutQueryBinding<global::SearchEndpoint>");
+        await Assert.That(GetGeneratedSource(result)).DoesNotContain("ValiantEndpointGeneratedCode.MapEndpoint<");
         await Assert.That(result.GeneratedSources.Any(static source =>
             source.HintName.Contains("QueryRequest", StringComparison.Ordinal) ||
             source.HintName.Contains("QueryObject", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Grouped_And_Standalone_Registration_Exclude_Query_Binder_Without_OptIn()
+    {
+        var result = RunGenerator(
+            """
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+            [ValiantEndpointGroup]
+            public sealed class TestGroup : IEndpointGroup
+            {
+                public static RouteGroupBuilder CreateGroup(IEndpointRouteBuilder builder) => throw null!;
+            }
+
+            [ValiantEndpoint<TestGroup>]
+            public sealed class GroupedEndpoint : IEndpoint
+            {
+                public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) => throw null!;
+            }
+
+            [ValiantEndpoint]
+            public sealed class StandaloneEndpoint : IEndpoint
+            {
+                public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) => throw null!;
+            }
+            """,
+            enableQueryBinding: false);
+
+        var generated = GetGeneratedSource(result);
+
+        await Assert.That(generated).Contains("MapEndpointWithoutQueryBinding<global::GroupedEndpoint>(group0,");
+        await Assert.That(generated).Contains("MapEndpointWithoutQueryBinding<global::StandaloneEndpoint>(builder,");
+        await Assert.That(generated).DoesNotContain("ValiantEndpointGeneratedCode.MapEndpoint<");
+        await Assert.That(generated).Contains("ShouldMapEndpointGroup<global::TestGroup>");
+        await Assert.That(generated).Contains("ShouldMapEndpoint<global::GroupedEndpoint>");
+        await Assert.That(generated).Contains("ShouldMapEndpoint<global::StandaloneEndpoint>");
     }
 
     [Test]
@@ -924,6 +964,8 @@ public sealed class SourceGenerationTests
         await Assert.That(disabled.GeneratedSources.Any(static generated =>
             generated.HintName.Contains("QueryRequest", StringComparison.Ordinal) ||
             generated.HintName.Contains("QueryObject", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(GetGeneratedSource(enabled)).Contains("ValiantEndpointGeneratedCode.MapEndpoint<global::SearchEndpoint>");
+        await Assert.That(GetGeneratedSource(disabled)).Contains("MapEndpointWithoutQueryBinding<global::SearchEndpoint>");
     }
 
     [Test]

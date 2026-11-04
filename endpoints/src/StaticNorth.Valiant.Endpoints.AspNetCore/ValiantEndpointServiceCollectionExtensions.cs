@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,8 +16,10 @@ public static class ValiantEndpointServiceCollectionExtensions
     /// <summary>
     /// Registers source-generated Valiant endpoint route registrars from the calling and entry assemblies.
     /// </summary>
+    /// <remarks>For Native AOT, use an overload that accepts endpoint assemblies explicitly.</remarks>
     /// <param name="services">The service collection to add endpoint registrations to.</param>
     /// <returns>The same service collection instance so calls can be chained.</returns>
+    [RequiresDynamicCode("Calling assembly discovery is unavailable in Native AOT. Use an AddValiantEndpoints overload with explicit assemblies.")]
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static IServiceCollection AddValiantEndpoints(this IServiceCollection services)
     {
@@ -29,9 +32,11 @@ public static class ValiantEndpointServiceCollectionExtensions
     /// <summary>
     /// Registers source-generated Valiant endpoint route registrars from the calling and entry assemblies and configures endpoint options.
     /// </summary>
+    /// <remarks>For Native AOT, use an overload that accepts endpoint assemblies explicitly.</remarks>
     /// <param name="services">The service collection to add endpoint registrations to.</param>
     /// <param name="setup">The endpoint setup action.</param>
     /// <returns>The same service collection instance so calls can be chained.</returns>
+    [RequiresDynamicCode("Calling assembly discovery is unavailable in Native AOT. Use an AddValiantEndpoints overload with explicit assemblies.")]
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static IServiceCollection AddValiantEndpoints(this IServiceCollection services, Action<ValiantEndpointOptions> setup)
     {

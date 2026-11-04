@@ -1617,7 +1617,8 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
                 "                    ",
                 endpoint,
                 "group" + groupIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                "endpointRegistration" + endpointIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                "endpointRegistration" + endpointIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                queryBindingGenerated);
             builder.AppendLine("                }");
             builder.AppendLine("            }");
         }
@@ -1654,7 +1655,8 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
                 "                ",
                 endpoint,
                 "builder",
-                "endpointRegistration" + endpointIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                "endpointRegistration" + endpointIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                queryBindingGenerated);
             builder.AppendLine("            }");
         }
 
@@ -1670,7 +1672,8 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         string indent,
         EndpointModel endpoint,
         string routeBuilderExpression,
-        string registrationExpression)
+        string registrationExpression,
+        bool queryBindingGenerated)
     {
         builder.Append(indent);
         if (!endpoint.QueryParsingOverrides.IsEmpty)
@@ -1678,7 +1681,8 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             builder.Append("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ApplyQueryParsingOverrides(");
         }
 
-        builder.Append("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.MapEndpoint<")
+        builder.Append("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.")
+            .Append(queryBindingGenerated ? "MapEndpoint<" : "MapEndpointWithoutQueryBinding<")
             .Append(endpoint.Type)
             .Append(">(")
             .Append(routeBuilderExpression)

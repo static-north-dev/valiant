@@ -1,8 +1,11 @@
+using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 using StaticNorth.Valiant.Mapping;
 using StaticNorth.Valiant.Settings;
 using StaticNorth.Valiant.Validation;
@@ -24,6 +27,7 @@ var schema = ValiantSettingsSchemas.Get<AotSettings>().Schema;
 var builder = WebApplication.CreateSlimBuilder();
 builder.Services.AddValiantValidators(options => options.Mode = ValiantValidationMode.Fast);
 builder.Services.AddSingleton(new AotRequest(""));
+builder.Services.AddValiantEndpoints(typeof(Program).Assembly);
 
 await using var app = builder.Build();
 var handlerReached = false;
@@ -36,9 +40,12 @@ app.MapGet(
         })
     .WithValiantValidation();
 
+app.MapValiantEndpoints();
+
 var endpoint = ((IEndpointRouteBuilder)app).DataSources
     .SelectMany(static dataSource => dataSource.Endpoints)
-    .Single();
+    .OfType<RouteEndpoint>()
+    .Single(static endpoint => endpoint.RoutePattern.RawText == "/validation");
 using var scope = app.Services.CreateScope();
 var httpContext = new DefaultHttpContext
 {
@@ -54,13 +61,32 @@ if (mapped.Value != "native" ||
     validation.IsValid ||
     schema.SectionPath != "Aot" ||
     httpContext.Response.StatusCode != StatusCodes.Status400BadRequest ||
-    handlerReached)
+    handlerReached ||
+    !await ExerciseGeneratedRouteAsync(app, "/generated", "standalone") ||
+    !await ExerciseGeneratedRouteAsync(app, "/aot/generated", "grouped"))
 {
     return 1;
 }
 
 Console.WriteLine("Valiant Native AOT package smoke passed.");
 return 0;
+
+static async Task<bool> ExerciseGeneratedRouteAsync(WebApplication app, string route, string expected)
+{
+    var endpoint = ((IEndpointRouteBuilder)app).DataSources
+        .SelectMany(static source => source.Endpoints)
+        .OfType<RouteEndpoint>()
+        .Single(candidate => candidate.RoutePattern.RawText == route);
+    using var body = new MemoryStream();
+    var context = new DefaultHttpContext
+    {
+        RequestServices = app.Services,
+        Response = { Body = body }
+    };
+
+    await endpoint.RequestDelegate!(context);
+    return context.Response.StatusCode == StatusCodes.Status200OK && Encoding.UTF8.GetString(body.ToArray()) == expected;
+}
 
 public sealed record AotSource(string Value);
 

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 
 namespace StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure;
 
@@ -14,7 +15,8 @@ public sealed class ValiantEndpointRouteRegistrarAttribute : Attribute
     /// </summary>
     /// <param name="registrarType">The generated registrar implementation type.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public ValiantEndpointRouteRegistrarAttribute(Type registrarType)
+    public ValiantEndpointRouteRegistrarAttribute(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type registrarType)
     {
         ArgumentNullException.ThrowIfNull(registrarType);
 
@@ -30,5 +32,6 @@ public sealed class ValiantEndpointRouteRegistrarAttribute : Attribute
     /// Gets the generated registrar implementation type.
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     public Type RegistrarType { get; }
 }

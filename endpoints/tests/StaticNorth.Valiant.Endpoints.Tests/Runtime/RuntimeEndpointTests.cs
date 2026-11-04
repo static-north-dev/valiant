@@ -67,6 +67,40 @@ public sealed partial class RuntimeEndpointTests
     }
 
     [Test]
+    public async Task Mapping_Without_Query_Binding_Preserves_Conventions_And_Parsing_Metadata()
+    {
+        var services = new ServiceCollection();
+        EndpointRegistration? configuredRegistration = null;
+        services.AddValiantEndpoints(options =>
+        {
+            options.ConfigureEndpoint = (_, registration) => configuredRegistration = registration;
+            options.ConfigureEndpointWhen(
+                registration => registration.EndpointType == typeof(DefaultRuntimeEndpoint),
+                configuration => configuration.QueryParameters.Parsing = new QueryParsingOptions
+                {
+                    SupportedArrayFormats = [QueryArrayFormat.CommaSeparated]
+                });
+        });
+        using var provider = services.BuildServiceProvider();
+        var builder = new TestEndpointRouteBuilder(provider);
+        var registration = ValiantEndpointGeneratedCode.CreateEndpointRegistration<DefaultRuntimeEndpoint>(
+            builder, null, 7, false, null, null, null);
+
+        ValiantEndpointGeneratedCode.MapEndpointWithoutQueryBinding<DefaultRuntimeEndpoint>(builder, registration);
+
+        var endpoint = builder.DataSources.SelectMany(static source => source.Endpoints).Single();
+        var context = new DefaultHttpContext { RequestServices = provider };
+        context.SetEndpoint(endpoint);
+
+        await Assert.That(configuredRegistration).IsSameReferenceAs(registration);
+        await Assert.That(configuredRegistration!.Order).IsEqualTo(7);
+        await Assert.That(configuredRegistration.QueryParameters.IsRuntimeBindingEnabled).IsFalse();
+        await Assert.That(ValiantEndpointGeneratedCode.ResolveQueryParsingOptions(context).SupportedArrayFormats
+            .SequenceEqual([QueryArrayFormat.CommaSeparated])).IsTrue();
+        await Assert.That(GetSingleRoutePattern(builder)).IsEqualTo("/items");
+    }
+
+    [Test]
     public async Task AddValiantEndpoints_With_Setup_And_Assembly_Configures_Options()
     {
         var services = new ServiceCollection();
