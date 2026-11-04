@@ -129,6 +129,18 @@ public static class ValiantEndpointGeneratedCode
             registration);
 
     /// <summary>
+    /// Maps an endpoint compiled without query binding, keeping the runtime query binder unreachable.
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static IEndpointConventionBuilder MapEndpointWithoutQueryBinding<TEndpoint>(
+        IEndpointRouteBuilder builder,
+        EndpointRegistration registration)
+        where TEndpoint : IEndpoint =>
+        ValiantEndpointRouteBuilderExtensions.MapEndpointWithoutQueryBinding<TEndpoint>(
+            builder,
+            registration);
+
+    /// <summary>
     /// Applies source-generated query parsing overrides to a mapped endpoint.
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]

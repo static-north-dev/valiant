@@ -104,6 +104,31 @@ public static class ValiantEndpointRouteBuilderExtensions
         EndpointRegistration registration)
         where TEndpoint : IEndpoint
     {
+        var endpoint = MapEndpointCore<TEndpoint>(builder, registration, out var options);
+
+        if (registration.QueryParameters.IsRuntimeBindingEnabled)
+        {
+            endpoint.AddValiantQueryBinding();
+        }
+
+        return ConfigureMappedEndpoint(endpoint, registration, options);
+    }
+
+    internal static IEndpointConventionBuilder MapEndpointWithoutQueryBinding<TEndpoint>(
+        this IEndpointRouteBuilder builder,
+        EndpointRegistration registration)
+        where TEndpoint : IEndpoint
+    {
+        var endpoint = MapEndpointCore<TEndpoint>(builder, registration, out var options);
+        return ConfigureMappedEndpoint(endpoint, registration, options);
+    }
+
+    private static IEndpointConventionBuilder MapEndpointCore<TEndpoint>(
+        IEndpointRouteBuilder builder,
+        EndpointRegistration registration,
+        out ValiantEndpointOptions options)
+        where TEndpoint : IEndpoint
+    {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(registration);
 
@@ -114,20 +139,22 @@ public static class ValiantEndpointRouteBuilderExtensions
                 nameof(registration));
         }
 
-        var options = GetOptions(builder);
-        var endpoint = TEndpoint.Map(builder);
-        if (registration.QueryParameters.IsRuntimeBindingEnabled)
-        {
-            endpoint.AddValiantQueryBinding();
-        }
+        options = GetOptions(builder);
+        return TEndpoint.Map(builder);
+    }
 
+    private static IEndpointConventionBuilder ConfigureMappedEndpoint(
+        IEndpointConventionBuilder endpoint,
+        EndpointRegistration registration,
+        ValiantEndpointOptions options)
+    {
         if (registration.Configuration.IsConditional)
         {
             endpoint.AddRegistrationQueryParsingOptions(
                 registration.Configuration.QueryParameters.Parsing);
         }
-        options.ConfigureEndpoint(endpoint, registration);
 
+        options.ConfigureEndpoint(endpoint, registration);
         return endpoint;
     }
 

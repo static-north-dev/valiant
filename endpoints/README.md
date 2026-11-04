@@ -88,6 +88,12 @@ Parsing precedence is `[ValiantQueryParsing]`, endpoint-authored `.WithQueryPars
 
 Endpoint generation itself is attribute-scoped. The companion missing-marker analyzer reports direct `IEndpoint` and `IEndpointGroup` declarations without the corresponding marker attribute, but intentionally does not scan indirect or aliased interface implementations to keep IDE analysis bounded.
 
+## Native AOT
+
+Generated registration without query-binding opt-in uses a mapping path that does not reference the reflection-based query binder. Group/endpoint policies and conventions still apply. Registrar metadata preserves the constructors needed by automatic dependency injection registration. The packed Native AOT smoke application exercises both grouped and standalone endpoints through `AddValiantEndpoints(typeof(Program).Assembly)` and `MapValiantEndpoints()`. Pass endpoint assemblies explicitly in Native AOT: the parameterless and setup-only overloads use `Assembly.GetCallingAssembly()`, which the native runtime does not support, and are annotated with `RequiresDynamicCode`.
+
+Enabling Valiant query binding remains a separate feature; it does not inherit this query-disabled registration guarantee. Existing query-enabled and previously generated registrations retain their runtime behavior.
+
 ## Query Parsing and Serialization
 
 Valiant includes a configurable query parser and serializer for API clients that use different array and object query string conventions. The parser and serializer use separate option types because inbound compatibility and outbound representation are different concerns:

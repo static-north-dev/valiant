@@ -4,10 +4,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <PublishAot>true</PublishAot>
     <PublishAotUsingRuntimePack>true</PublishAotUsingRuntimePack>
+    <RuntimeFrameworkVersion>10.0.14</RuntimeFrameworkVersion>
     <InvariantGlobalization>true</InvariantGlobalization>
     <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL3050</WarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="StaticNorth.Valiant.Endpoints.AspNetCore" Version="$(StaticNorthValiantPackageVersion)" />
     <PackageReference Include="StaticNorth.Valiant.Mapping" Version="$(StaticNorthValiantPackageVersion)" />
     <PackageReference Include="StaticNorth.Valiant.Settings" Version="$(StaticNorthValiantPackageVersion)" />
     <PackageReference Include="StaticNorth.Valiant.Validation" Version="$(StaticNorthValiantPackageVersion)" />
