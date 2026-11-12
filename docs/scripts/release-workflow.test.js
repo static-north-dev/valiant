@@ -139,12 +139,11 @@ test('documentation workflows run the dependency audit gate with bounded builds'
 test('documentation publication pins the tracked major and main source SHA', () => {
   const prepare = job(docsWorkflow, 'prepare');
   assert.match(prepare, /if: github\.ref == 'refs\/heads\/main'/);
-  assert.match(prepare, /ref: main/);
   assert.match(prepare, /node docs\/scripts\/current-major\.js/);
-  assert.match(prepare, /source_sha: \$\{\{ steps\.source\.outputs\.source_sha \}\}/);
   assert.doesNotMatch(docsWorkflow, /inputs\.major|github\.event\.inputs/);
 
-  const sourceReference = /ref: \$\{\{ needs\.prepare\.outputs\.source_sha \}\}/;
+  const sourceReference = /ref: \$\{\{ github\.sha \}\}/;
+  assert.match(prepare, sourceReference);
   assert.match(job(docsWorkflow, 'generate-docs-snapshot'), sourceReference);
   assert.match(job(docsWorkflow, 'verify-docs-candidate'), sourceReference);
   assert.match(job(docsWorkflow, 'propose-docs-snapshot'), sourceReference);
@@ -152,6 +151,10 @@ test('documentation publication pins the tracked major and main source SHA', () 
 
 test('documentation publication keeps credentials and permissions narrowly scoped', () => {
   assert.doesNotMatch(docsWorkflow, /^\s+(cache|cache-dependency-path):/m);
+  assert.equal(
+    docsWorkflow.match(/package-manager-cache: false/g)?.length,
+    docsWorkflow.match(/uses: actions\/setup-node@/g)?.length,
+  );
   assert.equal(docsWorkflow.match(/contents: write/g)?.length, 1);
   assert.match(job(docsWorkflow, 'propose-docs-snapshot'), /contents: write/);
   assert.equal(docsWorkflow.match(/deployments: write/g)?.length, 1);
@@ -198,7 +201,7 @@ test('changed documentation snapshots require a pull request before deployment',
 
 test('the final docs artifact is built and deployed from the reviewed SHA', () => {
   const reviewedReference =
-    /ref: \$\{\{ needs\.prepare\.outputs\.source_sha \}\}/;
+    /ref: \$\{\{ github\.sha \}\}/;
   const verify = job(docsWorkflow, 'verify-docs');
   const deploy = job(docsWorkflow, 'deploy-docs');
 
@@ -208,7 +211,7 @@ test('the final docs artifact is built and deployed from the reviewed SHA', () =
   assert.match(deploy, reviewedReference);
   assert.match(deploy, /Download verified documentation site/);
   assert.match(deploy, /DOCS_DEPLOYMENT_URL: \$\{\{ steps\.deploy\.outputs\.deployment-url \}\}/);
-  assert.match(deploy, /DOCS_EXPECTED_REVISION: \$\{\{ needs\.prepare\.outputs\.source_sha \}\}/);
+  assert.match(deploy, /DOCS_EXPECTED_REVISION: \$\{\{ github\.sha \}\}/);
   assert.match(deploy, /node docs\/scripts\/check-agent-http\.mjs "\$\{DOCS_DEPLOYMENT_URL:\?Wrangler did not return a deployment URL\}"/);
   assert.doesNotMatch(deploy, /check-agent-http\.mjs https:\/\/valiant\.staticnorth\.dev/);
   assert.doesNotMatch(deploy, /npm (ci|run build)/);
