@@ -14,12 +14,15 @@
 
   <ItemGroup>
     <None Include="buildTransitive/StaticNorth.Valiant.Validation.props" Pack="true" PackagePath="buildTransitive/StaticNorth.Valiant.Validation.props" />
-    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
     <ProjectReference Include="../StaticNorth.Valiant.Validation.SourceGeneration/StaticNorth.Valiant.Validation.SourceGeneration.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" Condition="'$(BuildProjectReferences)' != 'false'" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <PackageReference Include="System.Threading.Tasks.Extensions" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="Microsoft.NET.ILLink.Tasks" PrivateAssets="all" />
   </ItemGroup>
 
   <Target Name="BuildValiantSourceGeneratorForPack" Condition="'$(NoBuild)' != 'true'">

@@ -27,7 +27,7 @@ public sealed class OpenApiIntegrationTests
         {
             DocumentName = "v1",
             ParameterDescription = null,
-            JsonTypeInfo = JsonSerializerOptions.Default.GetTypeInfo(typeof(OpenApiUser)),
+            JsonTypeInfo = JsonSerializerOptions.Default.GetTypeInfo<OpenApiUser>(),
             JsonPropertyInfo = null,
             ApplicationServices = new ServiceCollection().BuildServiceProvider()
         };

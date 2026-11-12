@@ -14,8 +14,11 @@
 
   <ItemGroup>
     <None Include="buildTransitive/StaticNorth.Valiant.Settings.props" Pack="true" PackagePath="buildTransitive/StaticNorth.Valiant.Settings.props" />
-    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
     <ProjectReference Include="../StaticNorth.Valiant.Settings.SourceGeneration/StaticNorth.Valiant.Settings.SourceGeneration.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" Condition="'$(BuildProjectReferences)' != 'false'" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="Microsoft.NET.ILLink.Tasks" PrivateAssets="all" />
   </ItemGroup>
 
   <Target Name="BuildValiantSettingsSourceGeneratorForPack" Condition="'$(NoBuild)' != 'true'">

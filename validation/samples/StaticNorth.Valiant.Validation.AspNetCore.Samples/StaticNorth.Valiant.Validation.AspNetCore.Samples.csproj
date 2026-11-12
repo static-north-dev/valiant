@@ -2,14 +2,13 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Microsoft.AspNetCore.OpenApi.Generated</InterceptorsNamespaces>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/Generated</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
     <ProjectReference Include="../../src/StaticNorth.Valiant.Validation/StaticNorth.Valiant.Validation.csproj" />
     <ProjectReference Include="../../src/StaticNorth.Valiant.Validation.AspNetCore/StaticNorth.Valiant.Validation.AspNetCore.csproj" />
     <ProjectReference Include="../../src/StaticNorth.Valiant.Validation.AspNetCore.OpenApi/StaticNorth.Valiant.Validation.AspNetCore.OpenApi.csproj" />
