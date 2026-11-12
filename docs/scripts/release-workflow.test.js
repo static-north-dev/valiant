@@ -151,6 +151,7 @@ test('documentation publication pins the tracked major and main source SHA', () 
 });
 
 test('documentation publication keeps credentials and permissions narrowly scoped', () => {
+  assert.doesNotMatch(docsWorkflow, /^\s+(cache|cache-dependency-path):/m);
   assert.equal(docsWorkflow.match(/contents: write/g)?.length, 1);
   assert.match(job(docsWorkflow, 'propose-docs-snapshot'), /contents: write/);
   assert.equal(docsWorkflow.match(/deployments: write/g)?.length, 1);
