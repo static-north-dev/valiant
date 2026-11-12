@@ -17,6 +17,7 @@ env:
 jobs:
   prepare:
     name: pin documentation source
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       docs_major: ${{ steps.source.outputs.docs_major }}
@@ -202,38 +203,17 @@ jobs:
             done
           done
 
-  cloudflare-preflight:
-    name: ensure Cloudflare Pages project
-    needs:
-      - prepare
-      - verify-docs-candidate
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout pinned deployment automation
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.prepare.outputs.source_sha }}
-          persist-credentials: false
-
-      - name: Ensure Cloudflare Pages project
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: bash .github/scripts/ensure-cloudflare-pages-project.sh
-
-  persist-docs-snapshot:
-    name: persist documentation snapshot
+  propose-docs-snapshot:
+    name: stage documentation snapshot for review
     needs:
       - prepare
       - generate-docs-snapshot
       - verify-docs-candidate
-      - cloudflare-preflight
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
-      docs_commit: ${{ steps.persist.outputs.docs_commit }}
+      snapshot_pending: ${{ steps.propose.outputs.snapshot_pending }}
 
     steps:
       - name: Checkout pinned documentation source
@@ -253,8 +233,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Import, commit, and push documentation snapshot
-        id: persist
+      - name: Import and stage documentation snapshot
+        id: propose
         shell: bash
         env:
           DOCS_MAJOR: ${{ needs.prepare.outputs.docs_major }}
@@ -264,8 +244,8 @@ jobs:
           git fetch origin main
           remote_head="$(git rev-parse origin/main)"
           if [ "$remote_head" != "$DOCS_SOURCE_SHA" ]; then
-            echo "main moved from $DOCS_SOURCE_SHA to $remote_head during publication." >&2
-            echo "Run the Publish Docs workflow again to publish the new head safely." >&2
+            echo "main moved from $DOCS_SOURCE_SHA to $remote_head during snapshot generation." >&2
+            echo "Run Publish Docs again from the new head." >&2
             exit 1
           fi
 
@@ -288,40 +268,48 @@ jobs:
             docs/versioned_sidebars
 
           if git diff --cached --quiet; then
-            docs_commit="$DOCS_SOURCE_SHA"
-          else
-            short_source="${DOCS_SOURCE_SHA:0:12}"
-            git commit -m "docs: publish v$DOCS_MAJOR from $short_source"
-            if ! push_output="$(git push origin HEAD:main 2>&1)"; then
-              echo "$push_output" >&2
-              echo "Could not persist the documentation snapshot; verify branch rules or rerun if main moved." >&2
+            echo "snapshot_pending=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          snapshot_branch="docs/snapshot-v$DOCS_MAJOR-$DOCS_SOURCE_SHA"
+          snapshot_ref="refs/heads/$snapshot_branch"
+          snapshot_tree="$(git write-tree)"
+
+          existing_snapshot="$(git ls-remote --heads origin "$snapshot_ref")"
+          if [ -n "$existing_snapshot" ]; then
+            git fetch origin "$snapshot_ref"
+            if [ "$(git rev-parse FETCH_HEAD^)" != "$DOCS_SOURCE_SHA" ] ||
+               [ "$(git rev-parse 'FETCH_HEAD^{tree}')" != "$snapshot_tree" ]; then
+              echo "The existing snapshot branch differs from the generated snapshot." >&2
               exit 1
             fi
-            echo "$push_output"
-            docs_commit="$(git rev-parse HEAD)"
+          else
+            git commit -m "docs: publish v$DOCS_MAJOR from ${DOCS_SOURCE_SHA:0:12}"
+            git push origin "HEAD:$snapshot_ref"
           fi
 
-          git fetch origin main
-          if [ "$(git rev-parse origin/main)" != "$docs_commit" ]; then
-            echo "origin/main does not match the persisted documentation commit." >&2
-            exit 1
-          fi
-
-          echo "docs_commit=$docs_commit" >>"$GITHUB_OUTPUT"
+          echo "snapshot_pending=true" >>"$GITHUB_OUTPUT"
+          compare_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/main...$snapshot_branch?expand=1"
+          printf '%s\n' \
+            "[Open the documentation snapshot pull request]($compare_url)" \
+            "Merge it after CI passes, then run Publish Docs from main again." \
+            >>"$GITHUB_STEP_SUMMARY"
 
   verify-docs:
-    name: verify persisted documentation
+    name: verify reviewed documentation
+    if: needs.propose-docs-snapshot.outputs.snapshot_pending == 'false'
     needs:
       - prepare
-      - persist-docs-snapshot
+      - propose-docs-snapshot
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
-      - name: Checkout persisted documentation commit
+      - name: Checkout reviewed documentation commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.persist-docs-snapshot.outputs.docs_commit }}
+          ref: ${{ needs.prepare.outputs.source_sha }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -335,7 +323,7 @@ jobs:
         run: npm ci
         working-directory: docs
 
-      - name: Test persisted documentation
+      - name: Test reviewed documentation
         run: npm run test:docs-versions
         working-directory: docs
 
@@ -349,17 +337,17 @@ jobs:
         run: npm run docs:validate-major -- "$DOCS_MAJOR"
         working-directory: docs
 
-      - name: Build persisted documentation
+      - name: Build reviewed documentation
         env:
           DOCS_INCLUDE_CURRENT: false
         run: npm run build
         working-directory: docs
 
-      - name: Validate persisted agent documentation
+      - name: Validate reviewed agent documentation
         run: npm run docs:check-agent-artifacts
         working-directory: docs
 
-      - name: Validate every persisted major route
+      - name: Validate every reviewed major route
         shell: bash
         run: |
           mapfile -t majors < <(node -e "for (const version of require('./docs/versions.json')) console.log(version)")
@@ -397,19 +385,18 @@ jobs:
     name: deploy documentation to Cloudflare Pages
     needs:
       - prepare
-      - persist-docs-snapshot
       - verify-docs
     runs-on: ubuntu-latest
-    environment: production
+    environment: docs-production
     permissions:
       contents: read
       deployments: write
 
     steps:
-      - name: Checkout persisted documentation commit
+      - name: Checkout reviewed documentation commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.persist-docs-snapshot.outputs.docs_commit }}
+          ref: ${{ needs.prepare.outputs.source_sha }}
           persist-credentials: false
 
       - name: Download verified documentation site
@@ -426,6 +413,23 @@ jobs:
       - name: Validate downloaded agent documentation
         run: node docs/scripts/check-agent-artifacts.mjs docs/build
 
+      - name: Check the reviewed commit is still current
+        shell: bash
+        env:
+          DOCS_SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+        run: |
+          read -r remote_head _ < <(git ls-remote --exit-code origin refs/heads/main)
+          if [ "$remote_head" != "$DOCS_SOURCE_SHA" ]; then
+            echo "main moved during publication. Run Publish Docs again from the new head." >&2
+            exit 1
+          fi
+
+      - name: Ensure Cloudflare Pages project
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: bash .github/scripts/ensure-cloudflare-pages-project.sh
+
       - name: Deploy documentation
         id: deploy
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
@@ -441,5 +445,5 @@ jobs:
         shell: bash
         env:
           DOCS_DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
-          DOCS_EXPECTED_REVISION: ${{ needs.persist-docs-snapshot.outputs.docs_commit }}
+          DOCS_EXPECTED_REVISION: ${{ needs.prepare.outputs.source_sha }}
         run: node docs/scripts/check-agent-http.mjs "${DOCS_DEPLOYMENT_URL:?Wrangler did not return a deployment URL}"
