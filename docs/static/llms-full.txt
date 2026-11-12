@@ -739,6 +739,8 @@ app.Run();
 
 Registration discovers generated registrar metadata from the calling and entry assemblies. Mapping resolves those registrars and invokes each generated route plan.
 
+For Native AOT, pass endpoint assemblies explicitly: `builder.Services.AddValiantEndpoints(typeof(HealthEndpoint).Assembly)`. See [Native AOT registration](https://valiant.staticnorth.dev/endpoints/reference/registration-generation/#native-aot).
+
 #### 4. Put endpoints in a group
 
 ```csharp
@@ -1416,6 +1418,14 @@ app.MapValiantEndpoints();
 ```
 
 Explicit assembly selection changes registration only. Endpoint mapping always uses the same `MapValiantEndpoints()` entry point, so generated mapping policy and conventions have one consistent execution path.
+
+#### Native AOT
+
+Select endpoint assemblies explicitly with `AddValiantEndpoints(typeof(OrdersEndpoint).Assembly)`, then call `MapValiantEndpoints()` as usual. The default and setup-only registration overloads use `Assembly.GetCallingAssembly()`, which Native AOT does not support; these overloads carry `RequiresDynamicCode` and report `IL3050` during AOT analysis.
+
+When query binding is not opted into at compile time, generated registration calls a mapping path that never references the reflection-based query binder. Mapping policies, conditional registration, and conventions still apply. Generated registrar metadata preserves its public constructors for dependency injection. The packed native smoke test covers both standalone and grouped endpoints through this registration path.
+
+Query-binding opt-in retains the existing runtime binder and is not covered by this Native AOT guarantee. ASP.NET Core handler binding and serialization must also be AOT-compatible; use named handler method groups and generated JSON metadata for your payloads.
 
 #### Generator scope
 

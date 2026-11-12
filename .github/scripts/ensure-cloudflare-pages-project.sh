@@ -10,12 +10,12 @@ curl_bin="${CURL_BIN:-curl}"
 api_origin="${CLOUDFLARE_API_ORIGIN:-https://api.cloudflare.com/client/v4}"
 
 if [ -z "$account_id" ]; then
-  echo "CLOUDFLARE_ACCOUNT_ID repository secret is required." >&2
+  echo "CLOUDFLARE_ACCOUNT_ID secret is required." >&2
   exit 1
 fi
 
 if [ -z "$api_token" ]; then
-  echo "CLOUDFLARE_API_TOKEN repository secret is required." >&2
+  echo "CLOUDFLARE_API_TOKEN secret is required." >&2
   exit 1
 fi
 
