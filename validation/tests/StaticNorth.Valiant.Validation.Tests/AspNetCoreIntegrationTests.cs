@@ -91,6 +91,52 @@ public sealed class AspNetCoreIntegrationTests
     }
 
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Minimal_Api_Validation_Skips_Validators_When_Parameter_Binding_Fails(bool useTypedOverload)
+    {
+        var probe = new OrderedValidationProbe();
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.Configure<RouteHandlerOptions>(static options => options.ThrowOnBadRequest = false);
+        builder.Services.AddSingleton(probe);
+        builder.Services.AddTransient<IValidator<string>, FirstOrderedStringValidator>();
+
+        await using var app = builder.Build();
+        var route = app.MapGet(
+            "/binding",
+            static (string value, int count, HttpContext context) =>
+            {
+                context.Response.Headers["X-Handler-Reached"] = "true";
+                return Results.Ok();
+            });
+        var validatedRoute = useTypedOverload
+            ? route.WithValiantValidation<string>()
+            : route.WithValiantValidation();
+        validatedRoute.AddEndpointFilter(static (context, next) =>
+        {
+            context.HttpContext.Response.Headers["X-Next-Filter-Reached"] = "true";
+            return next(context);
+        });
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+
+        using var bindingFailure = await client.GetAsync("/binding?value=example&count=invalid");
+
+        await Assert.That(bindingFailure.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(probe.FirstStringValidatorConstructions).IsEqualTo(0);
+        await Assert.That(probe.Events).IsEmpty();
+        await Assert.That(bindingFailure.Headers.Contains("X-Next-Filter-Reached")).IsTrue();
+        await Assert.That(bindingFailure.Headers.Contains("X-Handler-Reached")).IsFalse();
+
+        using var validationFailure = await client.GetAsync("/binding?value=example&count=1");
+
+        await Assert.That(validationFailure.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(probe.FirstStringValidatorConstructions).IsEqualTo(1);
+        await AssertOrderedEvents(probe.Events, "string-first:example");
+    }
+
+    [Test]
     public async Task Parameterless_Minimal_Api_Validation_Preserves_Argument_Order_And_Resolves_Validators_Once_Per_Type()
     {
         var probe = new OrderedValidationProbe();

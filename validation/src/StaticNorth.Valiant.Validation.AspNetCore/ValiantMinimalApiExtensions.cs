@@ -59,6 +59,12 @@ public static class ValiantMinimalApiExtensions
         EndpointFilterInvocationContext invocationContext,
         EndpointFilterDelegate next)
     {
+        // ASP.NET Core sets an error status before running filters when parameter binding fails.
+        if (invocationContext.HttpContext.Response.StatusCode >= StatusCodes.Status400BadRequest)
+        {
+            return await next(invocationContext).ConfigureAwait(false);
+        }
+
         List<ValidationFailure>? failures = null;
         var validators = invocationContext.HttpContext.RequestServices
             .GetServices<IValidator<T>>()
@@ -88,6 +94,11 @@ public static class ValiantMinimalApiExtensions
         EndpointFilterDelegate next,
         ValidationPlan plan)
     {
+        if (invocationContext.HttpContext.Response.StatusCode >= StatusCodes.Status400BadRequest)
+        {
+            return await next(invocationContext).ConfigureAwait(false);
+        }
+
         List<ValidationFailure>? failures = null;
         object?[]? resolvedValidators = null;
 
