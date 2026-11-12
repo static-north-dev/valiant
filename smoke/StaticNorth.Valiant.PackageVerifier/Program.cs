@@ -32,7 +32,7 @@ var packages = new Dictionary<string, PackageExpectation>(StringComparer.Ordinal
         ["lib/net8.0/StaticNorth.Valiant.Validation.AspNetCore.dll"],
         ["StaticNorth.Valiant.Validation"]),
     ["StaticNorth.Valiant.Validation.AspNetCore.OpenApi"] = new(
-        ["lib/net10.0/StaticNorth.Valiant.Validation.AspNetCore.OpenApi.dll"],
+        ["lib/net10.0/StaticNorth.Valiant.Validation.AspNetCore.OpenApi.dll", "lib/net11.0/StaticNorth.Valiant.Validation.AspNetCore.OpenApi.dll"],
         ["Microsoft.AspNetCore.OpenApi", "Microsoft.OpenApi", "StaticNorth.Valiant.Validation"]),
     ["StaticNorth.Valiant.Validation.MediatR"] = new(
         ["lib/net8.0/StaticNorth.Valiant.Validation.MediatR.dll", "buildTransitive/StaticNorth.Valiant.Validation.MediatR.props", "contentFiles/cs/any/ValiantMediatRExtensions.cs"],
@@ -117,6 +117,7 @@ static void VerifyPackage(string path, string packageId, string version, Package
         {
             Id = element.Attribute("id")?.Value,
             Version = element.Attribute("version")?.Value,
+            TargetFramework = element.Parent?.Attribute("targetFramework")?.Value,
         })
         .ToArray();
 
@@ -129,10 +130,10 @@ static void VerifyPackage(string path, string packageId, string version, Package
     }
 
     if (dependencies.Any(static dependency =>
-            dependency.Id is "Microsoft.Net.Compilers.Toolset" ||
+            dependency.Id is "Microsoft.Net.Compilers.Toolset" or "Microsoft.NET.ILLink.Tasks" ||
             dependency.Id?.Contains("SourceGeneration", StringComparison.Ordinal) == true))
     {
-        throw new InvalidOperationException($"{packageId} leaks a compiler or source-generator implementation dependency.");
+        throw new InvalidOperationException($"{packageId} leaks a build tool or source-generator implementation dependency.");
     }
 
     if (packageId == "StaticNorth.Valiant.Validation.MediatR")
@@ -146,11 +147,19 @@ static void VerifyPackage(string path, string packageId, string version, Package
 
     if (packageId == "StaticNorth.Valiant.Validation.AspNetCore.OpenApi")
     {
-        var openApi = dependencies.Single(static dependency => dependency.Id == "Microsoft.OpenApi");
-        if (openApi.Version != "[2.7.5, 3.0.0)")
+        foreach (var (targetFramework, versionRange) in new[]
         {
-            throw new InvalidOperationException(
-                $"Microsoft.OpenApi must remain on the patched 2.x line [2.7.5, 3.0.0), found '{openApi.Version}'.");
+            ("net10.0", "[2.7.5, 3.0.0)"),
+            ("net11.0", "[3.11.0, 4.0.0)"),
+        })
+        {
+            var openApi = dependencies.SingleOrDefault(dependency =>
+                dependency.Id == "Microsoft.OpenApi" && dependency.TargetFramework == targetFramework);
+            if (openApi?.Version != versionRange)
+            {
+                throw new InvalidOperationException(
+                    $"Microsoft.OpenApi for {targetFramework} must use {versionRange}, found '{openApi?.Version}'.");
+            }
         }
     }
 }

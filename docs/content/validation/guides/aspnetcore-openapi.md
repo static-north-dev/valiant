@@ -74,6 +74,8 @@ Helpers are available for Minimal API `HttpValidationProblemDetails`, MVC `Valid
 
 ## OpenAPI
 
+The OpenAPI integration uses OpenAPI.NET 2.x on .NET 10 and OpenAPI.NET 3.x on .NET 11.
+
 ```csharp
 builder.Services.AddOpenApi();
 builder.Services.AddValiantOpenApi();
