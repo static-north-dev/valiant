@@ -23,7 +23,7 @@ var packages = new Dictionary<string, PackageExpectation>(StringComparer.Ordinal
         ["lib/net8.0/StaticNorth.Valiant.Settings.AspNetCore.dll"],
         ["StaticNorth.Valiant.Settings"]),
     ["StaticNorth.Valiant.Settings.Validation"] = new(
-        ["lib/net8.0/StaticNorth.Valiant.Settings.Validation.dll"],
+        ["lib/net8.0/StaticNorth.Valiant.Settings.Validation.dll", "lib/net11.0/StaticNorth.Valiant.Settings.Validation.dll"],
         ["StaticNorth.Valiant.Settings", "StaticNorth.Valiant.Validation"]),
     ["StaticNorth.Valiant.Validation"] = new(
         ["lib/net8.0/StaticNorth.Valiant.Validation.dll", "lib/netstandard2.0/StaticNorth.Valiant.Validation.dll", "analyzers/dotnet/cs/StaticNorth.Valiant.Validation.SourceGeneration.dll", "buildTransitive/StaticNorth.Valiant.Validation.props"],
