@@ -106,6 +106,14 @@ public static class ValiantEndpointRouteBuilderExtensions
     {
         var endpoint = MapEndpointCore<TEndpoint>(builder, registration, out var options);
 
+        endpoint.Add(static endpointBuilder =>
+        {
+            if (endpointBuilder.RequestDelegate is { } next)
+            {
+                endpointBuilder.RequestDelegate = context => WriteQueryBindingErrorsAsync(context, next);
+            }
+        });
+
         if (registration.QueryParameters.IsRuntimeBindingEnabled)
         {
             endpoint.AddValiantQueryBinding();
@@ -312,6 +320,18 @@ public static class ValiantEndpointRouteBuilderExtensions
         });
     }
 
+    private static async Task WriteQueryBindingErrorsAsync(HttpContext context, RequestDelegate next)
+    {
+        try
+        {
+            await next(context).ConfigureAwait(false);
+        }
+        catch (ValiantQueryBindingException exception) when (!context.Response.HasStarted)
+        {
+            await Results.BadRequest(exception.Errors).ExecuteAsync(context).ConfigureAwait(false);
+        }
+    }
+
     private static EndpointFilterDelegate CreateValiantQueryBindingFilter(
         EndpointFilterFactoryContext context,
         EndpointFilterDelegate next)
@@ -332,6 +352,7 @@ public static class ValiantEndpointRouteBuilderExtensions
             }
 
             var options = QueryParsingOptionsResolver.Resolve(invocationContext.HttpContext);
+            QueryStringParser.QueryInput? query = null;
 
             foreach (var candidate in asParametersCandidates)
             {
@@ -340,17 +361,16 @@ public static class ValiantEndpointRouteBuilderExtensions
                     continue;
                 }
 
-                var parsed = QueryStringParser.Parse(
+                query ??= new QueryStringParser.QueryInput(
                     invocationContext.HttpContext.Request.QueryString.Value,
-                    candidate.RequestType,
                     options);
-
-                if (!parsed.IsSuccess)
+                var parsed = query.Bind(candidate.RequestType, out var errors);
+                if (errors.Count > 0)
                 {
-                    return ValueTask.FromResult<object?>(Results.BadRequest(parsed.Errors));
+                    return ValueTask.FromResult<object?>(Results.BadRequest(errors));
                 }
 
-                if (parsed.Value is null)
+                if (parsed is null)
                 {
                     continue;
                 }
@@ -364,7 +384,7 @@ public static class ValiantEndpointRouteBuilderExtensions
 
                 foreach (var property in candidate.QueryProperties)
                 {
-                    property.SetValue(target, property.GetValue(parsed.Value));
+                    property.SetValue(target, property.GetValue(parsed));
                 }
 
                 invocationContext.Arguments[candidate.ArgumentIndex] = target;

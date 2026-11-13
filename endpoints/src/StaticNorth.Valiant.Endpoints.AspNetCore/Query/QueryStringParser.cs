@@ -2,6 +2,7 @@ using System.Collections;
 using System.Globalization;
 using System.Net;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace StaticNorth.Valiant.Endpoints.AspNetCore;
@@ -11,6 +12,8 @@ namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 /// </summary>
 public static class QueryStringParser
 {
+    private static readonly ConditionalWeakTable<Type, QueryType> QueryTypes = new();
+    private static readonly QueryParsingOptions DefaultOptions = new();
     private static readonly JsonSerializerOptions JsonSerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
@@ -22,10 +25,8 @@ public static class QueryStringParser
     /// <returns>The typed parse result and any structured errors.</returns>
     public static QueryParseResult<T> Parse<T>(string? queryString, QueryParsingOptions? options = null)
     {
-        var result = Parse(queryString, typeof(T), options);
-        return result.IsSuccess
-            ? new QueryParseResult<T>((T?)result.Value, result.Errors)
-            : new QueryParseResult<T>(default, result.Errors);
+        var value = ParseCore(queryString, typeof(T), options ?? DefaultOptions, out var errors);
+        return new QueryParseResult<T>(errors.Count == 0 ? (T?)value : default, errors);
     }
 
     /// <summary>
@@ -38,35 +39,43 @@ public static class QueryStringParser
     public static QueryParseResult Parse(string? queryString, Type targetType, QueryParsingOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(targetType);
-        options ??= new QueryParsingOptions();
+        var value = ParseCore(queryString, targetType, options ?? DefaultOptions, out var errors);
+        return new QueryParseResult(value, errors);
+    }
 
-        var errors = new List<QueryError>();
-        ValidateOptions(options, errors);
+    private static object? ParseCore(
+        string? queryString,
+        Type targetType,
+        QueryParsingOptions options,
+        out IReadOnlyList<QueryError> errors)
+    {
+        return new QueryInput(queryString, options).Bind(targetType, out errors);
+    }
 
-        var root = new QueryNode();
-        foreach (var parameter in ParseParameters(queryString, errors))
+    internal sealed class QueryInput
+    {
+        private readonly QueryNode _root = new();
+        private readonly QueryParsingOptions _options;
+        private readonly List<QueryError> _errors = [];
+
+        internal QueryInput(string? queryString, QueryParsingOptions options)
         {
-            if (!TryValidateConfiguredFormat(parameter, options, errors))
+            _options = options;
+            ValidateOptions(options, _errors);
+            ReadParameters(queryString, options, _root, _errors);
+        }
+
+        internal object? Bind(Type targetType, out IReadOnlyList<QueryError> errors)
+        {
+            object? value = null;
+            if (_errors.Count == 0)
             {
-                continue;
+                _ = TryBindValue(targetType, _root, string.Empty, _options, _errors, out value);
             }
 
-            root.Add(parameter);
+            errors = _errors.Count == 0 ? Array.Empty<QueryError>() : _errors;
+            return _errors.Count == 0 ? value : null;
         }
-
-        if (errors.Count > 0)
-        {
-            return new QueryParseResult(default, errors);
-        }
-
-        if (!TryBindValue(targetType, root, string.Empty, options, errors, out var value))
-        {
-            return new QueryParseResult(default, errors);
-        }
-
-        return errors.Count == 0
-            ? new QueryParseResult(value, errors)
-            : new QueryParseResult(default, errors);
     }
 
     private static void ValidateOptions(QueryParsingOptions options, List<QueryError> errors)
@@ -94,41 +103,33 @@ public static class QueryStringParser
         }
     }
 
-    private static IEnumerable<QueryParameter> ParseParameters(string? queryString, List<QueryError> errors)
+    private static void ReadParameters(string? queryString, QueryParsingOptions options, QueryNode root, List<QueryError> errors)
     {
-        if (string.IsNullOrEmpty(queryString))
+        var query = queryString.AsSpan();
+        if (!query.IsEmpty && query[0] == '?')
         {
-            yield break;
-        }
-
-        var query = queryString[0] == '?' ? queryString[1..] : queryString;
-        if (query.Length == 0)
-        {
-            yield break;
+            query = query[1..];
         }
 
         var order = 0;
-        foreach (var part in query.Split('&'))
+        while (!query.IsEmpty)
         {
-            if (part.Length == 0)
+            var end = query.IndexOf('&');
+            var part = end < 0 ? query : query[..end];
+            query = end < 0 ? [] : query[(end + 1)..];
+            if (part.IsEmpty)
             {
                 continue;
             }
 
-            var separatorIndex = part.IndexOf('=');
-            var encodedKey = separatorIndex >= 0 ? part[..separatorIndex] : part;
-            var encodedValue = separatorIndex >= 0 ? part[(separatorIndex + 1)..] : string.Empty;
-            var key = Decode(encodedKey);
-            var value = Decode(encodedValue);
-
-            if (!TryCreateParameter(key, value, order, errors, out var parameter))
+            var separator = part.IndexOf('=');
+            var key = Decode((separator < 0 ? part : part[..separator]).ToString());
+            var value = separator < 0 ? string.Empty : part[(separator + 1)..].ToString();
+            if (TryCreateParameter(key, value, order++, errors, out var parameter) &&
+                TryValidateConfiguredFormat(parameter, options, errors))
             {
-                order++;
-                continue;
+                root.Add(parameter);
             }
-
-            order++;
-            yield return parameter;
         }
     }
 
@@ -186,7 +187,7 @@ public static class QueryStringParser
         parameter = new QueryParameter(
             key,
             value,
-            [key],
+            null,
             QueryObjectFormat.Flat,
             null,
             null,
@@ -357,17 +358,18 @@ public static class QueryStringParser
     {
         value = null;
 
-        if (TryGetCollectionElementType(targetType, out var elementType))
+        var shape = QueryTypes.GetValue(targetType, static type => new QueryType(type));
+        if (shape.ElementType is { } elementType)
         {
-            return TryBindCollection(targetType, elementType, node, path, options, errors, out value);
+            return TryBindCollection(targetType, elementType, shape.ListType, node, path, options, errors, out value);
         }
 
-        if (IsSimpleType(targetType))
+        if (shape.IsSimple)
         {
             return TryBindSimple(targetType, node, path, errors, out value);
         }
 
-        return TryBindObject(targetType, node, path, options, errors, out value);
+        return TryBindObject(shape, node, path, options, errors, out value);
     }
 
     private static bool TryBindSimple(Type targetType, QueryNode node, string path, List<QueryError> errors, out object? value)
@@ -378,7 +380,7 @@ public static class QueryStringParser
             return true;
         }
 
-        if (node.Values.Any(static queryValue => queryValue.ArrayFormat is not null))
+        if (node.Values.Exists(static queryValue => queryValue.ArrayFormat is not null))
         {
             errors.Add(ValidationError(
                 path,
@@ -387,9 +389,7 @@ public static class QueryStringParser
             return false;
         }
 
-        var lastValue = node.Values
-            .OrderBy(static queryValue => queryValue.Order)
-            .Last();
+        var lastValue = node.Values[^1];
 
         return TryConvertValue(lastValue.Value, targetType, path, allowEmptyNullable: true, errors, out value);
     }
@@ -397,6 +397,7 @@ public static class QueryStringParser
     private static bool TryBindCollection(
         Type targetType,
         Type elementType,
+        Type? listType,
         QueryNode node,
         string path,
         QueryParsingOptions options,
@@ -404,51 +405,70 @@ public static class QueryStringParser
         out object? value)
     {
         value = null;
-
-        if (node.Values is [{ ArrayFormat: null } singleValue] && LooksLikeJsonValue(singleValue.Value))
+        var values = node.Values;
+        if (values is [{ ArrayFormat: null } singleValue] && LooksLikeJsonValue(singleValue.Value))
         {
             if (options.EnableJsonQueryValues)
             {
                 return TryDeserializeJson(targetType, singleValue.Value, path, errors, out value);
             }
-            
+
             errors.Add(ConfigurationError(
                 path,
                 "DisabledJsonQueryValues",
                 $"Query path '{path}' uses a JSON query value, but JSON query values are disabled."));
             return false;
-
         }
 
-        var items = new List<(string Value, int Order)>();
-        var scalarValues = node.Values
-            .Where(static queryValue => queryValue.ArrayFormat is null)
-            .OrderBy(static queryValue => queryValue.Order)
-            .ToArray();
-        var bracketValues = node.Values
-            .Where(static queryValue => queryValue.ArrayFormat == QueryArrayFormat.Brackets)
-            .OrderBy(static queryValue => queryValue.Order);
-        var indexedValues = node.Values
-            .Where(static queryValue => queryValue.ArrayFormat == QueryArrayFormat.IndexedBrackets)
-            .OrderBy(static queryValue => queryValue.ArrayIndex)
-            .ThenBy(static queryValue => queryValue.Order);
-
-        if (scalarValues.Length > 0)
+        var scalarCount = 0;
+        var needsReordering = false;
+        foreach (var item in values)
         {
-            if (scalarValues.Length > 1 && !Supports(options.SupportedArrayFormats, QueryArrayFormat.RepeatedKeys))
-            {
-                errors.Add(ConfigurationError(
-                    path,
-                    "DisabledQueryArrayFormat",
-                    $"Query path '{path}' uses repeated array keys, but format '{QueryArrayFormat.RepeatedKeys}' is disabled."));
-                return false;
-            }
+            scalarCount += item.ArrayFormat is null ? 1 : 0;
+            needsReordering |= item.ArrayFormat is not null || item.EncodedValue.Contains(',');
+        }
 
-            foreach (var scalarValue in scalarValues)
+        var allowsRepeated = Supports(options.SupportedArrayFormats, QueryArrayFormat.RepeatedKeys);
+        var allowsComma = Supports(options.SupportedArrayFormats, QueryArrayFormat.CommaSeparated);
+        if (scalarCount > 1 && !allowsRepeated)
+        {
+            errors.Add(ConfigurationError(
+                path,
+                "DisabledQueryArrayFormat",
+                $"Query path '{path}' uses repeated array keys, but format '{QueryArrayFormat.RepeatedKeys}' is disabled."));
+            return false;
+        }
+
+        if (scalarCount == 1 && !allowsRepeated && !allowsComma &&
+            values.Exists(static item => item.ArrayFormat is null && !item.EncodedValue.Contains(',')))
+        {
+            errors.Add(ConfigurationError(
+                path,
+                "DisabledQueryArrayFormat",
+                $"Query path '{path}' uses a scalar array value, but neither '{QueryArrayFormat.RepeatedKeys}' nor '{QueryArrayFormat.CommaSeparated}' is enabled."));
+            return false;
+        }
+
+        List<string>? orderedItems = null;
+        if (needsReordering)
+        {
+            orderedItems = new List<string>(values.Count);
+            List<QueryValue>? indexed = null;
+            foreach (var item in values)
             {
-                if (scalarValue.Value.Contains(',', StringComparison.Ordinal))
+                if (item.ArrayFormat == QueryArrayFormat.IndexedBrackets)
                 {
-                    if (!Supports(options.SupportedArrayFormats, QueryArrayFormat.CommaSeparated))
+                    (indexed ??= []).Add(item);
+                }
+                else if (item.ArrayFormat is null)
+                {
+                    if (!item.EncodedValue.Contains(','))
+                    {
+                        orderedItems.Add(item.Value);
+                        continue;
+                    }
+
+                    if (!allowsComma)
                     {
                         errors.Add(ConfigurationError(
                             path,
@@ -457,49 +477,52 @@ public static class QueryStringParser
                         return false;
                     }
 
-                    foreach (var item in scalarValue.Value.Split(','))
+                    foreach (var part in item.EncodedValue.Split(','))
                     {
-                        items.Add((item, scalarValue.Order));
+                        orderedItems.Add(Decode(part));
                     }
-
-                    continue;
                 }
+            }
 
-                if (scalarValues.Length == 1 &&
-                    !Supports(options.SupportedArrayFormats, QueryArrayFormat.RepeatedKeys) &&
-                    !Supports(options.SupportedArrayFormats, QueryArrayFormat.CommaSeparated))
+            foreach (var item in values)
+            {
+                if (item.ArrayFormat == QueryArrayFormat.Brackets)
                 {
-                    errors.Add(ConfigurationError(
-                        path,
-                        "DisabledQueryArrayFormat",
-                        $"Query path '{path}' uses a scalar array value, but neither '{QueryArrayFormat.RepeatedKeys}' nor '{QueryArrayFormat.CommaSeparated}' is enabled."));
-                    return false;
+                    orderedItems.Add(item.Value);
                 }
+            }
 
-                items.Add((scalarValue.Value, scalarValue.Order));
+            if (indexed is not null)
+            {
+                indexed.Sort(static (left, right) => left.ArrayIndex == right.ArrayIndex
+                    ? left.Order.CompareTo(right.Order)
+                    : Nullable.Compare(left.ArrayIndex, right.ArrayIndex));
+                foreach (var item in indexed)
+                {
+                    orderedItems.Add(item.Value);
+                }
             }
         }
 
-        foreach (var bracketValue in bracketValues)
+        var count = orderedItems?.Count ?? values.Count;
+        var array = targetType.IsArray ? Array.CreateInstance(elementType, count) : null;
+        var list = array is null ? (IList)Activator.CreateInstance(listType!)! : null;
+        for (var index = 0; index < count; index++)
         {
-            items.Add((bracketValue.Value, bracketValue.Order));
-        }
-
-        foreach (var indexedValue in indexedValues)
-        {
-            items.Add((indexedValue.Value, indexedValue.Order));
-        }
-
-        var list = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(elementType))!;
-        for (var i = 0; i < items.Count; i++)
-        {
-            var itemPath = CombineArrayPath(path, i);
-            if (!TryConvertValue(items[i].Value, elementType, itemPath, allowEmptyNullable: false, errors, out var itemValue))
+            var item = orderedItems is null ? values[index].Value : orderedItems[index];
+            if (!TryConvertValue(item, elementType, path, allowEmptyNullable: false, errors, out var itemValue, index))
             {
                 continue;
             }
 
-            list.Add(itemValue);
+            if (array is not null)
+            {
+                array.SetValue(itemValue, index);
+            }
+            else
+            {
+                list!.Add(itemValue);
+            }
         }
 
         if (errors.Count > 0)
@@ -507,20 +530,12 @@ public static class QueryStringParser
             return false;
         }
 
-        if (targetType.IsArray)
-        {
-            var array = Array.CreateInstance(elementType, list.Count);
-            list.CopyTo(array, 0);
-            value = array;
-            return true;
-        }
-
-        value = list;
+        value = (object?)array ?? list;
         return true;
     }
 
     private static bool TryBindObject(
-        Type targetType,
+        QueryType shape,
         QueryNode node,
         string path,
         QueryParsingOptions options,
@@ -528,13 +543,10 @@ public static class QueryStringParser
         out object? value)
     {
         value = null;
-        var nonNullableType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        var nonNullableType = shape.Type;
 
-        var jsonValue = node.Values
-            .Where(static queryValue => queryValue.ArrayFormat is null)
-            .OrderBy(static queryValue => queryValue.Order)
-            .LastOrDefault(static queryValue => LooksLikeJsonValue(queryValue.Value));
-        if (jsonValue is not null)
+        var jsonIndex = node.Values.FindLastIndex(static item => item.ArrayFormat is null && LooksLikeJsonValue(item.Value));
+        if (jsonIndex >= 0)
         {
             if (!options.EnableJsonQueryValues)
             {
@@ -545,10 +557,10 @@ public static class QueryStringParser
                 return false;
             }
 
-            return TryDeserializeJson(nonNullableType, jsonValue.Value, path, errors, out value);
+            return TryDeserializeJson(nonNullableType, node.Values[jsonIndex].Value, path, errors, out value);
         }
 
-        if (node.Values.Count > 0 && node.Children.Count == 0)
+        if (node.Values.Count > 0 && !node.HasChildren)
         {
             errors.Add(ValidationError(
                 path,
@@ -557,14 +569,14 @@ public static class QueryStringParser
             return false;
         }
 
-        if (!TryCreateObject(nonNullableType, path, errors, out var instance))
+        if (!TryCreateObject(shape, path, errors, out var instance))
         {
             return false;
         }
 
-        foreach (var property in GetBindableProperties(nonNullableType))
+        foreach (var property in shape.Properties)
         {
-            if (!node.TryGetChild(property.Name, out var child))
+            if (node.GetChild(property.Name) is not { } child)
             {
                 continue;
             }
@@ -600,10 +612,11 @@ public static class QueryStringParser
         }
     }
 
-    private static bool TryCreateObject(Type type, string path, List<QueryError> errors, out object instance)
+    private static bool TryCreateObject(QueryType shape, string path, List<QueryError> errors, out object instance)
     {
         instance = null!;
 
+        var type = shape.Type;
         if (type.IsAbstract || type.IsInterface)
         {
             errors.Add(ValidationError(
@@ -613,7 +626,7 @@ public static class QueryStringParser
             return false;
         }
 
-        var constructor = type.GetConstructor(Type.EmptyTypes);
+        var constructor = shape.Constructor;
         if (constructor is null)
         {
             errors.Add(ValidationError(
@@ -641,7 +654,8 @@ public static class QueryStringParser
         string path,
         bool allowEmptyNullable,
         List<QueryError> errors,
-        out object? value)
+        out object? value,
+        int? arrayIndex = null)
     {
         value = null;
 
@@ -661,6 +675,7 @@ public static class QueryStringParser
                 return true;
             }
 
+            path = arrayIndex is { } emptyIndex ? CombineArrayPath(path, emptyIndex) : path;
             errors.Add(ValidationError(
                 path,
                 "InvalidQueryValue",
@@ -722,6 +737,7 @@ public static class QueryStringParser
             }
         }
 
+        path = arrayIndex is { } invalidIndex ? CombineArrayPath(path, invalidIndex) : path;
         errors.Add(ValidationError(
             path,
             "InvalidQueryValue",
@@ -808,48 +824,89 @@ public static class QueryStringParser
         return new QueryError(path, code, message, QueryErrorKind.Configuration);
     }
 
+    private sealed class QueryType
+    {
+        public QueryType(Type type)
+        {
+            Type = Nullable.GetUnderlyingType(type) ?? type;
+            IsSimple = IsSimpleType(type);
+            if (!IsSimple && TryGetCollectionElementType(type, out var elementType))
+            {
+                ElementType = elementType;
+                ListType = type.IsArray ? null : typeof(List<>).MakeGenericType(elementType);
+            }
+            else if (!IsSimple)
+            {
+                Constructor = Type.GetConstructor(System.Type.EmptyTypes);
+                Properties = GetBindableProperties(Type).ToArray();
+            }
+        }
+
+        public Type Type { get; }
+        public bool IsSimple { get; }
+        public Type? ElementType { get; }
+        public Type? ListType { get; }
+        public ConstructorInfo? Constructor { get; }
+        public PropertyInfo[] Properties { get; } = [];
+    }
+
     private sealed class QueryNode
     {
-        private readonly Dictionary<string, QueryNode> _children = new(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, QueryNode>? _children;
+        private List<QueryValue>? _values;
+        private static readonly List<QueryValue> EmptyValues = [];
 
-        public List<QueryValue> Values { get; } = [];
+        public List<QueryValue> Values => _values ?? EmptyValues;
 
-        public IReadOnlyDictionary<string, QueryNode> Children => _children;
+        public bool HasChildren => _children is not null;
 
         public void Add(QueryParameter parameter)
         {
             var current = this;
-            foreach (var segment in parameter.Path)
+            if (parameter.Path is null)
             {
-                if (!current._children.TryGetValue(segment, out var child))
+                current = current.GetOrAddChild(parameter.OriginalKey);
+            }
+            else
+            {
+                foreach (var segment in parameter.Path)
                 {
-                    child = new QueryNode();
-                    current._children.Add(segment, child);
+                    current = current.GetOrAddChild(segment);
                 }
-
-                current = child;
             }
 
-            current.Values.Add(new QueryValue(
-                parameter.Value,
+            (current._values ??= []).Add(new QueryValue(
+                parameter.EncodedValue,
                 parameter.ArrayFormat,
                 parameter.ArrayIndex,
                 parameter.Order));
         }
 
-        public bool TryGetChild(string name, out QueryNode child)
+        private QueryNode GetOrAddChild(string name)
         {
-            return _children.TryGetValue(name, out child!);
+            _children ??= new Dictionary<string, QueryNode>(StringComparer.OrdinalIgnoreCase);
+            if (!_children.TryGetValue(name, out var child))
+            {
+                child = new QueryNode();
+                _children.Add(name, child);
+            }
+
+            return child;
         }
+
+        public QueryNode? GetChild(string name) =>
+            _children is not null && _children.TryGetValue(name, out var child) ? child : null;
     }
 
-    private sealed class QueryValue(
-        string value,
+    private readonly struct QueryValue(
+        string encodedValue,
         QueryArrayFormat? arrayFormat,
         int? arrayIndex,
         int order)
     {
-        public string Value { get; } = value;
+        public string EncodedValue { get; } = encodedValue;
+
+        public string Value { get; } = Decode(encodedValue);
 
         public QueryArrayFormat? ArrayFormat { get; } = arrayFormat;
 
@@ -858,10 +915,10 @@ public static class QueryStringParser
         public int Order { get; } = order;
     }
 
-    private sealed class QueryParameter(
+    private readonly struct QueryParameter(
         string originalKey,
-        string value,
-        string[] path,
+        string encodedValue,
+        string[]? path,
         QueryObjectFormat? objectFormat,
         QueryArrayFormat? arrayFormat,
         int? arrayIndex,
@@ -869,9 +926,9 @@ public static class QueryStringParser
     {
         public string OriginalKey { get; } = originalKey;
 
-        public string Value { get; } = value;
+        public string EncodedValue { get; } = encodedValue;
 
-        public string[] Path { get; } = path;
+        public string[]? Path { get; } = path;
 
         public QueryObjectFormat? ObjectFormat { get; } = objectFormat;
 

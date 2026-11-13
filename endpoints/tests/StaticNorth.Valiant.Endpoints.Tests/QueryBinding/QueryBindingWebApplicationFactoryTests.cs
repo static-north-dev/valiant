@@ -326,6 +326,26 @@ public sealed class QueryBindingWebApplicationFactoryTests(
     }
 
     [Test]
+    [Arguments("/integration/generated/array/global")]
+    [Arguments("/integration/as-parameters/array/global")]
+    public async Task Hosted_Valiant_Binding_Reports_All_Query_Errors(string route)
+    {
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(route + "?ids[]=1&ids[]=2");
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        using var document = await ReadJson(response);
+        var errors = document.RootElement.EnumerateArray().ToArray();
+        await Assert.That(errors.Length).IsEqualTo(2);
+        foreach (var error in errors)
+        {
+            await Assert.That(error.GetProperty("path").GetString()).IsEqualTo("ids[]");
+            await Assert.That(error.GetProperty("code").GetString()).IsEqualTo("DisabledQueryArrayFormat");
+        }
+    }
+
+    [Test]
     public async Task Hosted_AsParameters_Cannot_Repair_Comma_Separated_Integer_Array_After_Native_Binding_Fails()
     {
         using var client = factory.CreateClient();

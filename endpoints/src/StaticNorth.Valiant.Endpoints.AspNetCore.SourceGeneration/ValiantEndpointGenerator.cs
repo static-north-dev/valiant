@@ -523,7 +523,9 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             SimpleNameSyntax simpleName => simpleName.Identifier.ValueText,
             _ => string.Empty
         };
-        if (!name.StartsWith("Map", StringComparison.Ordinal))
+        if (!name.StartsWith("Map", StringComparison.Ordinal) ||
+            !invocation.ArgumentList.Arguments.Any(static argument => argument.Expression is not
+                (LiteralExpressionSyntax or ParenthesizedLambdaExpressionSyntax { ParameterList.Parameters.Count: 0 })))
         {
             yield break;
         }
@@ -2057,9 +2059,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
         builder.AppendLine("{");
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 3, binding.NamespaceName);
-        builder.AppendLine("var message = result.Errors.Count > 0 ? result.Errors[0].Message : \"The query string could not be bound to this request.\";");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 3, binding.NamespaceName);
-        builder.AppendLine("throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(message, global::Microsoft.AspNetCore.Http.StatusCodes.Status400BadRequest);");
+        builder.AppendLine("throw global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.CreateQueryBindingException(result.Errors);");
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
         builder.AppendLine("}");
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);

@@ -74,6 +74,45 @@ public sealed class GeneratorIdeTests
     }
 
     [Test]
+    public void Query_Binding_Stays_Stable_With_Parameterless_And_Typed_Handlers()
+    {
+        var scenario = Scenario with
+        {
+            Declaration = """
+                using Microsoft.AspNetCore.Builder;
+                using Microsoft.AspNetCore.Mvc;
+                using Microsoft.AspNetCore.Routing;
+                using Microsoft.Extensions.DependencyInjection;
+                using StaticNorth.Valiant.Endpoints;
+                using StaticNorth.Valiant.Endpoints.AspNetCore;
+                using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
+
+                [ValiantEndpoint]
+                public sealed class Item$ID$ : IEndpoint
+                {
+                    public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder)
+                    {
+                        builder.MapGet("/ping$ID$", () => "ok");
+                        return builder.MapGet("/item$ID$", Handle);
+                    }
+
+                    private static int Handle([FromQuery] Filter$ID$ filter) => filter.Id;
+                }
+
+                public sealed partial class Filter$ID$ { public int Id { get; set; } }
+
+                internal static class QueryConfiguration$ID$
+                {
+                    internal static void Configure(IServiceCollection services) =>
+                        services.AddValiantEndpoints(options => options.QueryParameters.EnableBinding = true);
+                }
+                """
+        };
+
+        GeneratorIdeTestHarness.VerifyUnrelatedEdits(scenario, 32);
+    }
+
+    [Test]
     public void Dependency_Edits_Diagnostics_Removal_Undo_And_Cancellation_Match_Fresh_Generation()
     {
         GeneratorIdeTestHarness.VerifyChangeDetection(Scenario);
