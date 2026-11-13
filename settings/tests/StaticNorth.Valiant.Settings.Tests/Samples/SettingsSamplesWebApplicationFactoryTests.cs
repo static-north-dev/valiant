@@ -87,6 +87,36 @@ public sealed class SettingsSamplesWebApplicationFactoryTests
     }
 
     [Test]
+    public async Task Runtime_Values_Load_Independently_Of_The_Schema_Catalog()
+    {
+        await using var factory = CreateFactory<SecretRevealStartup>();
+        using var client = factory.CreateClient();
+        var path = SecretRevealStartup.Path + "/schemas";
+        using var catalogResponse = await client.GetAsync(path + "?schemaOnly=true&revealSecrets=true");
+        using var catalog = await ReadJson(catalogResponse);
+        var schema = FindSchema(catalog, "SecretRevealSettings");
+        await Assert.That(catalog.RootElement.GetProperty("showRuntimeValues").GetBoolean()).IsTrue();
+        await Assert.That(schema.TryGetProperty("runtimeValues", out _)).IsFalse();
+        await Assert.That(await catalogResponse.Content.ReadAsStringAsync()).DoesNotContain("revealable-secret");
+
+        var url = path + "?schemaType=" + Uri.EscapeDataString(schema.GetProperty("typeName").GetString()!) +
+            "&section=" + Uri.EscapeDataString(schema.GetProperty("sectionPath").GetString()!) +
+            "&name=SecretRevealSettings";
+        using var maskedResponse = await client.GetAsync(url);
+        using var revealedResponse = await client.GetAsync(url + "&revealSecrets=true");
+        using var masked = await ReadJson(maskedResponse);
+        using var revealed = await ReadJson(revealedResponse);
+
+        await Assert.That(maskedResponse.Headers.CacheControl?.NoStore).IsTrue();
+        await Assert.That(revealedResponse.Headers.CacheControl?.NoStore).IsTrue();
+        await Assert.That(masked.RootElement.GetProperty("runtimeValues").GetProperty("ApiKey").GetString()).IsEqualTo("********");
+        await Assert.That(revealed.RootElement.GetProperty("runtimeValues").GetProperty("ApiKey").GetString()).IsEqualTo("revealable-secret");
+        await Assert.That(revealed.RootElement.TryGetProperty("schemas", out _)).IsFalse();
+        using var unknown = await client.GetAsync(url + "-unknown");
+        await Assert.That(unknown.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+    }
+
+    [Test]
     public async Task Secret_Reveal_Sample_Requires_Explicit_Query_Opt_In()
     {
         await using var factory = CreateFactory<SecretRevealStartup>();

@@ -118,7 +118,9 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
                 attribute.Location ?? typeSyntax.Identifier.GetLocation());
         }
 
-        var properties = CreatePropertyModels(settingsType, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), cancellationToken);
+        var properties = CreatePropertyModels(
+            settingsType, context.SemanticModel.Compilation,
+            new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), includeDefaults: true, cancellationToken);
 
         return SettingsModel.Valid(
             settingsType.Name,
@@ -475,7 +477,9 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
 
     private static ImmutableArray<SettingsPropertyModel> CreatePropertyModels(
         INamedTypeSymbol type,
+        Compilation compilation,
         HashSet<ITypeSymbol> visitedTypes,
+        bool includeDefaults,
         CancellationToken cancellationToken)
     {
         var properties = ImmutableArray.CreateBuilder<SettingsPropertyModel>();
@@ -492,13 +496,19 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
                         continue;
                     }
 
+                    var isSecret = HasSecretAttribute(property);
+                    var includePropertyDefaults = includeDefaults && !isSecret &&
+                        !SensitiveSettingsNames.IsSensitive(property.Name, configurationKey);
                     properties.Add(CreatePropertyModel(
                         property.Type,
                         property.Name,
                         configurationKey,
                         property.IsRequired,
-                        HasSecretAttribute(property),
+                        isSecret,
+                        includePropertyDefaults ? GetDeclaredDefault(property, compilation, cancellationToken) : null,
+                        compilation,
                         visitedTypes,
+                        includePropertyDefaults,
                         cancellationToken));
                 }
             }
@@ -510,6 +520,35 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
     private static bool IsSettingsProperty(IPropertySymbol property)
     {
         return property is { IsStatic: false, Parameters.Length: 0, GetMethod.DeclaredAccessibility: Accessibility.Public, DeclaredAccessibility: Accessibility.Public };
+    }
+
+    private static string? GetDeclaredDefault(
+        IPropertySymbol property,
+        Compilation compilation,
+        CancellationToken cancellationToken)
+    {
+        foreach (var reference in property.DeclaringSyntaxReferences)
+        {
+            if (reference.GetSyntax(cancellationToken) is not PropertyDeclarationSyntax { Initializer.Value: { } initializer } ||
+                !compilation.ContainsSyntaxTree(initializer.SyntaxTree))
+            {
+                continue;
+            }
+
+            var constant = compilation.GetSemanticModel(initializer.SyntaxTree).GetConstantValue(initializer, cancellationToken);
+            if (constant.HasValue)
+            {
+                return constant.Value switch
+                {
+                    null => "null",
+                    bool value => value ? "true" : "false",
+                    IFormattable value => value.ToString(null, CultureInfo.InvariantCulture),
+                    _ => constant.Value.ToString()
+                };
+            }
+        }
+
+        return null;
     }
 
     private static bool TryGetConfigurationKey(IPropertySymbol property, out string key)
@@ -545,7 +584,10 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         string configurationKey,
         bool isExplicitlyRequired,
         bool isSecret,
+        string? defaultValue,
+        Compilation compilation,
         HashSet<ITypeSymbol> visitedTypes,
+        bool includeDefaults,
         CancellationToken cancellationToken)
     {
         var effectiveType = UnwrapNullable(type);
@@ -553,14 +595,14 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         var itemType = GetCollectionItemType(effectiveType);
         var item = itemType is null
             ? null
-            : CreateItemModel(itemType, visitedTypes, cancellationToken);
+            : CreateItemModel(itemType, compilation, visitedTypes, includeDefaults, cancellationToken);
         var nestedProperties = ImmutableArray<SettingsPropertyModel>.Empty;
 
         if (kind == SettingsPropertyKind.Object &&
             effectiveType is INamedTypeSymbol namedType &&
             visitedTypes.Add(namedType))
         {
-            nestedProperties = CreatePropertyModels(namedType, visitedTypes, cancellationToken);
+            nestedProperties = CreatePropertyModels(namedType, compilation, visitedTypes, includeDefaults, cancellationToken);
             visitedTypes.Remove(namedType);
         }
 
@@ -569,17 +611,19 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             configurationKey,
             effectiveType.ToDisplayString(SchemaTypeDisplayFormat),
             kind,
-            IsRequired(type, isExplicitlyRequired),
+            isExplicitlyRequired,
             IsNullable(type),
             isSecret,
-            null,
+            defaultValue,
             item,
             nestedProperties);
     }
 
     private static SettingsPropertyModel CreateItemModel(
         ITypeSymbol type,
+        Compilation compilation,
         HashSet<ITypeSymbol> visitedTypes,
+        bool includeDefaults,
         CancellationToken cancellationToken)
     {
         var effectiveType = UnwrapNullable(type);
@@ -589,7 +633,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             effectiveType is INamedTypeSymbol namedType &&
             visitedTypes.Add(namedType))
         {
-            nestedProperties = CreatePropertyModels(namedType, visitedTypes, cancellationToken);
+            nestedProperties = CreatePropertyModels(namedType, compilation, visitedTypes, includeDefaults, cancellationToken);
             visitedTypes.Remove(namedType);
         }
 
@@ -713,16 +757,6 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         var containingNamespace = type.ContainingNamespace?.ToDisplayString();
         return containingNamespace is not null &&
             containingNamespace.StartsWith("System", StringComparison.Ordinal);
-    }
-
-    private static bool IsRequired(ITypeSymbol type, bool isExplicitlyRequired)
-    {
-        if (isExplicitlyRequired)
-        {
-            return true;
-        }
-
-        return type is { IsReferenceType: true, NullableAnnotation: NullableAnnotation.NotAnnotated };
     }
 
     private static bool IsNullable(ITypeSymbol type)

@@ -55,7 +55,7 @@ public sealed class ValiantSettingsPropertySchema
     public ValiantSettingsPropertyKind Kind { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the property must be present.
+    /// Gets a value indicating whether the property is declared as a required member.
     /// </summary>
     public bool IsRequired { get; }
 

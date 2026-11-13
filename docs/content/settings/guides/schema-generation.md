@@ -27,8 +27,8 @@ The model schema contains its CLR type, display name, section path, and ordered 
 
 - CLR name and configuration key;
 - type display name and normalized kind;
-- required and nullable flags;
-- secret flag and known default value;
+- C# required-member and nullability flags;
+- secret flag and declared compile-time constant initializer, when available for a non-sensitive property;
 - nested object properties or collection item schema.
 
 Public instance properties with public getters are included, including inherited properties. The most derived declaration wins when a property is overridden or hidden. Overrides retain an inherited `[ValiantSecret]` marker.

@@ -264,7 +264,7 @@ internal static class ValiantSettingsUiPage
       background: var(--chip-bg);
     }
 
-    .schema-button[aria-selected="true"] {
+    .schema-button[aria-pressed="true"] {
       background: var(--accent);
       color: var(--accent-text);
     }
@@ -281,7 +281,7 @@ internal static class ValiantSettingsUiPage
       width: 36px;
     }
 
-    .schema-button[aria-selected="true"] .schema-icon {
+    .schema-button[aria-pressed="true"] .schema-icon {
       background: rgba(255, 255, 255, 0.2);
       color: var(--accent-text);
     }
@@ -317,7 +317,7 @@ internal static class ValiantSettingsUiPage
       padding: 2px 8px;
     }
 
-    .schema-button[aria-selected="true"] .schema-count {
+    .schema-button[aria-pressed="true"] .schema-count {
       background: rgba(255, 255, 255, 0.22);
       color: var(--accent-text);
     }
@@ -331,7 +331,7 @@ internal static class ValiantSettingsUiPage
       overflow-wrap: anywhere;
     }
 
-    .schema-button[aria-selected="true"] .schema-section {
+    .schema-button[aria-pressed="true"] .schema-section {
       color: var(--accent-text);
     }
 
@@ -435,10 +435,6 @@ internal static class ValiantSettingsUiPage
       cursor: pointer;
     }
 
-    .json-view-wrap {
-      position: relative;
-    }
-
     .json-view-control {
       background: var(--accent-soft);
       border: 1px solid transparent;
@@ -446,46 +442,12 @@ internal static class ValiantSettingsUiPage
       cursor: pointer;
     }
 
-    .json-view-menu {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      box-shadow: var(--shadow);
-      display: grid;
-      gap: 4px;
-      left: 0;
-      min-width: 176px;
-      padding: 6px;
-      position: absolute;
-      top: calc(100% + 8px);
-      z-index: 20;
-    }
-
-    .json-view-option {
-      align-items: center;
+    .json-view-control select {
       background: transparent;
       border: 0;
-      border-radius: 12px;
-      color: var(--text);
+      color: inherit;
       cursor: pointer;
-      display: flex;
       font: inherit;
-      font-size: 13px;
-      font-weight: 700;
-      gap: 8px;
-      justify-content: space-between;
-      padding: 9px 11px;
-      text-align: left;
-      width: 100%;
-    }
-
-    .json-view-option:hover {
-      background: var(--chip-bg);
-    }
-
-    .json-view-option[aria-selected="true"] {
-      background: var(--accent-soft);
-      color: var(--accent);
     }
 
     .meta-label {
@@ -643,11 +605,6 @@ internal static class ValiantSettingsUiPage
     .status.required {
       background: var(--accent);
       color: var(--accent-text);
-    }
-
-    .status.optional {
-      border: 1.5px solid var(--border);
-      color: var(--text-muted);
     }
 
     .status.nullable {
@@ -863,7 +820,7 @@ internal static class ValiantSettingsUiPage
       <aside class="sidebar">
         <div class="search-wrap">
           <span class="search-icon" aria-hidden="true"></span>
-          <input class="search" id="search" type="search" placeholder="Filter settings" aria-label="Filter settings">
+          <input class="search" id="search" type="search" placeholder="Find sections or keys" aria-label="Filter settings">
         </div>
         <div class="schema-list" id="schemaList"></div>
       </aside>
@@ -883,8 +840,9 @@ internal static class ValiantSettingsUiPage
       copiedKey: null,
       jsonVisible: false,
       jsonMode: "runtime",
-      jsonMenuOpen: false,
-      revealSecrets: false,
+      runtime: null,
+      runtimeRequest: null,
+      showRuntimeValues: false,
       canRevealSecrets: false,
       theme: localStorage.getItem("valiant-settings-theme") || "light"
     };
@@ -896,15 +854,20 @@ internal static class ValiantSettingsUiPage
     const themeToggle = document.getElementById("themeToggle");
     const themeIcon = document.getElementById("themeIcon");
 
-    const schemaUrl = new URL("schemas", window.location.href.endsWith("/") ? window.location.href : window.location.href + "/");
+    const schemaUrl = new URL(window.location.href);
+    schemaUrl.pathname = schemaUrl.pathname.replace(/\/?$/, "/schemas");
+    schemaUrl.search = "";
+    schemaUrl.hash = "";
 
     function start() {
       applyTheme();
       renderChrome();
 
       search.addEventListener("input", () => {
-        state.filter = search.value.toLowerCase();
+        state.filter = search.value.trim().toLowerCase();
         renderList();
+        renderSelected();
+        loadSelectedRuntime();
       });
 
       themeToggle.addEventListener("click", () => {
@@ -913,10 +876,15 @@ internal static class ValiantSettingsUiPage
         applyTheme();
       });
 
-      document.addEventListener("click", event => {
-        if (state.jsonMenuOpen && !event.target.closest("[data-json-menu-root]")) {
-          state.jsonMenuOpen = false;
-          renderSelected();
+      detail.addEventListener("click", event => {
+        const button = event.target.closest("[data-copy]");
+        if (button) copyText(button.dataset.copy || "", button.dataset.copyKey || "");
+        if (event.target.closest("[data-toggle-secrets]")) {
+          const reveal = !state.runtime?.secretsRevealed;
+          resetRuntime();
+          detail.querySelector("#settingsJson").innerHTML = renderRuntimeValues(state.schemas[state.selected]);
+          detail.querySelector("#jsonView")?.focus();
+          loadSelectedRuntime(reveal);
         }
       });
 
@@ -925,23 +893,61 @@ internal static class ValiantSettingsUiPage
 
     function loadSchemas() {
       const url = new URL(schemaUrl);
-      if (state.revealSecrets) {
-        url.searchParams.set("revealSecrets", "true");
-      }
+      url.searchParams.set("schemaOnly", "true");
 
-      return fetch(url, { headers: { "accept": "application/json" } })
-        .then(response => response.ok ? response.json() : Promise.reject(new Error("Schema endpoint returned " + response.status)))
+      return fetchJson(url)
         .then(document => {
-          state.schemas = document.schemas || [];
+          state.schemas = (document.schemas || []).map(schema => ({
+            ...schema,
+            flatProperties: flattenProperties(schema)
+          }));
+          state.showRuntimeValues = Boolean(document.showRuntimeValues);
           state.canRevealSecrets = Boolean(document.canRevealSecrets);
-          state.revealSecrets = Boolean(document.secretsRevealed);
           renderChrome();
           renderList();
           renderSelected();
+          loadSelectedRuntime();
         })
         .catch(error => {
           detail.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
         });
+    }
+
+    async function fetchJson(url, signal) {
+      const response = await fetch(url, { headers: { accept: "application/json" }, signal });
+      if (!response.ok) throw new Error("Schema endpoint returned " + response.status);
+      return response.json();
+    }
+
+    function resetRuntime() {
+      state.runtimeRequest?.abort();
+      state.runtimeRequest = null;
+      state.runtime = null;
+    }
+
+    function loadSelectedRuntime(reveal = false) {
+      if (!state.showRuntimeValues || !state.jsonVisible || state.jsonMode !== "runtime" ||
+          !schemaList.querySelector("button") || state.runtimeRequest || state.runtime) return;
+
+      const schema = state.schemas[state.selected];
+      const url = new URL(schemaUrl);
+      url.searchParams.set("schemaType", schema.typeName);
+      url.searchParams.set("section", schema.sectionPath || "");
+      url.searchParams.set("name", schema.name);
+      if (reveal) url.searchParams.set("revealSecrets", "true");
+
+      const controller = new AbortController();
+      state.runtimeRequest = controller;
+      detail.querySelector("#runtimeStatus").textContent = runtimeStatus();
+      const complete = result => {
+        if (state.runtimeRequest !== controller) return;
+        state.runtimeRequest = null;
+        state.runtime = result;
+        detail.querySelector("#runtimeStatus").textContent = runtimeStatus();
+        detail.querySelector("#settingsJson").innerHTML = renderRuntimeValues(schema);
+      };
+
+      fetchJson(url, controller.signal).then(complete, error => complete({ runtimeValuesError: error.message }));
     }
 
     function applyTheme() {
@@ -950,7 +956,7 @@ internal static class ValiantSettingsUiPage
     }
 
     function renderChrome() {
-      const totalProperties = state.schemas.reduce((sum, schema) => sum + flattenProperties(schema).length, 0);
+      const totalProperties = state.schemas.reduce((sum, schema) => sum + schema.flatProperties.length, 0);
       stats.innerHTML = `
         <span class="chip">${state.schemas.length}&nbsp;${state.schemas.length === 1 ? "section" : "sections"}</span>
         <span class="chip">${totalProperties}&nbsp;${totalProperties === 1 ? "property" : "properties"}</span>
@@ -958,22 +964,31 @@ internal static class ValiantSettingsUiPage
       document.querySelector(".search-icon").innerHTML = icons.search(15);
     }
 
-    function filteredSchemas() {
-      if (!state.filter) return state.schemas;
-      return state.schemas.filter(schema =>
-        schema.name.toLowerCase().includes(state.filter) ||
+    function matchesSection(schema) {
+      return schema.name.toLowerCase().includes(state.filter) ||
         (schema.sectionPath || "").toLowerCase().includes(state.filter) ||
-        schema.typeName.toLowerCase().includes(state.filter));
+        schema.typeName.toLowerCase().includes(state.filter);
     }
 
     function renderList() {
-      const visible = filteredSchemas();
+      const visible = state.filter
+        ? state.schemas.filter(schema => matchesSection(schema) ||
+            schema.flatProperties.some(property => matchesKey(property, state.filter)))
+        : state.schemas;
       schemaList.innerHTML = "";
 
       if (visible.length === 0) {
-        schemaList.innerHTML = `<div class="empty">No sections match "${escapeHtml(search.value)}".</div>`;
-        detail.innerHTML = `<div class="empty">Select a schema to inspect its properties.</div>`;
+        resetRuntime();
+        schemaList.innerHTML = state.filter
+          ? `<div class="empty" role="status">No sections or keys match "${escapeHtml(search.value)}".</div>`
+          : "";
         return;
+      }
+
+      if (!visible.includes(state.schemas[state.selected])) {
+        resetRuntime();
+        state.selected = state.schemas.indexOf(visible[0]);
+        state.propertyFilter = "";
       }
 
       visible.forEach(schema => {
@@ -981,7 +996,7 @@ internal static class ValiantSettingsUiPage
         const button = document.createElement("button");
         button.className = "schema-button";
         button.type = "button";
-        button.setAttribute("aria-selected", String(index === state.selected));
+        button.setAttribute("aria-pressed", String(index === state.selected));
         button.innerHTML = `
           <span class="schema-icon">${iconForSchema(schema, 17)}</span>
           <span class="schema-row-main">
@@ -993,9 +1008,13 @@ internal static class ValiantSettingsUiPage
           </span>
         `;
         button.addEventListener("click", () => {
+          if (state.selected !== index) resetRuntime();
           state.selected = index;
+          state.propertyFilter = "";
           renderList();
           renderSelected();
+          schemaList.querySelector('[aria-pressed="true"]')?.focus();
+          loadSelectedRuntime();
         });
         schemaList.appendChild(button);
       });
@@ -1007,11 +1026,15 @@ internal static class ValiantSettingsUiPage
         return;
       }
 
+      if (state.filter && !schemaList.querySelector("button")) {
+        detail.innerHTML = "";
+        return;
+      }
+
       const schema = state.schemas[state.selected] || state.schemas[0];
-      const properties = flattenProperties(schema);
-      const visibleProperties = filterProperties(properties);
-      const requiredCount = visibleProperties.filter(property => property.isRequired).length;
-      const hasRuntimeValues = schema.runtimeValues !== undefined || schema.runtimeValuesError;
+      const properties = schema.flatProperties;
+      const { visibleProperties, requiredCount } = getVisibleProperties(schema);
+      const hasRuntimeValues = state.showRuntimeValues;
       const selectedJsonView = getSelectedJsonView(hasRuntimeValues);
 
       detail.innerHTML = `
@@ -1023,9 +1046,8 @@ internal static class ValiantSettingsUiPage
               <p class="description">${escapeHtml(descriptionForSchema(schema))}</p>
             </div>
           </div>
-          <div class="detail-stats">
-            <span class="chip">${visibleProperties.length}${state.propertyFilter ? `/${properties.length}` : ""}&nbsp;${visibleProperties.length === 1 ? "property" : "properties"}</span>
-            <span class="chip accent">${requiredCount}&nbsp;required</span>
+          <div class="detail-stats" id="propertyStats">
+            ${renderPropertyStats(properties, visibleProperties, requiredCount)}
           </div>
         </div>
 
@@ -1039,23 +1061,23 @@ internal static class ValiantSettingsUiPage
             <span class="mono">${escapeHtml(schema.sectionPath || "No configuration section")}</span>
             <span class="copy-icon">${copyIcon("section")}</span>
           </button>
-          <div class="json-view-wrap" data-json-menu-root>
-            <button class="meta-chip json-view-control" type="button" data-toggle-json-menu aria-haspopup="menu" aria-expanded="${state.jsonMenuOpen}">
-              <span class="meta-label">JSON view</span>
-              <span class="mono">${titleCase(selectedJsonView)}</span>
-              <span class="copy-icon">${icons.chevronDown(13)}</span>
-            </button>
-            ${state.jsonMenuOpen ? renderJsonViewMenu(selectedJsonView, hasRuntimeValues) : ""}
-          </div>
+          <label class="meta-chip json-view-control">
+            <span class="meta-label">JSON view</span>
+            <select id="jsonView" class="mono">
+              <option value="hidden" ${selectedJsonView === "hidden" ? "selected" : ""}>Hidden</option>
+              <option value="schema" ${selectedJsonView === "schema" ? "selected" : ""}>Schema</option>
+              ${hasRuntimeValues ? `<option value="runtime" ${selectedJsonView === "runtime" ? "selected" : ""}>Runtime</option>` : ""}
+            </select>
+          </label>
           ${hasRuntimeValues
             ? `<span class="meta-chip">
                 <span class="meta-label">Runtime values</span>
-                <span class="mono">${schema.runtimeValuesError ? "Unavailable" : "Enabled"}</span>
+                <span class="mono" id="runtimeStatus" role="status">${runtimeStatus()}</span>
               </span>`
             : ""}
         </div>
 
-        ${renderJsonPanel(schema, hasRuntimeValues)}
+        <div id="settingsJson">${renderJsonPanel(schema, hasRuntimeValues)}</div>
 
         <section class="properties-card">
           <div class="properties-header">
@@ -1065,79 +1087,63 @@ internal static class ValiantSettingsUiPage
               <input class="property-search" id="propertySearch" type="search" value="${escapeAttribute(state.propertyFilter)}" placeholder="Filter properties" aria-label="Filter properties">
             </div>
           </div>
-          ${properties.length === 0
-            ? `<div class="empty">This schema has no public settings properties.</div>`
-            : visibleProperties.length === 0
-              ? `<div class="empty">No properties match "${escapeHtml(state.propertyFilter)}".</div>`
-              : visibleProperties.map(renderProperty).join("")}
+          <div id="propertyResults">${renderPropertyResults(properties, visibleProperties)}</div>
         </section>
       `;
 
-      detail.querySelectorAll("[data-copy]").forEach(button => {
-        button.addEventListener("click", () => copyText(button.getAttribute("data-copy") || "", button.getAttribute("data-copy-key") || ""));
-      });
-      detail.querySelector("[data-toggle-json-menu]")?.addEventListener("click", event => {
-        event.stopPropagation();
-        state.jsonMenuOpen = !state.jsonMenuOpen;
+      detail.querySelector("#jsonView")?.addEventListener("change", event => {
+        setJsonView(event.currentTarget.value);
+        if (!state.jsonVisible || state.jsonMode !== "runtime") resetRuntime();
         renderSelected();
-      });
-      detail.querySelectorAll("[data-json-view]").forEach(button => {
-        button.addEventListener("click", event => {
-          event.stopPropagation();
-          setJsonView(button.getAttribute("data-json-view") || "hidden");
-          state.jsonMenuOpen = false;
-          renderSelected();
-        });
-      });
-      detail.querySelector("[data-toggle-secrets]")?.addEventListener("click", () => {
-        state.revealSecrets = !state.revealSecrets;
-        loadSchemas();
+        detail.querySelector("#jsonView")?.focus();
+        loadSelectedRuntime();
       });
       detail.querySelector("#propertySearch")?.addEventListener("input", event => {
-        const input = event.currentTarget;
-        const cursor = input.selectionStart ?? input.value.length;
-        state.propertyFilter = input.value.toLowerCase();
-        renderSelected();
-        const nextInput = detail.querySelector("#propertySearch");
-        nextInput?.focus();
-        nextInput?.setSelectionRange(cursor, cursor);
+        state.propertyFilter = event.currentTarget.value;
+        const { visibleProperties, requiredCount } = getVisibleProperties(schema);
+        detail.querySelector("#propertyStats").innerHTML = renderPropertyStats(properties, visibleProperties, requiredCount);
+        detail.querySelector("#propertyResults").innerHTML = renderPropertyResults(properties, visibleProperties);
       });
+    }
+
+    function runtimeStatus() {
+      if (state.runtimeRequest) return "Loading";
+      if (!state.runtime) return "Not loaded";
+      return state.runtime.runtimeValuesError ? "Unavailable" : "Options instance";
+    }
+
+    function getVisibleProperties(schema) {
+      const properties = matchesSection(schema) ? schema.flatProperties
+        : schema.flatProperties.filter(property => matchesKey(property, state.filter));
+      const visibleProperties = filterProperties(properties);
+      return { visibleProperties, requiredCount: visibleProperties.filter(property => property.isRequired).length };
+    }
+
+    function renderPropertyStats(properties, visible, requiredCount) {
+      return `<span class="chip">${visible.length}${state.propertyFilter ? `/${properties.length}` : ""}&nbsp;${visible.length === 1 ? "property" : "properties"}</span>
+              <span class="chip accent">${requiredCount}&nbsp;required</span>`;
+    }
+
+    function renderPropertyResults(properties, visible) {
+      if (properties.length === 0) return `<div class="empty">This schema has no public settings properties.</div>`;
+      if (visible.length === 0) return `<div class="empty">No properties match "${escapeHtml(state.propertyFilter)}".</div>`;
+      return visible.map(renderProperty).join("");
+    }
+
+    function matchesKey(property, query) {
+      return property.name.toLowerCase().includes(query) ||
+        property.configurationKey.toLowerCase().includes(query) ||
+        property.fullPath.toLowerCase().includes(query);
     }
 
     function filterProperties(properties) {
-      if (!state.propertyFilter) {
-        return properties;
-      }
+      const query = state.propertyFilter.trim().toLowerCase();
+      if (!query) return properties;
 
       return properties.filter(property =>
-        property.name.toLowerCase().includes(state.propertyFilter) ||
-        property.configurationKey.toLowerCase().includes(state.propertyFilter) ||
-        property.fullPath.toLowerCase().includes(state.propertyFilter) ||
-        property.typeName.toLowerCase().includes(state.propertyFilter) ||
-        String(property.kind || "").toLowerCase().includes(state.propertyFilter));
-    }
-
-    function renderJsonViewMenu(selectedJsonView, hasRuntimeValues) {
-      const options = [
-        ["hidden", "Hidden"],
-        ...(hasRuntimeValues ? [["runtime", "Runtime"]] : []),
-        ["schema", "Schema"]
-      ];
-
-      return `
-        <div class="json-view-menu" role="menu" aria-label="JSON view">
-          ${options.map(([value, label]) => `
-            <button class="json-view-option" type="button" role="menuitemradio" aria-selected="${value === selectedJsonView}" data-json-view="${value}">
-              <span>${label}</span>
-              <span>${value === selectedJsonView ? icons.check(13) : ""}</span>
-            </button>
-          `).join("")}
-        </div>
-      `;
-    }
-
-    function titleCase(value) {
-      return value.charAt(0).toUpperCase() + value.slice(1);
+        matchesKey(property, query) ||
+        property.typeName.toLowerCase().includes(query) ||
+        String(property.kind || "").toLowerCase().includes(query));
     }
 
     function getSelectedJsonView(hasRuntimeValues) {
@@ -1196,11 +1202,11 @@ internal static class ValiantSettingsUiPage
     }
 
     function renderRuntimeValues(schema) {
-      if (schema.runtimeValues === undefined && !schema.runtimeValuesError) {
-        return "";
+      if (!state.runtime) {
+        return `<section class="json-card"><div class="empty" role="status">Loading runtime values.</div></section>`;
       }
 
-      if (schema.runtimeValuesError) {
+      if (state.runtime.runtimeValuesError) {
         return `
           <section class="json-card">
             <div class="json-header">
@@ -1209,12 +1215,12 @@ internal static class ValiantSettingsUiPage
                 <div class="mono">Unavailable</div>
               </div>
             </div>
-            <pre class="json-code"><code>${escapeHtml(schema.runtimeValuesError)}</code></pre>
+            <pre class="json-code"><code>${escapeHtml(state.runtime.runtimeValuesError)}</code></pre>
           </section>
         `;
       }
 
-      const json = JSON.stringify(schema.runtimeValues, null, 2);
+      const json = JSON.stringify(state.runtime.runtimeValues, null, 2);
       return `
         <section class="json-card">
           <div class="json-header">
@@ -1229,8 +1235,8 @@ internal static class ValiantSettingsUiPage
               </button>
               ${state.canRevealSecrets
                 ? `<button class="copy-chip" type="button" data-toggle-secrets>
-                    <span class="meta-label">${state.revealSecrets ? "Hide secrets" : "Reveal secrets"}</span>
-                    <span class="copy-icon">${state.revealSecrets ? icons.eyeOff(13) : icons.eye(13)}</span>
+                    <span class="meta-label">${state.runtime.secretsRevealed ? "Hide secrets" : "Reveal secrets"}</span>
+                    <span class="copy-icon">${state.runtime.secretsRevealed ? icons.eyeOff(13) : icons.eye(13)}</span>
                   </button>`
                 : ""}
             </div>
@@ -1243,12 +1249,12 @@ internal static class ValiantSettingsUiPage
     function renderProperty(property) {
       const meta = typeMeta(property.kind, property.typeName);
       const copied = state.copiedKey === property.copyKey;
-      const defaultMarkup = property.defaultValue
-        ? `<span class="default-value">default: ${escapeHtml(property.defaultValue)}</span>`
+      const defaultMarkup = property.defaultValue != null
+        ? `<span class="default-value">Declared default: ${escapeHtml(property.defaultValue === "" ? '""' : property.defaultValue)}</span>`
         : "";
       const nullableMarkup = property.isNullable
         ? `<span class="status nullable">Nullable</span>`
-        : "";
+        : `<span class="status nullable">Non-nullable</span>`;
       const secretMarkup = property.isSecret
         ? `<span class="status secret">Secret</span>`
         : "";
@@ -1259,7 +1265,7 @@ internal static class ValiantSettingsUiPage
           <div class="property-main">
             <div class="property-heading">
               <span class="property-name">${escapeHtml(property.name)}</span>
-              ${property.isRequired ? `<span class="status required">Required</span>` : `<span class="status optional">Optional</span>`}
+              ${property.isRequired ? `<span class="status required">Required member</span>` : ""}
               ${nullableMarkup}
               ${secretMarkup}
             </div>
@@ -1328,7 +1334,7 @@ internal static class ValiantSettingsUiPage
       const normalized = String(property.kind || property.typeName || "").toLowerCase();
       if (normalized.includes("bool")) return false;
       if (normalized.includes("int") || normalized.includes("long") || normalized.includes("short")) return 0;
-      if (normalized.includes("decimal") || normalized.includes("double") || normalized.includes("float")) return 0;
+      if (normalized === "number" || normalized.includes("decimal") || normalized.includes("double") || normalized.includes("float")) return 0;
       if (normalized.includes("string")) return "string";
       return null;
     }
@@ -1338,15 +1344,16 @@ internal static class ValiantSettingsUiPage
       const normalized = String(kind || typeName || "").toLowerCase();
       if (normalized.includes("string")) return { abbr: "Str", label: "Text", className: "kind-string" };
       if (normalized.includes("bool")) return { abbr: "01", label: "Boolean", className: "kind-boolean" };
-      if (normalized.includes("decimal") || normalized.includes("double") || normalized.includes("float")) return { abbr: "0.0", label: "Decimal", className: "kind-decimal" };
+      if (normalized === "number" || normalized.includes("decimal") || normalized.includes("double") || normalized.includes("float")) return { abbr: "0.0", label: "Number", className: "kind-decimal" };
       if (normalized.includes("int") || normalized.includes("long") || normalized.includes("short")) return { abbr: "123", label: "Number", className: "kind-number" };
       if (normalized.includes("array") || normalized.includes("collection") || type.endsWith("[]")) return { abbr: "[ ]", label: "Array", className: "kind-object" };
+      if (normalized === "enum") return { abbr: "Enum", label: "Enum", className: "kind-object" };
       return { abbr: "{ }", label: "Object", className: "kind-object" };
     }
 
     function descriptionForSchema(schema) {
       if (schema.sectionPath) {
-        return `Settings model bound to the ${schema.sectionPath} configuration section.`;
+        return `Configuration section: ${schema.sectionPath}`;
       }
 
       return "Settings model registered without a configuration section path.";
@@ -1409,7 +1416,6 @@ internal static class ValiantSettingsUiPage
       moon: size => `<svg viewBox="0 0 24 24" fill="currentColor" width="${size}" height="${size}"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"></path></svg>`,
       copy: size => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg>`,
       check: size => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
-      chevronDown: size => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}"><polyline points="6 9 12 15 18 9"></polyline></svg>`,
       eye: size => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>`,
       eyeOff: size => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}"><path d="m3 3 18 18"></path><path d="M10.6 10.6A3 3 0 0 0 13.4 13.4"></path><path d="M9.9 4.2A9.6 9.6 0 0 1 12 4c6.5 0 10 8 10 8a17.5 17.5 0 0 1-3.1 4.2"></path><path d="M6.5 6.5C3.6 8.4 2 12 2 12s3.5 8 10 8a9.7 9.7 0 0 0 4.1-.9"></path></svg>`,
       code: size => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>`
