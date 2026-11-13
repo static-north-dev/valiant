@@ -52,7 +52,7 @@ public sealed class SourceGenerationTests
         await Assert.That(schema.Properties).Count().IsEqualTo(2);
         await Assert.That(schema.Properties[0].Name).IsEqualTo("ConnectionString");
         await Assert.That(schema.Properties[0].Kind).IsEqualTo(ValiantSettingsPropertyKind.String);
-        await Assert.That(schema.Properties[0].IsRequired).IsTrue();
+        await Assert.That(schema.Properties[0].IsRequired).IsFalse();
         await Assert.That(schema.Properties[0].IsSecret).IsTrue();
         await Assert.That(schema.Properties[1].Name).IsEqualTo("CommandTimeoutSeconds");
         await Assert.That(schema.Properties[1].Kind).IsEqualTo(ValiantSettingsPropertyKind.Integer);
@@ -158,6 +158,84 @@ public sealed class SourceGenerationTests
         await Assert.That(settingsType.GetProperty("CommandTimeoutSeconds")!.GetValue(value)).IsEqualTo(45);
         await Assert.That(schemaProviders).Count().IsEqualTo(1);
         await Assert.That(schemaProviders[0].SectionPath).IsEqualTo("ConnectionStrings:Primary");
+    }
+
+    [Test]
+    public async Task Schema_And_Runtime_Values_Respect_Configuration_Aliases_And_Ignored_Properties()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using Microsoft.Extensions.Configuration;
+            using StaticNorth.Valiant.Settings;
+
+            public class BaseSettings
+            {
+                [ConfigurationKeyName("worker-count")]
+                public virtual int Workers { get; set; }
+
+                [ConfigurationIgnore]
+                public virtual int Internal { get; set; } = 5;
+            }
+
+            [ValiantSettings("Test", configure: true)]
+            public sealed class AliasedSettings : BaseSettings
+            {
+                public override int Workers { get; set; }
+                public override int Internal { get; set; } = 5;
+
+                [ConfigurationKeyName("options")]
+                public NestedSettings Nested { get; set; } = new();
+            }
+
+            public sealed class NestedSettings
+            {
+                [ConfigurationKeyName(" ")]
+                public int Limit { get; set; }
+
+                [ConfigurationKeyName("login")]
+                [ValiantSecret]
+                public string? Value { get; set; }
+
+                [ConfigurationIgnore]
+                public string? Ignored { get; set; }
+            }
+            """);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Test:worker-count"] = "12",
+                ["Test:Internal"] = "99",
+                ["Test:options:Limit"] = "4",
+                ["Test:options:login"] = "secret",
+                ["Test:options:Ignored"] = "ignored"
+            })
+            .Build();
+        var services = new ServiceCollection();
+        var extensionType = assembly.GetType("StaticNorth.Valiant.Settings.DependencyInjection.ValiantSettingsServiceCollectionExtensions", throwOnError: true)!;
+        extensionType.GetMethod("AddValiantSettings", [typeof(IServiceCollection), typeof(IConfiguration)])!
+            .Invoke(null, [services, configuration]);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var provider = serviceProvider.GetServices<IValiantSettingsSchemaProvider>().Single();
+        var properties = provider.Schema.Properties;
+        await Assert.That(properties.Single(static property => property.Name == "Workers").ConfigurationKey).IsEqualTo("worker-count");
+        await Assert.That(properties.Select(static property => property.Name)).DoesNotContain("Internal");
+        var nested = properties.Single(static property => property.Name == "Nested");
+        await Assert.That(nested.ConfigurationKey).IsEqualTo("options");
+        await Assert.That(nested.Properties.Select(static property => property.ConfigurationKey)).IsEquivalentTo(["Limit", "login"]);
+
+        var document = ValiantSettingsSchemaDocumentFactory.Create([provider], serviceProvider, includeRuntimeValues: true);
+        var values = (IReadOnlyDictionary<string, object?>)document.Schemas[0].RuntimeValues!;
+        var nestedValues = (IReadOnlyDictionary<string, object?>)values["options"]!;
+        await Assert.That(values["worker-count"]).IsEqualTo(12);
+        await Assert.That(nestedValues["Limit"]).IsEqualTo(4);
+        await Assert.That(nestedValues["login"]).IsEqualTo("********");
+        await Assert.That(nestedValues.Keys).DoesNotContain("Ignored");
+
+        var optionsType = typeof(IOptions<>).MakeGenericType(provider.SettingsType);
+        var options = optionsType.GetProperty(nameof(IOptions<object>.Value))!.GetValue(serviceProvider.GetRequiredService(optionsType))!;
+        await Assert.That(provider.SettingsType.GetProperty("Internal")!.GetValue(options)).IsEqualTo(5);
     }
 
     [Test]
@@ -391,6 +469,59 @@ public sealed class SourceGenerationTests
         await Assert.That(revealedDocument.CanRevealSecrets).IsTrue();
         await Assert.That(revealedDocument.SecretsRevealed).IsTrue();
         await Assert.That(revealedRuntimeValues["Password"]).IsEqualTo("super-secret");
+    }
+
+    [Test]
+    public async Task Schema_Separates_Required_Members_And_Declared_Defaults_Without_Emitting_Secrets()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using StaticNorth.Valiant.Settings;
+
+            [ValiantSettings("Tests:Defaults")]
+            public sealed class DefaultSettings
+            {
+                public string Region { get; set; } = "us-east-1";
+                public required string Name { get; set; }
+                public string AccessToken { get; set; } = "test-token";
+                [ValiantSecret]
+                public NestedSettings Credentials { get; set; } = new();
+            }
+
+            public sealed class NestedSettings
+            {
+                public string Value { get; set; } = "test-value";
+            }
+            """);
+        var registry = assembly.GetType("StaticNorth.Valiant.Settings.ValiantSettingsSchemas", throwOnError: true)!;
+        var providers = (IReadOnlyList<IValiantSettingsSchemaProvider>)registry.GetProperty("All")!.GetValue(null)!;
+        var properties = providers.Single().Schema.Properties.ToDictionary(property => property.Name);
+
+        await Assert.That(properties["Region"].IsRequired).IsFalse();
+        await Assert.That(properties["Region"].IsNullable).IsFalse();
+        await Assert.That(properties["Region"].DefaultValue).IsEqualTo("us-east-1");
+        await Assert.That(properties["Name"].IsRequired).IsTrue();
+        await Assert.That(properties["AccessToken"].DefaultValue).IsNull();
+        await Assert.That(properties["Credentials"].Properties.Single().DefaultValue).IsNull();
+    }
+
+    [Test]
+    public async Task Schema_Document_Distinguishes_Configured_And_Default_Options()
+    {
+        var provider = CreateSecretProvider();
+        using var unconfigured = new ServiceCollection().AddOptions().BuildServiceProvider();
+        using var explicitlyProvided = new ServiceCollection()
+            .AddOptions()
+            .AddSingleton<IOptions<TestSettings>>(Options.Create(new TestSettings()))
+            .BuildServiceProvider();
+
+        var missing = ValiantSettingsSchemaDocumentFactory.Create([provider], unconfigured, includeRuntimeValues: true);
+        var supplied = ValiantSettingsSchemaDocumentFactory.Create([provider], explicitlyProvided, includeRuntimeValues: true);
+
+        await Assert.That(missing.Schemas[0].RuntimeValues).IsNull();
+        await Assert.That(missing.Schemas[0].RuntimeValuesError!).Contains("no Options configuration");
+        await Assert.That(supplied.Schemas[0].RuntimeValues).IsNotNull();
+        await Assert.That(supplied.Schemas[0].RuntimeValuesError).IsNull();
     }
 
     [Test]

@@ -100,9 +100,9 @@ public sealed class CoreSettingsSamplesTests
         await AssertProperty(properties[nameof(SchemaMetadataSettings.RetryCount)], ValiantSettingsPropertyKind.Integer);
         await AssertProperty(properties[nameof(SchemaMetadataSettings.FailureThreshold)], ValiantSettingsPropertyKind.Number);
         await AssertProperty(properties[nameof(SchemaMetadataSettings.Mode)], ValiantSettingsPropertyKind.Enum);
-        await AssertProperty(properties[nameof(SchemaMetadataSettings.Primary)], ValiantSettingsPropertyKind.Object, required: true);
-        await AssertProperty(properties[nameof(SchemaMetadataSettings.Tags)], ValiantSettingsPropertyKind.Array, required: true);
-        await AssertProperty(properties[nameof(SchemaMetadataSettings.Replicas)], ValiantSettingsPropertyKind.Array, required: true);
+        await AssertProperty(properties[nameof(SchemaMetadataSettings.Primary)], ValiantSettingsPropertyKind.Object);
+        await AssertProperty(properties[nameof(SchemaMetadataSettings.Tags)], ValiantSettingsPropertyKind.Array);
+        await AssertProperty(properties[nameof(SchemaMetadataSettings.Replicas)], ValiantSettingsPropertyKind.Array);
         await AssertProperty(properties[nameof(SchemaMetadataSettings.HealthCheck)], ValiantSettingsPropertyKind.Unknown, required: false, nullable: true);
 
         var apiKey = properties[nameof(SchemaMetadataSettings.ApiKey)];
@@ -112,14 +112,15 @@ public sealed class CoreSettingsSamplesTests
         var retryCount = properties[nameof(SchemaMetadataSettings.RetryCount)];
 
         await Assert.That(apiKey.IsSecret).IsTrue();
-        await Assert.That(apiKey.IsRequired).IsTrue();
+        await Assert.That(apiKey.IsRequired).IsFalse();
+        await Assert.That(apiKey.DefaultValue).IsNull();
         await Assert.That(tags.Item?.Kind).IsEqualTo(ValiantSettingsPropertyKind.String);
         await Assert.That(replicas.Item?.Kind).IsEqualTo(ValiantSettingsPropertyKind.Object);
         await Assert.That(replicas.Item?.Properties.Select(property => property.Name))
             .IsEquivalentTo([nameof(ReplicaSettings.Region), nameof(ReplicaSettings.Priority)]);
         await Assert.That(primary.Properties.Select(property => property.Name))
             .IsEquivalentTo([nameof(ReplicaSettings.Region), nameof(ReplicaSettings.Priority)]);
-        await Assert.That(retryCount.DefaultValue).IsNull();
+        await Assert.That(retryCount.DefaultValue).IsEqualTo("3");
     }
 
     private static void AddSampleSettings(

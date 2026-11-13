@@ -35,7 +35,12 @@ public static class ValiantSettingsValidationServiceCollectionExtensions
 
     private sealed class ValiantValidateOptions<TOptions>(
         IServiceScopeFactory scopeFactory,
-        bool requireValidator) : IValidateOptions<TOptions>
+        bool requireValidator) :
+#if NET11_0_OR_GREATER
+        IAsyncValidateOptions<TOptions>
+#else
+        IValidateOptions<TOptions>
+#endif
         where TOptions : class
     {
         public ValidateOptionsResult Validate(string? name, TOptions options)
@@ -47,20 +52,42 @@ public static class ValiantSettingsValidationServiceCollectionExtensions
 
             using var scope = scopeFactory.CreateScope();
             var validator = scope.ServiceProvider.GetService<IValidator<TOptions>>();
-            if (validator is null)
+            return validator is null
+                ? MissingValidatorResult()
+                : ToOptionsResult(validator.Validate(options));
+        }
+
+#if NET11_0_OR_GREATER
+        public async Task<ValidateOptionsResult> ValidateAsync(
+            string? name,
+            TOptions options,
+            CancellationToken cancellationToken = default)
+        {
+            if (options is null)
             {
-                return requireValidator
-                    ? ValidateOptionsResult.Fail($"No Valiant validator was registered for {typeof(TOptions).FullName}.")
-                    : ValidateOptionsResult.Success;
+                return ValidateOptionsResult.Fail($"Options instance for {typeof(TOptions).FullName} was null.");
             }
 
-            var result = validator.Validate(options);
-            if (result.IsValid)
-            {
-                return ValidateOptionsResult.Success;
-            }
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var validator = scope.ServiceProvider.GetService<IValidator<TOptions>>();
+            return validator is null
+                ? MissingValidatorResult()
+                : ToOptionsResult(await validator.ValidateAsync(options, cancellationToken).ConfigureAwait(false));
+        }
+#endif
 
-            return ValidateOptionsResult.Fail(result.Errors.Select(FormatFailure));
+        private ValidateOptionsResult MissingValidatorResult()
+        {
+            return requireValidator
+                ? ValidateOptionsResult.Fail($"No Valiant validator was registered for {typeof(TOptions).FullName}.")
+                : ValidateOptionsResult.Success;
+        }
+
+        private static ValidateOptionsResult ToOptionsResult(ValidationResult result)
+        {
+            return result.IsValid
+                ? ValidateOptionsResult.Success
+                : ValidateOptionsResult.Fail(result.Errors.Select(FormatFailure));
         }
 
         private static string FormatFailure(ValidationFailure failure)

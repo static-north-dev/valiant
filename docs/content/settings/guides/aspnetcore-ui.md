@@ -42,7 +42,9 @@ app.MapValiantSettingsUi(options =>
 });
 ```
 
-Runtime values are resolved dynamically from `IOptions<TSettings>` for registered schemas only. If schema-provider registration is disabled, the UI has no generated catalog to display.
+Runtime values come from the host's default `IOptions<TSettings>` instance for each registered schema. The explorer reports values as unavailable when the host has neither Options configuration for that model nor an explicitly supplied options instance. Runtime values can include defaults and values assigned by configuration or post-configuration. Declared defaults in the property list describe constant initializers.
+
+The explorer loads the schema catalog first and requests values for the selected section when you open its Runtime view. Changing sections clears revealed values. A request to `/schemas` without a section selector still returns the full document.
 
 ## Protect secrets
 

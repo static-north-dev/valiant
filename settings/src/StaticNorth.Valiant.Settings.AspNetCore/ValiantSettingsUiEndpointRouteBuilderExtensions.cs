@@ -41,6 +41,38 @@ public static class ValiantSettingsUiEndpointRouteBuilderExtensions
             var revealSecrets = options.AllowSecretReveal &&
                 string.Equals(httpContext.Request.Query["revealSecrets"], "true", StringComparison.OrdinalIgnoreCase);
 
+            if (httpContext.Request.Query.TryGetValue("schemaType", out var schemaType))
+            {
+                if (!options.ShowRuntimeValues)
+                {
+                    return Results.NotFound();
+                }
+
+                var section = httpContext.Request.Query["section"].ToString();
+                var name = httpContext.Request.Query["name"].ToString();
+                var schema = providers.Select(static provider => provider.Schema).FirstOrDefault(candidate =>
+                    string.Equals(candidate.SettingsType.FullName ?? candidate.SettingsType.Name, schemaType, StringComparison.Ordinal) &&
+                    string.Equals(candidate.SectionPath ?? string.Empty, section, StringComparison.Ordinal) &&
+                    string.Equals(candidate.Name, name, StringComparison.Ordinal));
+                if (schema is null)
+                {
+                    return Results.NotFound();
+                }
+
+                var runtimeValues = ValiantSettingsRuntimeValueFactory.TryCreate(schema, serviceProvider, revealSecrets, out var runtimeValuesError);
+                return Results.Json(new { runtimeValues, runtimeValuesError, secretsRevealed = revealSecrets });
+            }
+
+            if (httpContext.Request.Query["schemaOnly"] == "true")
+            {
+                return Results.Json(new
+                {
+                    ValiantSettingsSchemaDocumentFactory.Create(providers).Schemas,
+                    options.ShowRuntimeValues,
+                    CanRevealSecrets = options.ShowRuntimeValues && options.AllowSecretReveal
+                });
+            }
+
             return Results.Json(ValiantSettingsSchemaDocumentFactory.Create(
                 providers,
                 serviceProvider,

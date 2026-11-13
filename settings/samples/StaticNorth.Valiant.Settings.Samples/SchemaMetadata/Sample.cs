@@ -24,6 +24,6 @@ public static class Sample
         var retryCount = schema.Properties.Single(property =>
             property.Name == nameof(SchemaMetadataSettings.RetryCount));
         Console.WriteLine(
-            $"Initializer metadata: {retryCount.DefaultValue ?? "not emitted (runtime initializer only)"}");
+            $"Declared default: {retryCount.DefaultValue ?? "unavailable"}");
     }
 }

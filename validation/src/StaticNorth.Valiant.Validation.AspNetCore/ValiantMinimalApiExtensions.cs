@@ -13,6 +13,9 @@ namespace StaticNorth.Valiant.Validation.AspNetCore;
 /// </summary>
 public static class ValiantMinimalApiExtensions
 {
+    private static readonly ConditionalWeakTable<IServiceProvider, IReadOnlyDictionary<Type, ValidationTypePlan>>
+        GeneratedPlansByHost = new();
+
     /// <summary>
     /// Adds an endpoint filter that validates each non-null endpoint argument with Valiant validators
     /// registered for its exact declared parameter type.
@@ -59,10 +62,14 @@ public static class ValiantMinimalApiExtensions
         EndpointFilterInvocationContext invocationContext,
         EndpointFilterDelegate next)
     {
+        // ASP.NET Core sets an error status before running filters when parameter binding fails.
+        if (invocationContext.HttpContext.Response.StatusCode >= StatusCodes.Status400BadRequest)
+        {
+            return await next(invocationContext).ConfigureAwait(false);
+        }
+
         List<ValidationFailure>? failures = null;
-        var validators = invocationContext.HttpContext.RequestServices
-            .GetServices<IValidator<T>>()
-            .ToArray();
+        var validators = ResolveValidatorArray<T>(invocationContext.HttpContext.RequestServices);
 
         foreach (var argument in invocationContext.Arguments)
         {
@@ -88,6 +95,11 @@ public static class ValiantMinimalApiExtensions
         EndpointFilterDelegate next,
         ValidationPlan plan)
     {
+        if (invocationContext.HttpContext.Response.StatusCode >= StatusCodes.Status400BadRequest)
+        {
+            return await next(invocationContext).ConfigureAwait(false);
+        }
+
         List<ValidationFailure>? failures = null;
         object?[]? resolvedValidators = null;
 
@@ -137,21 +149,14 @@ public static class ValiantMinimalApiExtensions
         var candidates = new List<ValidationCandidate>(parameters.Length);
         var typePlans = new List<ValidationTypePlan>();
         var typePlanIndices = new Dictionary<Type, int>();
-        var generatedInvokers = GetGeneratedInvokers(applicationServices);
+        var generatedPlans = GeneratedPlansByHost.GetValue(applicationServices, CreateGeneratedPlans);
 
         for (var index = 0; index < parameters.Length; index++)
         {
             var type = parameters[index].ParameterType;
             if (!typePlanIndices.TryGetValue(type, out var typePlanIndex))
             {
-                ValidationTypePlan? typePlan;
-                if (generatedInvokers.TryGetValue(type, out var generatedInvoker))
-                {
-                    typePlan = new ValidationTypePlan(
-                        generatedInvoker.ResolveValidators,
-                        generatedInvoker.ValidateAsync);
-                }
-                else
+                if (!generatedPlans.TryGetValue(type, out var typePlan))
                 {
                     typePlan = CreateDynamicValidationTypePlanIfSupported(type);
                 }
@@ -172,16 +177,16 @@ public static class ValiantMinimalApiExtensions
         return new ValidationPlan(candidates.ToArray(), typePlans.ToArray());
     }
 
-    private static Dictionary<Type, IValiantValidatorInvoker> GetGeneratedInvokers(
+    private static IReadOnlyDictionary<Type, ValidationTypePlan> CreateGeneratedPlans(
         IServiceProvider applicationServices)
     {
-        var generatedInvokers = new Dictionary<Type, IValiantValidatorInvoker>();
+        var plans = new Dictionary<Type, ValidationTypePlan>();
         foreach (var invoker in applicationServices.GetServices<IValiantValidatorInvoker>())
         {
-            _ = generatedInvokers.TryAdd(invoker.ModelType, invoker);
+            _ = plans.TryAdd(invoker.ModelType, new ValidationTypePlan(invoker.ResolveValidators, invoker.ValidateAsync));
         }
 
-        return generatedInvokers;
+        return plans;
     }
 
     [UnconditionalSuppressMessage(
@@ -214,11 +219,17 @@ public static class ValiantMinimalApiExtensions
     private static ValidationTypePlan CreateValidationTypePlanCore<T>()
     {
         return new ValidationTypePlan(
-            static services => services.GetServices<IValidator<T>>().ToArray(),
+            ResolveValidatorArray<T>,
             static (validators, model, cancellationToken) => ValidateModelAsync(
                 (IValidator<T>[])validators,
                 (T)model,
                 cancellationToken));
+    }
+
+    private static IValidator<T>[] ResolveValidatorArray<T>(IServiceProvider services)
+    {
+        var validators = services.GetServices<IValidator<T>>();
+        return validators as IValidator<T>[] ?? validators.ToArray();
     }
 
     private static async ValueTask<ValidationResult> ValidateModelAsync<T>(

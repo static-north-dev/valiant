@@ -1,7 +1,9 @@
 using System.Linq.Expressions;
 using System.Collections;
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 
 namespace StaticNorth.Valiant.Mapping;
 
@@ -12,6 +14,9 @@ namespace StaticNorth.Valiant.Mapping;
 /// <typeparam name="TTarget">The target type.</typeparam>
 public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget>
 {
+    [ThreadStatic]
+    private static int _nestedMappingDepth;
+
     private readonly List<MappingRuleDeclaration<TSource>> _maps = [];
     private readonly List<MappingIgnoreDeclaration<TSource>> _ignores = [];
     private readonly List<object> _mappers = [];
@@ -78,7 +83,8 @@ public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(Dynamica
     {
         _ = source ?? throw new ArgumentNullException(nameof(source));
         _ = target ?? throw new ArgumentNullException(nameof(target));
-        var compiledSource = source.Compile();
+        // Configure runs for every source and may capture values from that invocation.
+        var compiledSource = source.Compile(preferInterpretation: true);
         var declaration = new MappingRuleDeclaration<TSource>(
             value => compiledSource(value),
             GetSelectedMember(target),
@@ -130,124 +136,147 @@ public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(Dynamica
     /// <returns>The mapped target instance.</returns>
     public TTarget MapRuntime()
     {
+        return MapRuntimeCore(null, null, null);
+    }
+
+    /// <summary>
+    /// Executes the runtime rules using the constructor selected by the source generator.
+    /// </summary>
+    /// <param name="constructorParameterTypes">The parameter types of the selected constructor.</param>
+    /// <param name="resolveMapper">The optional resolver for nested mappers.</param>
+    /// <returns>The mapped target instance.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public TTarget MapRuntime(Type[] constructorParameterTypes, Func<Type, object?>? resolveMapper = null)
+    {
+        return MapRuntime(constructorParameterTypes, resolveMapper, null);
+    }
+
+    /// <summary>
+    /// Executes runtime rules using the constructor and initializer order selected by the generator.
+    /// </summary>
+    /// <param name="constructorParameterTypes">The parameter types of the selected constructor.</param>
+    /// <param name="resolveMapper">The optional resolver for nested mappers.</param>
+    /// <param name="initializerMembers">The members assigned in the object initializer.</param>
+    /// <returns>The mapped target instance.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public TTarget MapRuntime(Type[] constructorParameterTypes, Func<Type, object?>? resolveMapper, string[]? initializerMembers)
+    {
+        _ = constructorParameterTypes ?? throw new ArgumentNullException(nameof(constructorParameterTypes));
+        return MapRuntimeCore(constructorParameterTypes, initializerMembers, resolveMapper);
+    }
+
+    private TTarget MapRuntimeCore(Type[]? constructorParameterTypes, string[]? initializerMembers, Func<Type, object?>? resolveMapper)
+    {
         if (!HasSource)
         {
             throw new InvalidOperationException("Runtime mapping requires a source instance.");
         }
 
-        var target = CreateTarget();
-        ApplyAssignments(target);
-        return target;
+        // Keep one boxed target so reflection writes to the same struct we return.
+        object target = CreateTarget(constructorParameterTypes, resolveMapper, out var parameters)!;
+        ApplyAssignments(target, parameters, initializerMembers, resolveMapper);
+        return (TTarget)target;
     }
 
-    private TTarget CreateTarget()
+    private TTarget CreateTarget(Type[]? constructorParameterTypes, Func<Type, object?>? resolveMapper, out ParameterInfo[] boundParameters)
     {
         var targetType = typeof(TTarget);
+        boundParameters = [];
         if (targetType.IsValueType)
         {
-            return default!;
+            return Activator.CreateInstance<TTarget>();
         }
 
-        var constructors = targetType.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
-            .OrderByDescending(static constructor => constructor.GetParameters().Length);
+        var constructors = constructorParameterTypes is null
+            ? targetType.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
+                .OrderByDescending(static constructor => constructor.GetParameters().Length)
+            : new[] { targetType.GetConstructor(constructorParameterTypes)! }.AsEnumerable();
         foreach (var constructor in constructors)
         {
             var parameters = constructor.GetParameters();
+            if (constructorParameterTypes is null && parameters.Any(parameter => _ignores.Any(ignore =>
+                ignore.Condition is not null && string.Equals(ignore.TargetMember.Name, parameter.Name, StringComparison.OrdinalIgnoreCase) &&
+                ignore.Condition(Source))))
+            {
+                continue;
+            }
+
             var arguments = new object?[parameters.Length];
-            var canUseConstructor = true;
             for (var index = 0; index < parameters.Length; index++)
             {
                 var parameter = parameters[index];
-                if (TryGetIgnore(parameter.Name!, out var ignore))
+                arguments[index] = GetDefault(parameter.ParameterType);
+                if (HasActiveIgnore(parameter.Name!))
                 {
-                    if (ignore.Condition is not null && ignore.Condition(Source))
+                    continue;
+                }
+
+                foreach (var map in _maps)
+                {
+                    if (string.Equals(map.TargetMember.Name, parameter.Name, StringComparison.OrdinalIgnoreCase) &&
+                        TryGetMappedValue(map, parameter.ParameterType, resolveMapper, out var value))
                     {
-                        canUseConstructor = false;
+                        arguments[index] = value;
                         break;
                     }
-
-                    arguments[index] = GetDefault(parameter.ParameterType);
-                    continue;
                 }
-
-                if (TryGetMap(parameter.Name!, out var map))
-                {
-                    arguments[index] = ShouldRun(map) ? ConvertValueOrFallback(map, parameter.ParameterType) : GetFallback(map, parameter.ParameterType);
-                    continue;
-                }
-
-                arguments[index] = GetDefault(parameter.ParameterType);
             }
 
-            if (canUseConstructor)
-            {
-                return (TTarget)constructor.Invoke(arguments);
-            }
+            boundParameters = parameters;
+            return (TTarget)InvokeUnwrapped(constructor, null, arguments)!;
         }
 
         throw new InvalidOperationException("Target type '" + targetType.FullName + "' does not have a public constructor.");
     }
 
-    private void ApplyAssignments(TTarget target)
+    private void ApplyAssignments(object target, ParameterInfo[] parameters, string[]? initializerMembers, Func<Type, object?>? resolveMapper)
     {
-        foreach (var map in _maps)
+        IEnumerable<MappingRuleDeclaration<TSource>> maps = _maps;
+        if (initializerMembers is { Length: > 0 })
+        {
+            maps = _maps.OrderBy(map =>
+            {
+                var index = Array.IndexOf(initializerMembers, map.TargetMember.Name);
+                return index < 0 ? int.MaxValue : index;
+            });
+        }
+
+        foreach (var map in maps)
         {
             if (HasActiveIgnore(map.TargetMember.Name) ||
+                parameters.Any(parameter => string.Equals(parameter.Name, map.TargetMember.Name, StringComparison.OrdinalIgnoreCase)) ||
                 !CanAssign(map.TargetMember))
             {
                 continue;
             }
 
             var targetType = GetMemberType(map.TargetMember);
-            if (!ShouldRun(map))
+            if (TryGetMappedValue(map, targetType, resolveMapper, out var value))
             {
-                ApplyAssignmentFallback(target, map, targetType);
-                continue;
+                SetValue(target, map.TargetMember, value);
             }
-
-            var value = map.Source(Source);
-            if (ShouldIgnoreNullSource(map, value))
+            else if (map.TargetMember is PropertyInfo { SetMethod: { } setter } && IsInitOnly(setter) &&
+                (initializerMembers is null || Array.IndexOf(initializerMembers, map.TargetMember.Name) >= 0))
             {
-                ApplyAssignmentFallback(target, map, targetType);
-                continue;
+                SetValue(target, map.TargetMember, GetDefault(targetType));
             }
-
-            SetValue(target!, map.TargetMember, ConvertValue(value, targetType));
         }
     }
 
-    private bool ShouldRun(MappingRuleDeclaration<TSource> map)
+    private bool TryGetMappedValue(MappingRuleDeclaration<TSource> map, Type targetType, Func<Type, object?>? resolveMapper, out object? result)
     {
-        return map.Condition is null || map.Condition(Source);
-    }
-
-    private object? ConvertValueOrFallback(MappingRuleDeclaration<TSource> map, Type targetType)
-    {
-        var value = map.Source(Source);
-        return ShouldIgnoreNullSource(map, value)
-            ? GetFallback(map, targetType)
-            : ConvertValue(value, targetType);
-    }
-
-    private static bool ShouldIgnoreNullSource(MappingRuleDeclaration<TSource> map, object? value)
-    {
-        return value is null && map.NullHandling == ValiantNullHandling.IgnoreSourceNulls;
-    }
-
-    private object? GetFallback(MappingRuleDeclaration<TSource> map, Type targetType)
-    {
-        return map.Fallback is null ? GetDefault(targetType) : ConvertValue(map.Fallback(Source), targetType);
-    }
-
-    private void ApplyAssignmentFallback(
-        TTarget target,
-        MappingRuleDeclaration<TSource> map,
-        Type targetType)
-    {
-        if (map.Fallback is not null)
+        if (map.Condition is null || map.Condition(Source))
         {
-            SetValue(target!, map.TargetMember, ConvertValue(map.Fallback(Source), targetType));
+            var value = map.Source(Source);
+            if (value is not null || map.NullHandling != ValiantNullHandling.IgnoreSourceNulls)
+            {
+                result = ConvertValue(value, map.SourceType, targetType, resolveMapper);
+                return true;
+            }
         }
+
+        result = map.Fallback?.Invoke(Source);
+        return map.Fallback is not null;
     }
 
     private bool HasActiveIgnore(string targetName)
@@ -264,79 +293,52 @@ public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(Dynamica
         return false;
     }
 
-    private bool TryGetIgnore(string targetName, out MappingIgnoreDeclaration<TSource> ignore)
-    {
-        foreach (var candidate in _ignores)
-        {
-            if (string.Equals(candidate.TargetMember.Name, targetName, StringComparison.OrdinalIgnoreCase))
-            {
-                ignore = candidate;
-                return true;
-            }
-        }
-
-        ignore = null!;
-        return false;
-    }
-
-    private bool TryGetMap(string targetName, out MappingRuleDeclaration<TSource> map)
-    {
-        foreach (var candidate in _maps)
-        {
-            if (string.Equals(candidate.TargetMember.Name, targetName, StringComparison.OrdinalIgnoreCase))
-            {
-                map = candidate;
-                return true;
-            }
-        }
-
-        map = null!;
-        return false;
-    }
-
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Reflection mapper invocation is used only by the debuggable runtime mapping backend.")]
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Reflection mapper invocation is used only by the debuggable runtime mapping backend.")]
     [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Reflection collection mapping is used only by the debuggable runtime mapping backend.")]
     [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Reflection collection mapping is used only by the debuggable runtime mapping backend.")]
-    private object? ConvertValue(object? value, Type targetType)
+    private object? ConvertValue(object? value, Type sourceType, Type targetType, Func<Type, object?>? resolveMapper)
     {
-        if (value is null || targetType.IsInstanceOfType(value))
+        if (targetType.IsAssignableFrom(sourceType))
         {
             return value;
         }
 
-        var valueType = value.GetType();
-        if (valueType.IsEnum && targetType.IsEnum)
+        if (MappingValueConversion.TryConvert(value, sourceType, targetType, out var converted))
         {
-            return Enum.ToObject(targetType, value);
+            return converted;
         }
 
+        var mapperInterface = typeof(IMapper<,>).MakeGenericType(sourceType, targetType);
         foreach (var mapper in _mappers)
         {
-            var mapperInterface = mapper.GetType()
-                .GetInterfaces()
-                .FirstOrDefault(type => type.IsGenericType &&
-                    type.GetGenericTypeDefinition() == typeof(IMapper<,>) &&
-                    type.GetGenericArguments()[0].IsInstanceOfType(value) &&
-                    type.GetGenericArguments()[1] == targetType);
-            if (mapperInterface is null)
+            if (mapper.GetType().GetInterfaces().Contains(mapperInterface))
             {
-                continue;
+                return InvokeUnwrapped(mapperInterface.GetMethod(nameof(IMapper<object, object>.Map))!, mapper, [value]);
             }
+        }
 
-            return mapperInterface.GetMethod(nameof(IMapper<object, object>.Map))!.Invoke(mapper, [value]);
+        if (value is null)
+        {
+            return null;
+        }
+
+        if ((Nullable.GetUnderlyingType(sourceType) ?? sourceType).IsEnum &&
+            (Nullable.GetUnderlyingType(targetType) ?? targetType) is { IsEnum: true } targetEnum)
+        {
+            return Enum.ToObject(targetEnum, value);
         }
 
         if (value is IEnumerable enumerable &&
             value is not string &&
-            TryGetEnumerableElementType(valueType, out var sourceElementType) &&
+            TryGetEnumerableElementType(sourceType, out var sourceElementType) &&
             TryGetEnumerableElementType(targetType, out var targetElementType))
         {
             var listType = typeof(List<>).MakeGenericType(targetElementType);
             var list = (IList)Activator.CreateInstance(listType)!;
             foreach (var item in enumerable)
             {
-                list.Add(ConvertValue(item, targetElementType));
+                list.Add(ConvertValue(item, sourceElementType, targetElementType, resolveMapper));
             }
 
             if (targetType.IsArray)
@@ -346,10 +348,37 @@ public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(Dynamica
                 return array;
             }
 
-            return list;
+            if (targetType.IsAssignableFrom(listType))
+            {
+                return list;
+            }
+
+            var setType = typeof(HashSet<>).MakeGenericType(targetElementType);
+            return targetType.IsAssignableFrom(setType)
+                ? Activator.CreateInstance(setType, [list])
+                : list;
         }
 
-        return value;
+        var resolvedMapper = resolveMapper?.Invoke(mapperInterface);
+        if (resolvedMapper is not null)
+        {
+            if (_nestedMappingDepth >= 64)
+            {
+                throw new InvalidOperationException($"Valiant mapper recursion depth exceeded 64 while mapping source type '{sourceType.FullName}' to target type '{targetType.FullName}'. Check for cyclic object graphs or configure this member explicitly.");
+            }
+
+            _nestedMappingDepth++;
+            try
+            {
+                return InvokeUnwrapped(mapperInterface.GetMethod(nameof(IMapper<object, object>.Map))!, resolvedMapper, [value]);
+            }
+            finally
+            {
+                _nestedMappingDepth--;
+            }
+        }
+
+        throw new InvalidOperationException($"No Valiant mapper is registered for source type '{sourceType.FullName}' and target type '{targetType.FullName}'. Register mappers with AddValiantMappers or configure this member with UseMapper.");
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Reflection collection mapping is used only by the debuggable runtime mapping backend.")]
@@ -401,11 +430,15 @@ public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(Dynamica
     {
         return member switch
         {
-            PropertyInfo property => property.SetMethod is { IsPublic: true } &&
-                !property.SetMethod.ReturnParameter.GetRequiredCustomModifiers().Any(static modifier => modifier.Name == "IsExternalInit"),
-            FieldInfo field => !field.IsInitOnly,
+            PropertyInfo property => property.SetMethod is { IsPublic: true },
+            FieldInfo field => field.IsPublic && !field.IsInitOnly,
             _ => false
         };
+    }
+
+    private static bool IsInitOnly(MethodInfo setter)
+    {
+        return setter.ReturnParameter.GetRequiredCustomModifiers().Any(static modifier => modifier.Name == "IsExternalInit");
     }
 
     private static void SetValue(object target, MemberInfo member, object? value)
@@ -413,11 +446,26 @@ public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(Dynamica
         switch (member)
         {
             case PropertyInfo property:
-                property.SetValue(target, value);
+                InvokeUnwrapped(property.SetMethod!, target, [value]);
                 break;
             case FieldInfo field:
                 field.SetValue(target, value);
                 break;
+        }
+    }
+
+    private static object? InvokeUnwrapped(MethodBase method, object? target, object?[] arguments)
+    {
+        try
+        {
+            return method is ConstructorInfo constructor
+                ? constructor.Invoke(arguments)
+                : method.Invoke(target, arguments);
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException is not null)
+        {
+            ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            throw;
         }
     }
 
@@ -449,7 +497,7 @@ public readonly struct MappingRule<TSource, [DynamicallyAccessedMembers(Dynamica
     public MappingRule<TSource, TTarget, TSourceMember, TTargetMember> When(Expression<Func<TSource, bool>> predicate)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
-        _declaration.Chain.AddCondition(predicate.Compile());
+        _declaration.Chain.AddCondition(predicate.Compile(preferInterpretation: true));
         return this;
     }
 
@@ -561,7 +609,7 @@ public readonly struct MappingIgnoreRule<TSource, [DynamicallyAccessedMembers(Dy
     public MappingIgnoreRule<TSource, TTarget, TTargetMember> When(Expression<Func<TSource, bool>> predicate)
     {
         _ = predicate ?? throw new ArgumentNullException(nameof(predicate));
-        _declaration.Chain.AddCondition(predicate.Compile());
+        _declaration.Chain.AddCondition(predicate.Compile(preferInterpretation: true));
         return this;
     }
 

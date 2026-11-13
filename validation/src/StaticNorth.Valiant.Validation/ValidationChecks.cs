@@ -6,6 +6,35 @@ namespace StaticNorth.Valiant.Validation;
 public static class ValidationChecks
 {
     /// <summary>
+    /// Reads a nested property selector, treating a null reference during the read as an unavailable path.
+    /// </summary>
+    /// <param name="instance">The instance to read.</param>
+    /// <param name="selector">The nested property selector.</param>
+    /// <param name="value">The selected value when the path is available.</param>
+    /// <returns>Whether the property could be read.</returns>
+    public static bool TryReadNestedProperty<T, TProperty>(T instance, Func<T, TProperty> selector, out TProperty value)
+    {
+        try
+        {
+            value = selector(instance);
+            return true;
+        }
+        catch (NullReferenceException)
+        {
+            value = default!;
+            return false;
+        }
+    }
+
+    /// <summary>Checks whether a value is the default for its type or contains only whitespace.</summary>
+    public static bool IsRequiredValueMissing<T>(T value)
+    {
+        return value is string text
+            ? string.IsNullOrWhiteSpace(text)
+            : EqualityComparer<T>.Default.Equals(value, default!);
+    }
+
+    /// <summary>
     /// Determines whether an enum value is defined by its enum type. Null values are treated as valid.
     /// </summary>
     /// <param name="value">The enum value to inspect.</param>

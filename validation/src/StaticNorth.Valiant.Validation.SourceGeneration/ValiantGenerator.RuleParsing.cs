@@ -516,7 +516,7 @@ public sealed partial class ValiantGenerator
                 ParseStatements(block.Statements, itemScope, semanticModel, cancellationToken, parsedNodes, diagnostics);
                 break;
             case InvocationExpressionSyntax nestedInvocation:
-                ParseStatement(SyntaxFactory.ExpressionStatement(nestedInvocation), itemScope, semanticModel, cancellationToken, parsedNodes, diagnostics);
+                ParseInvocation(nestedInvocation, itemScope, semanticModel, cancellationToken, parsedNodes, diagnostics);
                 break;
             default:
                 diagnostic = new DiagnosticInfo(
@@ -635,7 +635,7 @@ public sealed partial class ValiantGenerator
                 ParseStatements(block.Statements, childScope, semanticModel, cancellationToken, parsedNodes, diagnostics);
                 break;
             case InvocationExpressionSyntax nestedInvocation:
-                ParseStatement(SyntaxFactory.ExpressionStatement(nestedInvocation), childScope, semanticModel, cancellationToken, parsedNodes, diagnostics);
+                ParseInvocation(nestedInvocation, childScope, semanticModel, cancellationToken, parsedNodes, diagnostics);
                 break;
             default:
                 diagnostic = new DiagnosticInfo(
@@ -900,9 +900,6 @@ public sealed partial class ValiantGenerator
         severity = null;
         diagnostic = null;
 
-        _ = semanticModel;
-        _ = cancellationToken;
-
         var arguments = ImmutableArray.CreateBuilder<ArgumentSyntax>();
         foreach (var argument in call.Arguments)
         {
@@ -945,7 +942,7 @@ public sealed partial class ValiantGenerator
                         return false;
                     }
 
-                    severity = RewriteForValidation(argument.Expression, scope);
+                    severity = RewriteSeverity(argument.Expression, scope, semanticModel, cancellationToken);
                     break;
 
                 default:
@@ -1002,7 +999,7 @@ public sealed partial class ValiantGenerator
                 return false;
             }
 
-            severity = RewriteForValidation(arguments[requiredArgumentCount + 2].Expression, scope);
+            severity = RewriteSeverity(arguments[requiredArgumentCount + 2].Expression, scope, semanticModel, cancellationToken);
         }
 
         if (arguments.Count < requiredArgumentCount)
@@ -1022,6 +1019,18 @@ public sealed partial class ValiantGenerator
 
         validationArguments = validationArgumentBuilder.ToImmutable();
         return true;
+    }
+
+    private static string RewriteSeverity(
+        ExpressionSyntax expression,
+        ParseScope scope,
+        SemanticModel semanticModel,
+        CancellationToken cancellationToken)
+    {
+        return semanticModel.GetConstantValue(expression, cancellationToken) is { HasValue: true, Value: int value } &&
+            GetKnownSeverityExpression(value) is { } known
+            ? known
+            : RewriteForValidation(expression, scope);
     }
 
     private static bool TryCreateCustomCheck(

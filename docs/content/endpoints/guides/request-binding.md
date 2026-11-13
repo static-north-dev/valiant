@@ -22,7 +22,15 @@ Changing the literal between `true` and `false` adds or removes generated query 
 
 :::
 
-When enabled, Valiant connects its configurable query parser to generated endpoints in three binding shapes.
+When enabled, Valiant connects its configurable query parser to generated endpoints in three binding shapes. You can use an inline handler or pass a named handler directly as a method group, such as `builder.MapGet("/cars", Handle)`.
+
+Use **whole-request binding** for complex queries that need consistent format handling and structured errors.
+
+| Binding shape | Query policy | HTTP 400 response |
+| --- | --- | --- |
+| Whole request | Global or per-endpoint policy for arrays, objects, and JSON | Structured query errors |
+| `[AsParameters]` | Global or per-endpoint policy after native binding succeeds | Structured query errors for the Valiant pass. ASP.NET Core handles native binding failures. |
+| Direct complex `[FromQuery]` | Compile-time JSON policy for the generated parser | ASP.NET Core binding response |
 
 ## Whole request binding
 
@@ -38,7 +46,11 @@ public sealed partial record ListCarsRequest
     public CarFilter? Filter { get; init; }
 }
 
-public sealed record CarFilter(int? Year, string? Brand);
+public sealed record CarFilter
+{
+    public int? Year { get; init; }
+    public string? Brand { get; init; }
+}
 ```
 
 Valiant emits `BindAsync(HttpContext, ParameterInfo)` on `ListCarsRequest` and parses the full query through the configured policy.
@@ -58,13 +70,17 @@ public sealed record ListCarsRequest
     public CarFilter? Filter { get; init; }
 }
 
-public sealed partial record CarFilter(int? Year, string? Brand);
+public sealed partial record CarFilter
+{
+    public int? Year { get; init; }
+    public string? Brand { get; init; }
+}
 ```
 
 The complex `[FromQuery]` type must be `partial` in this shape. Valiant generates a `TryParse(string, out T)` shim because ASP.NET Core checks property bindability before endpoint filters run.
 The same containing-type rule applies when that complex type is nested.
 
-The Valiant filter runs after native property binding, so it cannot recover from a format that makes ASP.NET Core fail the initial property conversion. For example, comma-separated `?ids=1,2,3` fails before the filter for an `int[] Ids` property. Use generated whole-request binding when every configured format must work without native `[AsParameters]` constraints.
+The Valiant filter reparses the query only after native parameter binding succeeds. For example, ASP.NET Core rejects comma-separated `?ids=1,2,3` for an `int[] Ids` property and controls the resulting HTTP response. Use generated whole-request binding when every configured format must work without native `[AsParameters]` constraints.
 
 ## Direct complex `[FromQuery]`
 
@@ -93,7 +109,7 @@ The policy is compiled into the generated method, so direct binding does not use
 
 ## Failure response
 
-Generated binders and the Valiant query-binding filter return HTTP 400 with structured `QueryError` entries when values cannot be converted or a client uses a disabled format. Each entry identifies a `Path`, stable `Code`, human-readable `Message`, and `Kind` (`Validation` or `Configuration`).
+Whole-request binders on mapped Valiant endpoints and the Valiant `[AsParameters]` filter return HTTP 400 with structured `QueryError` entries when values cannot be converted or a client uses a disabled format. Each entry identifies a `Path`, stable `Code`, human-readable `Message`, and `Kind` (`Validation` or `Configuration`).
 
 ## Configure accepted formats
 

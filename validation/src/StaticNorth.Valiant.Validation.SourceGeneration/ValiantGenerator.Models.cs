@@ -35,7 +35,8 @@ public sealed partial class ValiantGenerator
         ImmutableArray<string> usings,
         ImmutableArray<ValidationNode> nodes,
         ImmutableArray<DiagnosticInfo> diagnostics,
-        string fingerprint)
+        string fingerprint,
+        bool generateSimpleFluent = false)
     {
         public ValidatorDeclarationModel Declaration { get; } = declaration;
 
@@ -50,6 +51,8 @@ public sealed partial class ValiantGenerator
         public bool ImplementsValidatorDefinition { get; } = implementsValidatorDefinition;
 
         public bool HasConfigureMethod { get; } = hasConfigureMethod;
+
+        public bool UsesRuntimeValidation => HasConfigureMethod && !generateSimpleFluent;
 
         public bool RegisterAsDefault { get; } = registerAsDefault;
 
@@ -275,11 +278,14 @@ public sealed partial class ValiantGenerator
 
     private sealed class SwitchNode(
         string expression,
-        ImmutableArray<SwitchSectionModel> sections) : ValidationNode
+        ImmutableArray<SwitchSectionModel> sections,
+        string? label) : ValidationNode
     {
         public string Expression { get; } = expression;
 
         public ImmutableArray<SwitchSectionModel> Sections { get; } = sections;
+
+        public string? Label { get; } = label;
     }
 
     private sealed class SwitchSectionModel(
@@ -295,7 +301,8 @@ public sealed partial class ValiantGenerator
         string kind,
         string? header,
         string? condition,
-        ImmutableArray<ValidationNode> nodes) : ValidationNode
+        ImmutableArray<ValidationNode> nodes,
+        string? label) : ValidationNode
     {
         public string Kind { get; } = kind;
 
@@ -304,11 +311,15 @@ public sealed partial class ValiantGenerator
         public string? Condition { get; } = condition;
 
         public ImmutableArray<ValidationNode> Nodes { get; } = nodes;
+
+        public string? Label { get; } = label;
     }
 
-    private sealed class FlowControlNode(string kind) : ValidationNode
+    private sealed class FlowControlNode(string kind, string? label) : ValidationNode
     {
         public string Kind { get; } = kind;
+
+        public string? Label { get; } = label;
     }
 
     private sealed class FailureBehaviorNode(string behaviorExpression) : ValidationNode

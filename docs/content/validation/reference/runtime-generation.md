@@ -1,6 +1,6 @@
 ---
 title: Runtime and generation
-description: Validator APIs, modes, failure behavior, DI lifetime, generator scope, and diagnostics.
+description: Validator APIs, modes, Runtime Async opt-in, failure behavior, DI lifetime, generator scope, and diagnostics.
 ---
 
 # Runtime and generation
@@ -18,6 +18,20 @@ ValueTask<bool> IsValidAsync(T instance, CancellationToken cancellationToken = d
 
 Use async APIs whenever a validator graph can contain async predicates or async property validators.
 
+## Opt in to Runtime Async on .NET 11
+
+With the existing Valiant NuGet package reference, add this to the `.csproj` that declares your `[ValiantValidator]` classes. If your validators live in a class library, configure that library. The condition enables the compiler feature for `net11.0` builds, including in a multi-targeted project.
+
+```xml title="YourProject.csproj"
+<PropertyGroup Condition="'$(TargetFramework)' == 'net11.0'">
+  <Features>$(Features);runtime-async=on</Features>
+</PropertyGroup>
+```
+
+Rebuild the project to apply the setting. The NuGet package delivers the Valiant source generator, which emits validator code during your build. The compiler flag applies to eligible async methods in that project, including generated `ValidateAsync` and `IsValidAsync` methods and your own async code. Precompiled Valiant assemblies, including the ASP.NET Core endpoint filter and the validation runtime, use the settings from their own builds.
+
+See [Microsoft’s Runtime Async documentation](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-11/runtime#runtime-async) for the compiler feature details.
+
 ## Options
 
 | Option | Values | Default |
@@ -26,20 +40,20 @@ Use async APIs whenever a validator graph can contain async predicates or async 
 | `FailureBehavior` | `ValidateAll`, `FailFast` | `ValidateAll` |
 | `Lifetime` | `Scoped`, `Transient`, `Singleton` | `Scoped` |
 
-`Auto` uses the runtime, debuggable backend in Debug builds and generated fast code otherwise. `Debuggable` lets you step through `Configure`; `Fast` always uses direct generated checks.
+All modes execute the same rules in the same order and propagate the same exceptions. `Auto` and `Fast` use generated checks for eligible straight-line fluent validators in Debug and Release builds. Set `Mode` to `Debuggable` to step through the original `Configure` method. Attribute validators always use generated checks, and fluent validators outside the generated subset always run `Configure`.
 
 Choose validator lifetime based on constructor dependencies. A singleton validator must not capture scoped services.
 
 ## Result model
 
-`ValidationResult` exposes all failures as well as `Errors`, `Warnings`, and `Infos`. Only error severity makes `IsValid` false. Each `ValidationFailure` includes `PropertyName`, `ErrorCode`, `ErrorMessage`, and `Severity`.
+`ValidationResult` exposes all failures as well as `Errors`, `Warnings`, and `Infos`. Each `ValidationFailure` includes `PropertyName`, `ErrorCode`, `ErrorMessage`, and `Severity`. Errors and unknown severity values make the result invalid.
 
-Results are immutable and do not need disposal. In `Fast` mode, simple validators
-with at most six checks and fixed default failure content reuse results after
-each failure combination is first seen. All checks still run on every call.
-Reuse is bounded to 63 nonempty combinations per validator type. Custom diagnostic
-expressions, culture-dependent messages, composition, async checks, and larger
-validators keep the owned-result path.
+`IsValid()` and `IsValidAsync()` execute the same rules, diagnostic expressions, and reused validators as the full result APIs. The fluent runtime returns the validity of the collected failures directly.
+
+Results are immutable and do not need disposal. Generated validators with at
+most six checks and fixed default failure content can reuse a result for each
+failure combination. Each call evaluates the applicable rules again. Reuse is
+bounded to 63 nonempty combinations per validator type.
 
 ## Generator scope
 
