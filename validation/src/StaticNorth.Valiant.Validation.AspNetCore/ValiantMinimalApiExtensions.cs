@@ -13,6 +13,9 @@ namespace StaticNorth.Valiant.Validation.AspNetCore;
 /// </summary>
 public static class ValiantMinimalApiExtensions
 {
+    private static readonly ConditionalWeakTable<IServiceProvider, IReadOnlyDictionary<Type, ValidationTypePlan>>
+        GeneratedPlansByHost = new();
+
     /// <summary>
     /// Adds an endpoint filter that validates each non-null endpoint argument with Valiant validators
     /// registered for its exact declared parameter type.
@@ -146,21 +149,14 @@ public static class ValiantMinimalApiExtensions
         var candidates = new List<ValidationCandidate>(parameters.Length);
         var typePlans = new List<ValidationTypePlan>();
         var typePlanIndices = new Dictionary<Type, int>();
-        var generatedInvokers = GetGeneratedInvokers(applicationServices);
+        var generatedPlans = GeneratedPlansByHost.GetValue(applicationServices, CreateGeneratedPlans);
 
         for (var index = 0; index < parameters.Length; index++)
         {
             var type = parameters[index].ParameterType;
             if (!typePlanIndices.TryGetValue(type, out var typePlanIndex))
             {
-                ValidationTypePlan? typePlan;
-                if (generatedInvokers.TryGetValue(type, out var generatedInvoker))
-                {
-                    typePlan = new ValidationTypePlan(
-                        generatedInvoker.ResolveValidators,
-                        generatedInvoker.ValidateAsync);
-                }
-                else
+                if (!generatedPlans.TryGetValue(type, out var typePlan))
                 {
                     typePlan = CreateDynamicValidationTypePlanIfSupported(type);
                 }
@@ -181,16 +177,16 @@ public static class ValiantMinimalApiExtensions
         return new ValidationPlan(candidates.ToArray(), typePlans.ToArray());
     }
 
-    private static Dictionary<Type, IValiantValidatorInvoker> GetGeneratedInvokers(
+    private static IReadOnlyDictionary<Type, ValidationTypePlan> CreateGeneratedPlans(
         IServiceProvider applicationServices)
     {
-        var generatedInvokers = new Dictionary<Type, IValiantValidatorInvoker>();
+        var plans = new Dictionary<Type, ValidationTypePlan>();
         foreach (var invoker in applicationServices.GetServices<IValiantValidatorInvoker>())
         {
-            _ = generatedInvokers.TryAdd(invoker.ModelType, invoker);
+            _ = plans.TryAdd(invoker.ModelType, new ValidationTypePlan(invoker.ResolveValidators, invoker.ValidateAsync));
         }
 
-        return generatedInvokers;
+        return plans;
     }
 
     [UnconditionalSuppressMessage(

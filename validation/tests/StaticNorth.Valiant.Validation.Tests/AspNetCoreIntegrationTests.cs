@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using StaticNorth.Valiant.Validation.AspNetCore;
+using StaticNorth.Valiant.Validation.Infrastructure;
 
 namespace StaticNorth.Valiant.Validation.Tests;
 
@@ -61,6 +62,30 @@ public sealed class AspNetCoreIntegrationTests
             .WithValiantValidation();
 
         await Assert.That(app).IsNotNull();
+    }
+
+    [Test]
+    public async Task Generated_Validation_Plans_Are_Shared_Only_Within_The_Same_Host()
+    {
+        var resolutions = 0;
+        for (var host = 1; host <= 2; host++)
+        {
+            var builder = WebApplication.CreateBuilder();
+            builder.Services.AddTransient<IValiantValidatorInvoker>(_ =>
+            {
+                resolutions++;
+                return new ValiantValidatorInvoker<string>();
+            });
+
+            await using var app = builder.Build();
+            app.MapGet("/first", (string value) => value).WithValiantValidation();
+            app.MapGet("/second", (string value) => value).WithValiantValidation();
+
+            var endpoints = ((IEndpointRouteBuilder)app).DataSources
+                .SelectMany(static source => source.Endpoints).ToArray();
+            await Assert.That(endpoints.Length).IsEqualTo(2);
+            await Assert.That(resolutions).IsEqualTo(host);
+        }
     }
 
     [Test]
