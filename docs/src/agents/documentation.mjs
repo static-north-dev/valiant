@@ -11,7 +11,7 @@ export const contentSignal = 'search=yes, ai-input=yes';
 
 const filterProperties = {
   module: {type: 'string', enum: moduleNames, description: 'Limit results to one Valiant module.'},
-  version: {type: 'string', maxLength: 32, description: 'Documentation version. Defaults to the latest published major; use current explicitly for development docs.'},
+  version: {type: 'string', maxLength: 32, description: 'Documentation version. Defaults to the latest published major. Use a version advertised by list_documents.'},
 };
 
 export const documentationTools = [

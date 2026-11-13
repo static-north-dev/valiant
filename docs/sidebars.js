@@ -34,6 +34,8 @@ const sidebars = {
         'endpoints/guides/groups-conventions',
         'endpoints/guides/conditional-registration',
         'endpoints/guides/request-binding',
+        'endpoints/guides/validated-api',
+        'endpoints/guides/upgrading-from-preview',
       ],
     },
     {

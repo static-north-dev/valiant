@@ -53,15 +53,6 @@ See the
 [runnable configuration sample](../samples.md#configuration-hooks)
 for two grouped routes where a group hook adds a shared response header and an endpoint hook adds a second header only to the selected endpoint.
 
-## Migrating the earlier preview hooks
-
-The earlier preview exposed three callbacks. Consolidate them as follows:
-
-- Move both `ConfigureAllEndpointGroupsBeforeMapping` and `ConfigureAllEndpointGroupsAfterMapping` conventions into `ConfigureEndpointGroup`.
-- Replace `ConfigureAllEndpointsAfterMapping` with `ConfigureEndpoint`.
-- Replace callback `Type` parameters with `registration.GroupType` or `registration.EndpointType`.
-- Move any callback that returned `group.MapGroup(...)` into `IEndpointGroup.CreateGroup(...)`.
-
 ## Ordering
 
 Set `Order` on endpoint and group marker attributes when one generated mapping must precede another:
@@ -76,3 +67,5 @@ Types with the same order are sorted by type name, keeping generated output dete
 ## Standalone endpoints
 
 `[ValiantEndpoint]` without a group maps directly on the supplied root route builder. The same `ConfigureEndpoint` hook and `MapEndpointWhen` registration policy apply; its registration has `Group == null`.
+
+See [Upgrading Endpoints from preview](./upgrading-from-preview.md) for the earlier convention hooks.

@@ -88,6 +88,8 @@ const config = {
           position: 'left',
           className: 'navbar-version-selector',
         },
+        {to: '/search', label: 'Search', position: 'right'},
+        {href: 'https://github.com/static-north-dev/valiant', label: 'GitHub', position: 'right'},
       ],
     },
     footer: {

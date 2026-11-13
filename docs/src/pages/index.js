@@ -38,40 +38,20 @@ const modules = [
   },
 ];
 
-function SourceFlow() {
+function GeneratedExample() {
   return (
-    <div className={styles.flow} aria-label="Valiant source generation flow">
-      <div className={styles.flowHeader}>
-        <span>compile.pipeline</span>
-        <span className={styles.flowStatus}>4 generators ready</span>
-      </div>
+    <figure className={styles.flow}>
+      <figcaption className={styles.flowHeader}>Generated mapping example</figcaption>
       <div className={styles.flowBody}>
-        <div className={styles.declarations}>
-          <span className={styles.flowLabel}>explicit C# declarations</span>
-          <div className={styles.declarationGrid}>
-            {modules.map((module) => (
-              <Link
-                className={`${styles.declaration} ${styles[module.key]}`}
-                to={module.href}
-                key={module.key}>
-                <span className={styles.declarationModule}>{module.label}</span>
-                <code>{module.marker}</code>
-              </Link>
-            ))}
-          </div>
-        </div>
-        <div className={styles.compileStep}>
-          <span>incremental source generation</span>
-        </div>
-        <div className={styles.generated}>
-          <span className={styles.generatedLabel}>outputs across the Valiant family</span>
-          <div><i /> Generated C#</div>
-          <div><i /> Typed contracts</div>
-          <div><i /> Registration where applicable</div>
-          <div><i /> Build-time diagnostics</div>
-        </div>
+        <p className={styles.flowLabel}>You declare the mapping pair</p>
+        <pre><code>{`[ValiantMapper]
+public sealed partial class OrderMapper
+    : MapperDefinition<Order, OrderDto>;`}</code></pre>
+        <p className={styles.flowLabel}>Valiant generates the Map method</p>
+        <pre><code>{`// Constructor mapping in Fast mode
+return new OrderDto(source.Id, source.Total);`}</code></pre>
       </div>
-    </div>
+    </figure>
   );
 }
 
@@ -81,23 +61,22 @@ function HomepageHeader() {
       <div className={styles.heroGrid} aria-hidden="true" />
       <div className="container">
         <div className={styles.heroLayout}>
-          <div className={styles.heroCopy}>
-            <p className={styles.eyebrow}>Source-generated .NET building blocks</p>
-            <Heading as="h1">Compile the repetitive.<br /><span>Keep the intent.</span></Heading>
+          <div>
+            <Heading as="h1">Source-generated<br /><span>.NET libraries</span></Heading>
             <p className={styles.lede}>
-              Valiant turns explicit C# declarations into fast validation, endpoints,
-              mapping, and settings infrastructure—with no runtime assembly scanning.
+              Define validation, Minimal API endpoints, object mapping, and settings in C#.
+              Valiant generates typed implementations, registration, and build-time diagnostics.
             </p>
             <div className={styles.actions}>
               <a className={styles.primaryAction} href="#modules">
                 Explore the generators <span aria-hidden="true">→</span>
               </a>
-              <a className={styles.secondaryAction} href="#approach">
-                Why source generation
-              </a>
+              <Link className={styles.secondaryAction} to="/validation/reference/packages">
+                Packages and compatibility
+              </Link>
             </div>
           </div>
-          <SourceFlow />
+          <GeneratedExample />
         </div>
       </div>
     </header>
@@ -115,8 +94,8 @@ export default function Home() {
           <div className="container">
             <div className={styles.sectionHeading}>
               <p className={styles.eyebrow}>Four focused modules</p>
-              <Heading as="h2">Choose the contract your code needs.</Heading>
-              <p>Each package stands on its own. Together, they share one design: explicit discovery, generated hot paths, and ordinary C# APIs.</p>
+              <Heading as="h2">Choose a module</Heading>
+              <p>Use any module on its own, or combine them in one application.</p>
             </div>
             <div className={styles.moduleGrid}>
               {modules.map((module) => (
@@ -137,14 +116,11 @@ export default function Home() {
           </div>
         </section>
 
-        <section className={styles.principles} id="approach">
+        <section className={styles.principles}>
           <div className="container">
-            <div className={styles.principleGrid}>
-              <div><span>01</span><strong>Scoped discovery</strong><p>Markers define exactly what generators inspect.</p></div>
-              <div><span>02</span><strong>Direct output</strong><p>Generated C# keeps production paths predictable.</p></div>
-              <div><span>03</span><strong>Ordinary C# authoring</strong><p>Declarations stay explicit, typed, and easy to navigate.</p></div>
-              <div><span>04</span><strong>Build-time feedback</strong><p>Diagnostics catch unsupported shapes before runtime.</p></div>
-            </div>
+            <Heading as="h2">See the modules together</Heading>
+            <p>Build a Minimal API that binds configuration, validates a request, and maps a response.</p>
+            <Link to="/endpoints/guides/validated-api">Build a validated API</Link>
           </div>
         </section>
       </main>

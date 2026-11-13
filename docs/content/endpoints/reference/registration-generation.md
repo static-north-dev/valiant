@@ -1,6 +1,6 @@
 ---
 title: Registration, generation, and diagnostics
-description: Assembly registration, generated mapping, generator scope, ordering, and diagnostics.
+description: Assembly registration, Native AOT, generated mapping, ordering, and diagnostics.
 ---
 
 # Registration, generation, and diagnostics
