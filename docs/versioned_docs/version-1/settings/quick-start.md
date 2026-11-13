@@ -5,22 +5,21 @@ description: Install StaticNorth.Valiant.Settings, generate a schema, and option
 
 # Quick start
 
-## 1. Choose a package
+## 1. Create a project and install Valiant
+
+Use the **.NET 10.0.400 SDK or newer** to build this example with Valiant 1.2.1. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
 
 ```bash
-# Schema generation and optional Options binding
-dotnet add package StaticNorth.Valiant.Settings
-
-# Or install a specific integration
-dotnet add package StaticNorth.Valiant.Settings.AspNetCore
-dotnet add package StaticNorth.Valiant.Settings.Validation
+dotnet new web -n SettingsDemo -f net8.0
+cd SettingsDemo
+dotnet add package StaticNorth.Valiant.Settings --version 1.2.1
 ```
 
-Specific integration packages forward the core runtime, build, and generator assets they depend on. Add multiple integration packages only when the application uses multiple integrations.
+For the [settings explorer](./guides/aspnetcore-ui.md), choose `StaticNorth.Valiant.Settings.AspNetCore`. For [Options validation](./guides/binding-validation.md), choose `StaticNorth.Valiant.Settings.Validation`. Both integrations bring in the core package and its generator.
 
 ## 2. Mark a settings model
 
-```csharp
+```csharp title="MailSettings.cs"
 using StaticNorth.Valiant.Settings;
 
 [ValiantSettings("Mail", configure: true)]
@@ -36,31 +35,35 @@ public sealed record MailSettings
 
 The section path is required. `configure: true` opts this model into generated Options binding; omit it for schema-only metadata.
 
-## 3. Register generated settings
+## 3. Add configuration
 
-```csharp
-using StaticNorth.Valiant.Settings.DependencyInjection;
+Add the `Mail` section to `appsettings.json`:
 
-builder.Services.AddValiantSettings(builder.Configuration);
-```
-
-The generated extension binds opted-in models and registers every generated schema provider.
-
-## 4. Consume the options
-
-```csharp
-public sealed class MailSender(IOptions<MailSettings> options)
+```json title="appsettings.json"
 {
-    private readonly MailSettings _settings = options.Value;
+  "Mail": {
+    "Host": "smtp.example.com"
+  }
 }
 ```
 
-Or enumerate schemas:
+## 4. Register and read the options
 
-```csharp
-IEnumerable<IValiantSettingsSchemaProvider> schemas =
-    provider.GetServices<IValiantSettingsSchemaProvider>();
+Replace the contents of `Program.cs`:
+
+```csharp title="Program.cs"
+using Microsoft.Extensions.Options;
+using StaticNorth.Valiant.Settings.DependencyInjection;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddValiantSettings(builder.Configuration);
+
+await using var app = builder.Build();
+var settings = app.Services.GetRequiredService<IOptions<MailSettings>>().Value;
+Console.WriteLine($"{settings.Host}:{settings.Port}");
 ```
+
+Run `dotnet run --no-launch-profile`. The output is `smtp.example.com:587`. The generated extension binds the opted-in model and registers its schema provider. In a web application, inject `IOptions<MailSettings>` where you use the settings.
 
 Next: learn how nested models and collections appear in [Schema generation](./guides/schema-generation.md).
 

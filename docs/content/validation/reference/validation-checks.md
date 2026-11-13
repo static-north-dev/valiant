@@ -12,10 +12,11 @@ All checks accept optional `code`, `message`, and `severity`. Nullable value che
 | Check | Purpose |
 | --- | --- |
 | `NotNull()` / `Null()` | Require presence or absence |
-| `Required()` | Require a non-null value and, for strings/collections, non-empty content |
+| `Required()` | Reject null, empty, or whitespace-only strings. For other types, reject the default value. A non-null empty collection passes. |
 | `NotEmpty()` / `Empty()` | Require content or emptiness |
 | `Equal(value)` / `NotEqual(value)` | Compare with an expected value |
-| `Satisfies(predicate)` | Apply a custom sync or async predicate |
+| `Satisfies(predicate)` | Apply a custom synchronous predicate |
+| `SatisfiesAsync(predicate)` | Apply a custom asynchronous predicate via `ValidateAsync` or `IsValidAsync` |
 | `UseValidator(validator)` | Delegate to a reusable property validator |
 
 ## Comparable values

@@ -10,7 +10,7 @@ description: Native branches, nested objects, collections, reusable root validat
 Validator configuration supports native `if`/`else`, `switch`, loops, and `foreach`:
 
 ```csharp
-public void Configure(ValidationContext<CreateOrder> context)
+public override void Configure(ValidationContext<CreateOrder> context)
 {
     if (context.Instance.RequiresApproval)
     {
@@ -63,8 +63,20 @@ Failures include indexed paths such as `Lines[0].Sku`.
 
 ## Reuse a root validator
 
+Both validators must validate the same model type. Mark the reusable validator with `RegisterAsDefault = false` so it can be injected by concrete type while the outer validator remains the default `IValidator<Checkout>`.
+
 ```csharp
-public sealed partial class CheckoutValidator(AddressValidator addressValidator)
+[ValiantValidator(RegisterAsDefault = false)]
+public sealed partial class CheckoutAddressValidator : ValidatorDefinition<Checkout>
+{
+    public override void Configure(ValidationContext<Checkout> context)
+    {
+        context.Property(value => value.ShippingAddress).Required();
+    }
+}
+
+[ValiantValidator]
+public sealed partial class CheckoutValidator(CheckoutAddressValidator addressValidator)
     : ValidatorDefinition<Checkout>
 {
     public override void Configure(ValidationContext<Checkout> context)
