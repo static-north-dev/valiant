@@ -16,6 +16,8 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
     private const int DictionaryLookupThreshold = 8;
     private const string SettingsAttributeMetadataName = "StaticNorth.Valiant.Settings.ValiantSettingsAttribute";
     private const string SecretAttributeMetadataName = "StaticNorth.Valiant.Settings.ValiantSecretAttribute";
+    private const string ConfigurationKeyNameAttribute = "Microsoft.Extensions.Configuration.ConfigurationKeyNameAttribute";
+    private const string ConfigurationIgnoreAttribute = "Microsoft.Extensions.Configuration.ConfigurationIgnoreAttribute";
 
     private static readonly SymbolDisplayFormat SourceTypeDisplayFormat = SymbolDisplayFormat.FullyQualifiedFormat;
 
@@ -485,10 +487,15 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
                 cancellationToken.ThrowIfCancellationRequested();
                 if (member is IPropertySymbol property && names.Add(property.Name) && IsSettingsProperty(property))
                 {
+                    if (!TryGetConfigurationKey(property, out var configurationKey))
+                    {
+                        continue;
+                    }
+
                     properties.Add(CreatePropertyModel(
                         property.Type,
                         property.Name,
-                        property.Name,
+                        configurationKey,
                         property.IsRequired,
                         HasSecretAttribute(property),
                         visitedTypes,
@@ -503,6 +510,33 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
     private static bool IsSettingsProperty(IPropertySymbol property)
     {
         return property is { IsStatic: false, Parameters.Length: 0, GetMethod.DeclaredAccessibility: Accessibility.Public, DeclaredAccessibility: Accessibility.Public };
+    }
+
+    private static bool TryGetConfigurationKey(IPropertySymbol property, out string key)
+    {
+        key = property.Name;
+
+        // ConfigurationBinder uses the base definition of a virtual property setter.
+        while (property.SetMethod is { IsOverride: true } && property.OverriddenProperty is { } overridden)
+        {
+            property = overridden;
+        }
+
+        foreach (var attribute in property.GetAttributes())
+        {
+            switch (attribute.AttributeClass?.ToDisplayString())
+            {
+                case ConfigurationIgnoreAttribute:
+                    return false;
+                case ConfigurationKeyNameAttribute when attribute.ConstructorArguments.Length == 1 &&
+                    attribute.ConstructorArguments[0].Value is string alias &&
+                    !string.IsNullOrWhiteSpace(alias):
+                    key = alias;
+                    break;
+            }
+        }
+
+        return true;
     }
 
     private static SettingsPropertyModel CreatePropertyModel(

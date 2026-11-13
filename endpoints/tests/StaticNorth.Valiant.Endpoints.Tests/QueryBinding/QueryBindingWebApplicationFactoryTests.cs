@@ -200,6 +200,22 @@ public sealed class QueryBindingWebApplicationFactoryTests(
     QueryBindingTestApplicationFactory factory)
 {
     [Test]
+    public async Task Query_Filter_Preserves_AspNetCore_Binding_Failure()
+    {
+        using var client = factory.CreateClient();
+        const string path = "/integration/as-parameters/binding-failure/";
+        const string invalidQuery = "?filter%5Bid%5D=1";
+
+        using var invalidRoute = await client.GetAsync(path + "invalid" + invalidQuery);
+        await Assert.That(invalidRoute.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(await invalidRoute.Content.ReadAsStringAsync()).IsEqualTo(string.Empty);
+
+        using var validRoute = await client.GetAsync(path + "1" + invalidQuery);
+        await Assert.That(validRoute.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(await validRoute.Content.ReadAsStringAsync()).Contains("DisabledQueryObjectFormat");
+    }
+
+    [Test]
     public async Task Test_Application_Starts_And_Maps_Generated_Endpoints()
     {
         using var client = factory.CreateClient();

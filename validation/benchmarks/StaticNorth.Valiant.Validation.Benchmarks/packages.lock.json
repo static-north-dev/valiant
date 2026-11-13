@@ -26,8 +26,7 @@
         "resolved": "1.3.0",
         "contentHash": "EwN7QaXjyRby8cKDabRxVJW+6eYGMAE87W8XDkzQ2+k6S8zYmjLpsN/FSd/Ci/dMnnaLYiR36SZ5YbbTmLE9RQ==",
         "dependencies": {
-          "Microsoft.Bcl.AsyncInterfaces": "8.0.0",
-          "Microsoft.Extensions.ObjectPool": "8.0.25"
+          "Microsoft.Bcl.AsyncInterfaces": "8.0.0"
         }
       },
       "Validly.Extensions.Validators": {
@@ -131,11 +130,6 @@
           "Microsoft.Diagnostics.NETCore.Client": "0.2.510501"
         }
       },
-      "Microsoft.Extensions.ObjectPool": {
-        "type": "Transitive",
-        "resolved": "8.0.25",
-        "contentHash": "uRU3krAGwHQAWXrAVbKRHhXUs9SQAx32Ys09QnLzpk7GSj48YrmM1MIIFUdv0wHRkDxuLFr8G6yDCV2qINSyuQ=="
-      },
       "Microsoft.Identity.Client": {
         "type": "Transitive",
         "resolved": "4.83.1",
@@ -191,6 +185,12 @@
       },
       "staticnorth.valiant.validation": {
         "type": "Project"
+      },
+      "staticnorth.valiant.validation.aspnetcore": {
+        "type": "Project",
+        "dependencies": {
+          "StaticNorth.Valiant.Validation": "[0.1.0-preview.1, )"
+        }
       },
       "Microsoft.CodeAnalysis.CSharp": {
         "type": "CentralTransitive",

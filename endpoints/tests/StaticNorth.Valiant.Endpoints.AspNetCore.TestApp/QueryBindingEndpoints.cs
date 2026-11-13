@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
 namespace StaticNorth.Valiant.Endpoints.AspNetCore.TestApp;
@@ -142,8 +143,19 @@ public sealed class AsParametersGlobalObjectEndpoint : IEndpoint
     {
         return builder.MapGet(
             "/integration/as-parameters/object/global",
-            ([AsParameters] AsParametersObjectRequest request) => TypedResults.Ok(request));
+            Handle);
     }
+
+    private static Ok<AsParametersObjectRequest> Handle([AsParameters] AsParametersObjectRequest request)
+        => TypedResults.Ok(request);
+}
+
+[ValiantEndpoint]
+public sealed class QueryBindingFailureEndpoint : IEndpoint
+{
+    public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder)
+        => builder.MapGet("/integration/as-parameters/binding-failure/{id}",
+            static (int id, [AsParameters] AsParametersObjectRequest request) => TypedResults.Ok(id));
 }
 
 [ValiantEndpoint]
@@ -265,8 +277,11 @@ public sealed class DirectJsonEnabledEndpoint : IEndpoint
     {
         return builder.MapGet(
             "/integration/direct/enabled",
-            ([FromQuery(Name = "payload")] DirectJsonEnabledRequest request) => TypedResults.Ok(request));
+            Handle);
     }
+
+    private static Ok<DirectJsonEnabledRequest> Handle([FromQuery(Name = "payload")] DirectJsonEnabledRequest request)
+        => TypedResults.Ok(request);
 }
 
 [ValiantEndpoint]

@@ -323,8 +323,14 @@ public static class ValiantEndpointRouteBuilderExtensions
             return next;
         }
 
-        return async invocationContext =>
+        return invocationContext =>
         {
+            // ASP.NET Core can invoke the filter pipeline after rejecting parameter binding.
+            if (invocationContext.HttpContext.Response.StatusCode >= StatusCodes.Status400BadRequest)
+            {
+                return next(invocationContext);
+            }
+
             var options = QueryParsingOptionsResolver.Resolve(invocationContext.HttpContext);
 
             foreach (var candidate in asParametersCandidates)
@@ -341,7 +347,7 @@ public static class ValiantEndpointRouteBuilderExtensions
 
                 if (!parsed.IsSuccess)
                 {
-                    return Results.BadRequest(parsed.Errors);
+                    return ValueTask.FromResult<object?>(Results.BadRequest(parsed.Errors));
                 }
 
                 if (parsed.Value is null)
@@ -364,7 +370,7 @@ public static class ValiantEndpointRouteBuilderExtensions
                 invocationContext.Arguments[candidate.ArgumentIndex] = target;
             }
 
-            return await next(invocationContext).ConfigureAwait(false);
+            return next(invocationContext);
         };
     }
 

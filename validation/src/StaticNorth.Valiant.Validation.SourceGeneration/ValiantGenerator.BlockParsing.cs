@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using static StaticNorth.Valiant.SourceGeneration.ValiantNativeControlFlow;
@@ -91,6 +92,10 @@ public sealed partial class ValiantGenerator
                 ParseIfStatement(ifStatement, scope, semanticModel, cancellationToken, nodes, diagnostics);
                 return;
 
+            case LabeledStatementSyntax labeledStatement when IsSupportedLabelTarget(labeledStatement.Statement):
+                ParseStatement(labeledStatement.Statement, scope, semanticModel, cancellationToken, nodes, diagnostics);
+                return;
+
             case SwitchStatementSyntax switchStatement:
                 ParseSwitchStatement(switchStatement, scope, semanticModel, cancellationToken, nodes, diagnostics);
                 return;
@@ -119,11 +124,11 @@ public sealed partial class ValiantGenerator
                 return;
 
             case BreakStatementSyntax:
-                nodes.Add(new FlowControlNode("break"));
+                nodes.Add(new FlowControlNode("break", GetJumpLabel(statement)));
                 return;
 
             case ContinueStatementSyntax:
-                nodes.Add(new FlowControlNode("continue"));
+                nodes.Add(new FlowControlNode("continue", GetJumpLabel(statement)));
                 return;
 
             case LocalDeclarationStatementSyntax localDeclaration:
@@ -141,6 +146,51 @@ public sealed partial class ValiantGenerator
                     "Only Property declarations, UseValidator declarations, if/else statements, switch statements, loops, blocks, break/continue statements, and return statements are supported in validator declarations."));
                 return;
         }
+    }
+
+    private static bool IsSupportedLabelTarget(StatementSyntax statement)
+    {
+        return statement is SwitchStatementSyntax or ForEachStatementSyntax or ForStatementSyntax or WhileStatementSyntax or DoStatementSyntax;
+    }
+
+    private static string? GetJumpLabel(StatementSyntax statement)
+    {
+        // The optional identifier is a direct child. Roslyn 5.9 marks the typed Name API experimental.
+        var name = statement.ChildNodes().OfType<IdentifierNameSyntax>().FirstOrDefault();
+        if (name is null)
+        {
+            return null;
+        }
+
+        foreach (var ancestor in name.Ancestors())
+        {
+            if (ancestor is AnonymousFunctionExpressionSyntax or LocalFunctionStatementSyntax or MethodDeclarationSyntax)
+            {
+                break;
+            }
+
+            if (ancestor is LabeledStatementSyntax labeledStatement &&
+                IsSupportedLabelTarget(labeledStatement.Statement) &&
+                (statement is BreakStatementSyntax || labeledStatement.Statement is not SwitchStatementSyntax) &&
+                string.Equals(name.Identifier.ValueText, labeledStatement.Identifier.ValueText, StringComparison.Ordinal))
+            {
+                return GetGeneratedLabel(labeledStatement);
+            }
+        }
+
+        return name.Identifier.Text;
+    }
+
+    private static string? GetStatementLabel(StatementSyntax statement)
+    {
+        return statement.Parent is LabeledStatementSyntax labeledStatement ? GetGeneratedLabel(labeledStatement) : null;
+    }
+
+    private static string GetGeneratedLabel(LabeledStatementSyntax statement)
+    {
+        // Flattened blocks and inlined lambdas can bring identical source labels into the same scope.
+        var methodStart = statement.FirstAncestorOrSelf<MethodDeclarationSyntax>()?.SpanStart ?? 0;
+        return "__valiantLabel" + (statement.SpanStart - methodStart).ToString(CultureInfo.InvariantCulture);
     }
 
     private static void ParseIfStatement(
@@ -184,7 +234,8 @@ public sealed partial class ValiantGenerator
 
         nodes.Add(new SwitchNode(
             RewriteForValidation(switchStatement.Expression, scope),
-            sections.ToImmutable()));
+            sections.ToImmutable(),
+            GetStatementLabel(switchStatement)));
     }
 
     private static void ParseForEachStatement(
@@ -199,7 +250,8 @@ public sealed partial class ValiantGenerator
             "foreach",
             CreateForEachHeader(forEachStatement, node => RewriteForValidation(node, scope)),
             null,
-            ParseNestedStatement(forEachStatement.Statement, scope, semanticModel, cancellationToken, diagnostics)));
+            ParseNestedStatement(forEachStatement.Statement, scope, semanticModel, cancellationToken, diagnostics),
+            GetStatementLabel(forEachStatement)));
     }
 
     private static void ParseForStatement(
@@ -214,7 +266,8 @@ public sealed partial class ValiantGenerator
             "for",
             CreateForHeader(forStatement, node => RewriteForValidation(node, scope)),
             null,
-            ParseNestedStatement(forStatement.Statement, scope, semanticModel, cancellationToken, diagnostics)));
+            ParseNestedStatement(forStatement.Statement, scope, semanticModel, cancellationToken, diagnostics),
+            GetStatementLabel(forStatement)));
     }
 
     private static void ParseWhileStatement(
@@ -229,7 +282,8 @@ public sealed partial class ValiantGenerator
             "while",
             CreateWhileCondition(whileStatement, node => RewriteForValidation(node, scope)),
             null,
-            ParseNestedStatement(whileStatement.Statement, scope, semanticModel, cancellationToken, diagnostics)));
+            ParseNestedStatement(whileStatement.Statement, scope, semanticModel, cancellationToken, diagnostics),
+            GetStatementLabel(whileStatement)));
     }
 
     private static void ParseDoStatement(
@@ -244,7 +298,8 @@ public sealed partial class ValiantGenerator
             "do",
             null,
             CreateDoCondition(doStatement, node => RewriteForValidation(node, scope)),
-            ParseNestedStatement(doStatement.Statement, scope, semanticModel, cancellationToken, diagnostics)));
+            ParseNestedStatement(doStatement.Statement, scope, semanticModel, cancellationToken, diagnostics),
+            GetStatementLabel(doStatement)));
     }
 
     private static ImmutableArray<ValidationNode> ParseNestedStatement(

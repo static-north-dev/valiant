@@ -161,6 +161,84 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
+    public async Task Schema_And_Runtime_Values_Respect_Configuration_Aliases_And_Ignored_Properties()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using Microsoft.Extensions.Configuration;
+            using StaticNorth.Valiant.Settings;
+
+            public class BaseSettings
+            {
+                [ConfigurationKeyName("worker-count")]
+                public virtual int Workers { get; set; }
+
+                [ConfigurationIgnore]
+                public virtual int Internal { get; set; } = 5;
+            }
+
+            [ValiantSettings("Test", configure: true)]
+            public sealed class AliasedSettings : BaseSettings
+            {
+                public override int Workers { get; set; }
+                public override int Internal { get; set; } = 5;
+
+                [ConfigurationKeyName("options")]
+                public NestedSettings Nested { get; set; } = new();
+            }
+
+            public sealed class NestedSettings
+            {
+                [ConfigurationKeyName(" ")]
+                public int Limit { get; set; }
+
+                [ConfigurationKeyName("login")]
+                [ValiantSecret]
+                public string? Value { get; set; }
+
+                [ConfigurationIgnore]
+                public string? Ignored { get; set; }
+            }
+            """);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Test:worker-count"] = "12",
+                ["Test:Internal"] = "99",
+                ["Test:options:Limit"] = "4",
+                ["Test:options:login"] = "secret",
+                ["Test:options:Ignored"] = "ignored"
+            })
+            .Build();
+        var services = new ServiceCollection();
+        var extensionType = assembly.GetType("StaticNorth.Valiant.Settings.DependencyInjection.ValiantSettingsServiceCollectionExtensions", throwOnError: true)!;
+        extensionType.GetMethod("AddValiantSettings", [typeof(IServiceCollection), typeof(IConfiguration)])!
+            .Invoke(null, [services, configuration]);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var provider = serviceProvider.GetServices<IValiantSettingsSchemaProvider>().Single();
+        var properties = provider.Schema.Properties;
+        await Assert.That(properties.Single(static property => property.Name == "Workers").ConfigurationKey).IsEqualTo("worker-count");
+        await Assert.That(properties.Select(static property => property.Name)).DoesNotContain("Internal");
+        var nested = properties.Single(static property => property.Name == "Nested");
+        await Assert.That(nested.ConfigurationKey).IsEqualTo("options");
+        await Assert.That(nested.Properties.Select(static property => property.ConfigurationKey)).IsEquivalentTo(["Limit", "login"]);
+
+        var document = ValiantSettingsSchemaDocumentFactory.Create([provider], serviceProvider, includeRuntimeValues: true);
+        var values = (IReadOnlyDictionary<string, object?>)document.Schemas[0].RuntimeValues!;
+        var nestedValues = (IReadOnlyDictionary<string, object?>)values["options"]!;
+        await Assert.That(values["worker-count"]).IsEqualTo(12);
+        await Assert.That(nestedValues["Limit"]).IsEqualTo(4);
+        await Assert.That(nestedValues["login"]).IsEqualTo("********");
+        await Assert.That(nestedValues.Keys).DoesNotContain("Ignored");
+
+        var optionsType = typeof(IOptions<>).MakeGenericType(provider.SettingsType);
+        var options = optionsType.GetProperty(nameof(IOptions<object>.Value))!.GetValue(serviceProvider.GetRequiredService(optionsType))!;
+        await Assert.That(provider.SettingsType.GetProperty("Internal")!.GetValue(options)).IsEqualTo(5);
+    }
+
+    [Test]
     public async Task Settings_Model_With_Section_Path_Does_Not_Generate_Options_Registration_By_Default()
     {
         var result = RunGenerator(
