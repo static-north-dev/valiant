@@ -149,6 +149,12 @@
           "TUnit.Core": "1.84.0"
         }
       },
+      "staticnorth.valiant.endpoints": {
+        "type": "Project"
+      },
+      "staticnorth.valiant.endpoints.aspnetcore": {
+        "type": "Project"
+      },
       "staticnorth.valiant.validation": {
         "type": "Project"
       },

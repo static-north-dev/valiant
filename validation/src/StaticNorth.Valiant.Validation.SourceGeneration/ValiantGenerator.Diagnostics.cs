@@ -101,6 +101,7 @@ public sealed partial class ValiantGenerator
                 case SwitchNode switchNode:
                     AppendFingerprintValue(builder, "switch");
                     AppendFingerprintValue(builder, switchNode.Expression);
+                    AppendFingerprintValue(builder, switchNode.Label);
                     foreach (var section in switchNode.Sections)
                     {
                         AppendFingerprintValues(builder, section.Labels);
@@ -113,11 +114,13 @@ public sealed partial class ValiantGenerator
                     AppendFingerprintValue(builder, loopNode.Kind);
                     AppendFingerprintValue(builder, loopNode.Header);
                     AppendFingerprintValue(builder, loopNode.Condition);
+                    AppendFingerprintValue(builder, loopNode.Label);
                     AppendValidationNodesFingerprint(builder, loopNode.Nodes);
                     break;
                 case FlowControlNode flowControlNode:
                     AppendFingerprintValue(builder, "flow");
                     AppendFingerprintValue(builder, flowControlNode.Kind);
+                    AppendFingerprintValue(builder, flowControlNode.Label);
                     break;
                 case FailureBehaviorNode failureBehaviorNode:
                     AppendFingerprintValue(builder, "failure");

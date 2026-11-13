@@ -129,17 +129,11 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             .Select(static (configuration, _) => configuration.Right.Any(static enabled => enabled))
             .WithTrackingName("Endpoints.QueryBindingEnabled");
 
-        var endpoints = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                EndpointAttributeMetadataName,
-                static (node, _) => node is ClassDeclarationSyntax { AttributeLists.Count: > 0 },
-                static (context, cancellationToken) => CreateEndpointCandidate(context, cancellationToken));
-
-        var genericEndpoints = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                GenericEndpointAttributeMetadataName,
-                static (node, _) => node is ClassDeclarationSyntax { AttributeLists.Count: > 0 },
-                static (context, cancellationToken) => CreateEndpointCandidate(context, cancellationToken));
+        var queryBindingCompilation = queryBindingEnabled
+            .Combine(context.CompilationProvider)
+            .Select(static (input, _) => input.Left ? input.Right : null);
+        var endpoints = CreateEndpointProvider(context.SyntaxProvider, EndpointAttributeMetadataName, queryBindingCompilation);
+        var genericEndpoints = CreateEndpointProvider(context.SyntaxProvider, GenericEndpointAttributeMetadataName, queryBindingCompilation);
 
         var endpointGroups = context.SyntaxProvider
             .ForAttributeWithMetadataName(
@@ -233,6 +227,34 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             static (context, registration) => ExecuteQueryObjectBindings(context, registration));
     }
 
+    private static IncrementalValuesProvider<EndpointCandidateModel> CreateEndpointProvider(
+        SyntaxValueProvider syntaxProvider,
+        string attributeMetadataName,
+        IncrementalValueProvider<Compilation?> queryBindingCompilation)
+    {
+        return syntaxProvider
+            .ForAttributeWithMetadataName(
+                attributeMetadataName,
+                static (node, _) => node is ClassDeclarationSyntax { AttributeLists.Count: > 0 },
+                static (context, _) => (Candidate: CreateEndpointCandidate(context), MetadataName: GetTypeMetadataName((INamedTypeSymbol)context.TargetSymbol)))
+            .Combine(queryBindingCompilation)
+            .Select(static (input, cancellationToken) => input.Right is { } compilation
+                ? AnalyzeQueryBinding(input.Left.Candidate, input.Left.MetadataName, compilation, cancellationToken)
+                : input.Left.Candidate);
+    }
+
+    private static string GetTypeMetadataName(INamedTypeSymbol type)
+    {
+        if (type.ContainingType is { } containingType)
+        {
+            return GetTypeMetadataName(containingType) + "+" + type.MetadataName;
+        }
+
+        return type.ContainingNamespace.IsGlobalNamespace
+            ? type.MetadataName
+            : type.ContainingNamespace.ToDisplayString() + "." + type.MetadataName;
+    }
+
     private static bool IsPotentialQueryBindingOptIn(SyntaxNode node)
     {
         return node is AssignmentExpressionSyntax
@@ -278,9 +300,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             method.ContainingType.ToDisplayString() == EndpointServiceCollectionExtensionsMetadataName;
     }
 
-    private static EndpointCandidateModel CreateEndpointCandidate(
-        GeneratorAttributeSyntaxContext context,
-        CancellationToken cancellationToken)
+    private static EndpointCandidateModel CreateEndpointCandidate(GeneratorAttributeSyntaxContext context)
     {
         if (context.TargetSymbol is not INamedTypeSymbol typeSymbol)
         {
@@ -339,19 +359,36 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             groupType = groupTypeSymbol.ToDisplayString(TypeDisplayFormat);
         }
 
+        return new EndpointCandidateModel(
+            new EndpointModel(typeName, EndpointKind.Endpoint, groupType, order),
+            ImmutableArray<ValiantDiagnosticInfo>.Empty);
+    }
+
+    private static EndpointCandidateModel AnalyzeQueryBinding(
+        EndpointCandidateModel candidate,
+        string metadataName,
+        Compilation compilation,
+        CancellationToken cancellationToken)
+    {
+        if (candidate.Endpoint is not { } endpoint ||
+            compilation.Assembly.GetTypeByMetadataName(metadataName) is not { } typeSymbol)
+        {
+            return candidate;
+        }
+
         var queryParsingPolicy = GetEndpointQueryParsingPolicy(typeSymbol, cancellationToken);
         var queryObjectBindings = CreateQueryObjectBindings(
-            context.SemanticModel,
+            compilation,
             typeSymbol,
             queryParsingPolicy.EnableDirectJsonQueryValues,
             queryParsingPolicy.JsonPolicyLocation,
             cancellationToken);
         return new EndpointCandidateModel(
             new EndpointModel(
-                typeName,
-                isGroup ? EndpointKind.Group : EndpointKind.Endpoint,
-                groupType,
-                order,
+                endpoint.Type,
+                endpoint.Kind,
+                endpoint.GroupType,
+                endpoint.Order,
                 queryParsingPolicy.Overrides),
             queryObjectBindings.Bindings,
             queryObjectBindings.Diagnostics);
@@ -401,7 +438,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
     }
 
     private static (ImmutableArray<QueryObjectBindingModel> Bindings, ImmutableArray<ValiantDiagnosticInfo> Diagnostics) CreateQueryObjectBindings(
-        SemanticModel semanticModel,
+        Compilation compilation,
         INamedTypeSymbol endpointType,
         bool enableDirectJsonQueryValues,
         ValiantDiagnosticLocation jsonPolicyLocation,
@@ -415,9 +452,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         foreach (var mapMethod in GetMapMethodDeclarations(endpointType, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var methodSemanticModel = mapMethod.SyntaxTree == semanticModel.SyntaxTree
-                ? semanticModel
-                : semanticModel.Compilation.GetSemanticModel(mapMethod.SyntaxTree);
+            var methodSemanticModel = compilation.GetSemanticModel(mapMethod.SyntaxTree);
 
             foreach (var invocation in mapMethod
                 .DescendantNodes(static node => node is not LambdaExpressionSyntax)
@@ -425,54 +460,45 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                foreach (var handlerExpression in GetAspNetCoreRouteHandlerExpressions(methodSemanticModel, invocation, cancellationToken))
+                foreach (var parameter in GetAspNetCoreRouteHandlerParameters(methodSemanticModel, invocation, cancellationToken))
                 {
-                    foreach (var parameter in GetHandlerParameters(handlerExpression))
+                    if (parameter.GetAttributes().IsEmpty)
                     {
-                        if (parameter.AttributeLists.Count == 0)
+                        if (UnwrapNullable(parameter.Type) is INamedTypeSymbol unannotatedRequestType &&
+                            HasFromQueryProperties(unannotatedRequestType))
                         {
-                            if (methodSemanticModel.GetDeclaredSymbol(parameter, cancellationToken) is IParameterSymbol parameterWithoutAttributes &&
-                                UnwrapNullable(parameterWithoutAttributes.Type) is INamedTypeSymbol unannotatedRequestType &&
-                                HasFromQueryProperties(unannotatedRequestType))
-                            {
-                                AddQueryRequestBindingForType(
-                                    unannotatedRequestType,
-                                    parameterWithoutAttributes,
-                                    bindings,
-                                    diagnostics,
-                                    bindingTypes,
-                                    diagnosticKeys,
-                                    cancellationToken);
-                            }
-
-                            continue;
-                        }
-
-                        if (methodSemanticModel.GetDeclaredSymbol(parameter, cancellationToken) is not IParameterSymbol parameterSymbol)
-                        {
-                            continue;
-                        }
-
-                        if (HasAttribute(parameterSymbol, FromQueryAttributeMetadataName))
-                        {
-                            AddQueryObjectBindingsForType(
-                                QueryObjectBindingKind.TryParse,
-                                parameterSymbol.Type,
-                                parameterSymbol,
+                            AddQueryRequestBindingForType(
+                                unannotatedRequestType,
+                                parameter,
                                 bindings,
                                 diagnostics,
                                 bindingTypes,
                                 diagnosticKeys,
-                                enableDirectJsonQueryValues,
-                                jsonPolicyLocation,
                                 cancellationToken);
                         }
 
-                        if (HasAttribute(parameterSymbol, AsParametersAttributeMetadataName) &&
-                            UnwrapNullable(parameterSymbol.Type) is INamedTypeSymbol requestType)
-                        {
-                            AddQueryObjectBindingsForRequestProperties(requestType, bindings, diagnostics, bindingTypes, diagnosticKeys, cancellationToken);
-                        }
+                        continue;
+                    }
+
+                    if (HasAttribute(parameter, FromQueryAttributeMetadataName))
+                    {
+                        AddQueryObjectBindingsForType(
+                            QueryObjectBindingKind.TryParse,
+                            parameter.Type,
+                            parameter,
+                            bindings,
+                            diagnostics,
+                            bindingTypes,
+                            diagnosticKeys,
+                            enableDirectJsonQueryValues,
+                            jsonPolicyLocation,
+                            cancellationToken);
+                    }
+
+                    if (HasAttribute(parameter, AsParametersAttributeMetadataName) &&
+                        UnwrapNullable(parameter.Type) is INamedTypeSymbol requestType)
+                    {
+                        AddQueryObjectBindingsForRequestProperties(requestType, bindings, diagnostics, bindingTypes, diagnosticKeys, cancellationToken);
                     }
                 }
             }
@@ -485,17 +511,19 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             diagnostics.ToImmutable());
     }
 
-    private static IEnumerable<ExpressionSyntax> GetAspNetCoreRouteHandlerExpressions(
+    private static IEnumerable<IParameterSymbol> GetAspNetCoreRouteHandlerParameters(
         SemanticModel semanticModel,
         InvocationExpressionSyntax invocation,
         CancellationToken cancellationToken)
     {
-        // Query metadata comes only from inline handler parameters. Avoid binding
-        // overloads for unrelated invocations and parameterless route handlers.
-        if (!invocation.ArgumentList.Arguments.Any(static argument => argument.Expression is
-            SimpleLambdaExpressionSyntax or
-            ParenthesizedLambdaExpressionSyntax { ParameterList.Parameters.Count: > 0 } or
-            AnonymousMethodExpressionSyntax { ParameterList.Parameters.Count: > 0 }))
+        var name = invocation.Expression switch
+        {
+            MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
+            MemberBindingExpressionSyntax binding => binding.Name.Identifier.ValueText,
+            SimpleNameSyntax simpleName => simpleName.Identifier.ValueText,
+            _ => string.Empty
+        };
+        if (!name.StartsWith("Map", StringComparison.Ordinal))
         {
             yield break;
         }
@@ -508,13 +536,29 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
 
         foreach (var argument in invocation.ArgumentList.Arguments)
         {
-            if (semanticModel.GetOperation(argument, cancellationToken) is IArgumentOperation { Parameter: { } parameter } &&
+            if (semanticModel.GetOperation(argument, cancellationToken) is IArgumentOperation { Parameter: { } parameter } operation &&
                 IsRouteHandlerParameter(parameter))
             {
-                yield return argument.Expression;
+                var handler = GetRouteHandlerMethod(operation.Value);
+                if (handler is not null)
+                {
+                    foreach (var handlerParameter in handler.Parameters)
+                    {
+                        yield return handlerParameter;
+                    }
+                }
             }
         }
     }
+
+    private static IMethodSymbol? GetRouteHandlerMethod(IOperation operation) => operation switch
+    {
+        IDelegateCreationOperation creation => GetRouteHandlerMethod(creation.Target),
+        IConversionOperation conversion => GetRouteHandlerMethod(conversion.Operand),
+        IAnonymousFunctionOperation anonymous => anonymous.Symbol,
+        IMethodReferenceOperation reference => reference.Method,
+        _ => null
+    };
 
     private static bool IsAspNetCoreRouteMappingMethod(IMethodSymbol method)
     {
@@ -564,21 +608,6 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
                     yield return methodDeclaration;
                 }
             }
-        }
-    }
-
-    private static IEnumerable<ParameterSyntax> GetHandlerParameters(ExpressionSyntax expression)
-    {
-        switch (expression)
-        {
-            case ParenthesizedLambdaExpressionSyntax lambda:
-                return lambda.ParameterList.Parameters;
-            case SimpleLambdaExpressionSyntax lambda:
-                return [lambda.Parameter];
-            case AnonymousMethodExpressionSyntax { ParameterList: not null } anonymousMethod:
-                return anonymousMethod.ParameterList.Parameters;
-            default:
-                return [];
         }
     }
 

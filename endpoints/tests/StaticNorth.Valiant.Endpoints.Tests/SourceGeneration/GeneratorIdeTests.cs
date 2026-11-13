@@ -55,6 +55,13 @@ public sealed class GeneratorIdeTests
                 using Microsoft.AspNetCore.Builder;
                 using Microsoft.AspNetCore.Routing;
                 using Microsoft.AspNetCore.Mvc;
+                using Microsoft.Extensions.DependencyInjection;
+                using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
+                internal static class QueryConfiguration
+                {
+                    internal static void Configure(IServiceCollection services) =>
+                        services.AddValiantEndpoints(options => options.QueryParameters.EnableBinding = true);
+                }
                 public sealed partial class Item$ID$
                 {
                     public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) =>

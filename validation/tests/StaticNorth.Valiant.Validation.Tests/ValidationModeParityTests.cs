@@ -256,6 +256,42 @@ public sealed class ValidationModeParityTests
     }
 
     [Test]
+    public async Task Labeled_Break_And_Continue_Target_The_Outer_Loop_In_Both_Modes()
+    {
+        await AssertSyncParity(
+            "LabeledLoopJumps",
+            mode => new LabeledLoopValidator(Options(mode)),
+            Invalid(
+                static () => new LoopModel { Values = [1, -1, 1] },
+                Failure("Name", "Visit"),
+                Failure("Name", "AfterLoop")),
+            Invalid(
+                static () => new LoopModel { Values = [0, 1] },
+                Failure("Name", "Visit"),
+                Failure("Name", "Visit"),
+                Failure("Name", "RoundTail"),
+                Failure("Name", "AfterLoop")));
+    }
+
+    [Test]
+    public async Task Labeled_Jumps_With_Reused_Names_And_Async_Rules_Have_Mode_Parity()
+    {
+        await AssertAsyncParity(
+            "ScopedLabeledJumps",
+            mode => new AsyncLabeledLoopValidator(Options(mode)),
+            Invalid(
+                static () => new LoopModel { Values = [1, 0, 2], RunWhile = true },
+                Failure("Name", "Checked"),
+                Failure("Name", "Checked"),
+                Failure("Name", "ForeachTail"),
+                Failure("Name", "Checked"),
+                Failure("Name", "Checked"),
+                Failure("Name", "ForeachTail"),
+                Failure("Name", "SwitchVisit"),
+                Failure("Name", "AfterSwitch")));
+    }
+
+    [Test]
     public async Task Collection_Dictionary_And_Indexed_Rules_Have_Mode_Parity()
     {
         await AssertSyncParity(
@@ -1198,5 +1234,88 @@ public sealed partial class CompositeCancellationValidator(
     public override void Configure(ValidationContext<NullableTextModel> context)
     {
         context.UseValidator(innerValidator);
+    }
+}
+
+[ValiantValidator(RegisterAsDefault = false)]
+public sealed partial class LabeledLoopValidator : ValidatorDefinition<LoopModel>
+{
+    public override void Configure(ValidationContext<LoopModel> context)
+    {
+        outer: for (var round = 0; round < 2; round++)
+        {
+            foreach (var value in context.Instance.Values)
+            {
+                if (value == 0 && round == 0)
+                {
+                    continue outer;
+                }
+
+                if (value < 0)
+                {
+                    break outer;
+                }
+
+                context.Property(model => model.Name).Required(code: "Visit");
+            }
+
+            context.Property(model => model.Name).Required(code: "RoundTail");
+        }
+
+        context.Property(model => model.Name).Required(code: "AfterLoop");
+    }
+}
+
+[ValiantValidator(RegisterAsDefault = false)]
+public sealed partial class AsyncLabeledLoopValidator : ValidatorDefinition<LoopModel>
+{
+    public override void Configure(ValidationContext<LoopModel> context)
+    {
+        {
+            @target: foreach (var value in context.Instance.Values)
+            {
+                for (var step = 0; step < 2; step++)
+                {
+                    if (value == 0)
+                    {
+                        continue target;
+                    }
+
+                    context.Property(model => model.Name).SatisfiesAsync(CheckNameAsync, code: "Checked");
+                }
+
+                context.Property(model => model.Name).Required(code: "ForeachTail");
+            }
+        }
+
+        {
+            target: switch (context.Instance.RunWhile)
+            {
+                case true:
+                    foreach (var value in context.Instance.Values)
+                    {
+                        if (value == 0)
+                        {
+                            break @target;
+                        }
+
+                        context.Property(model => model.Name).Required(code: "SwitchVisit");
+                    }
+
+                    context.Property(model => model.Name).Required(code: "SwitchTail");
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        context.Property(model => model.Name).Required(code: "AfterSwitch");
+    }
+
+    private static async ValueTask<bool> CheckNameAsync(string? name, CancellationToken cancellationToken)
+    {
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+        return !string.IsNullOrWhiteSpace(name);
     }
 }

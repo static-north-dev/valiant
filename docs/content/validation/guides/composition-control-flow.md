@@ -31,6 +31,8 @@ public void Configure(ValidationContext<CreateOrder> context)
 
 In `Debuggable` mode this method executes at runtime, so ordinary breakpoints and step-through debugging work.
 
+With C# 15, label an enclosing loop to target it from a nested loop. For a loop labeled `outer`, `break outer;` exits it and `continue outer;` advances it to the next iteration. A labeled `break` can also exit an enclosing `switch`.
+
 ## Nested objects
 
 Use `Children` to validate a nested context and retain the complete property path:

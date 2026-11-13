@@ -1796,6 +1796,63 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
+    public async Task Labeled_Jump_Tracking_Changes_When_The_Target_Changes()
+    {
+        const string imports = "using StaticNorth.Valiant.Validation;";
+        const string validator = """
+            [ValiantValidator]
+            public sealed partial class PersonValidator : ValidatorDefinition<Person>
+            {
+                public override void Configure(ValidationContext<Person> context)
+                {
+                    outer: for (var row = 0; row < 2; row++)
+                    {
+                        inner: for (var column = 0; column < 2; column++)
+                        {
+                            if (row == 0)
+                            {
+                                break outer;
+                            }
+
+                            if (column == 0)
+                            {
+                                continue inner;
+                            }
+
+                            context.Property(person => person.Name).Required();
+                        }
+
+                        continue outer;
+                    }
+                }
+            }
+
+            public sealed class Person
+            {
+                public string? Name { get; init; }
+            }
+            """;
+        const string stepName = "Validation.NonGenericValidator";
+        var source = imports + "\n" + validator;
+
+        var retargeted = RunTrackedGeneratorEdit(
+            source,
+            source.Replace("break outer;", "break inner;", StringComparison.Ordinal),
+            stepName);
+        var originalSource = RunGenerator(source).GeneratedSources
+            .Single(static generated => generated.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+        var shiftedSource = RunGenerator(imports + "\npublic sealed class Unrelated { }\n" + validator).GeneratedSources
+            .Single(static generated => generated.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+
+        await Assert.That(retargeted).Contains(IncrementalStepRunReason.Modified);
+        await Assert.That(shiftedSource).IsEqualTo(originalSource);
+    }
+
+    [Test]
     public async Task Diagnostic_Location_Preserves_Line_Mapping_Without_Retaining_Syntax_Tree()
     {
         var result = RunGenerator(

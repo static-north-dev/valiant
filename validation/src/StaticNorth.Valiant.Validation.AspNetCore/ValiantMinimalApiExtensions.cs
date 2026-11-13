@@ -66,9 +66,7 @@ public static class ValiantMinimalApiExtensions
         }
 
         List<ValidationFailure>? failures = null;
-        var validators = invocationContext.HttpContext.RequestServices
-            .GetServices<IValidator<T>>()
-            .ToArray();
+        var validators = ResolveValidatorArray<T>(invocationContext.HttpContext.RequestServices);
 
         foreach (var argument in invocationContext.Arguments)
         {
@@ -225,11 +223,17 @@ public static class ValiantMinimalApiExtensions
     private static ValidationTypePlan CreateValidationTypePlanCore<T>()
     {
         return new ValidationTypePlan(
-            static services => services.GetServices<IValidator<T>>().ToArray(),
+            ResolveValidatorArray<T>,
             static (validators, model, cancellationToken) => ValidateModelAsync(
                 (IValidator<T>[])validators,
                 (T)model,
                 cancellationToken));
+    }
+
+    private static IValidator<T>[] ResolveValidatorArray<T>(IServiceProvider services)
+    {
+        var validators = services.GetServices<IValidator<T>>();
+        return validators as IValidator<T>[] ?? validators.ToArray();
     }
 
     private static async ValueTask<ValidationResult> ValidateModelAsync<T>(

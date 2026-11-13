@@ -298,6 +298,8 @@ public void Configure(ValidationContext<CreateOrder> context)
 
 In `Debuggable` mode this method executes at runtime, so ordinary breakpoints and step-through debugging work.
 
+With C# 15, label an enclosing loop to target it from a nested loop. For a loop labeled `outer`, `break outer;` exits it and `continue outer;` advances it to the next iteration. A labeled `break` can also exit an enclosing `switch`.
+
 #### Nested objects
 
 Use `Children` to validate a nested context and retain the complete property path:
@@ -436,6 +438,8 @@ Helpers are available for Minimal API `HttpValidationProblemDetails`, MVC `Valid
 #### OpenAPI
 
 The OpenAPI integration uses OpenAPI.NET 2.x on .NET 10 and OpenAPI.NET 3.x on .NET 11.
+
+On .NET 11, ASP.NET Core describes C# 15 union JSON bodies with `anyOf`. The Valiant schema transformer includes validation rules on case models with generated validation metadata. To validate the request at runtime, register a validator for the union parameter type and delegate to the relevant case validator as needed.
 
 ```csharp
 builder.Services.AddOpenApi();
@@ -576,6 +580,20 @@ ValueTask<bool> IsValidAsync(T instance, CancellationToken cancellationToken = d
 ```
 
 Use async APIs whenever a validator graph can contain async predicates or async property validators.
+
+#### Opt in to Runtime Async on .NET 11
+
+With the existing Valiant NuGet package reference, add this to the `.csproj` that declares your `[ValiantValidator]` classes. If your validators live in a class library, configure that library. The condition enables the compiler feature for `net11.0` builds, including in a multi-targeted project.
+
+```xml title="YourProject.csproj"
+<PropertyGroup Condition="'$(TargetFramework)' == 'net11.0'">
+  <Features>$(Features);runtime-async=on</Features>
+</PropertyGroup>
+```
+
+Rebuild the project to apply the setting. The NuGet package delivers the Valiant source generator, which emits validator code during your build. The compiler flag applies to eligible async methods in that project, including generated `ValidateAsync` and `IsValidAsync` methods and your own async code. Precompiled Valiant assemblies, including the ASP.NET Core endpoint filter and the validation runtime, use the settings from their own builds.
+
+See [Microsoft’s Runtime Async documentation](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-11/runtime#runtime-async) for the compiler feature details.
 
 #### Options
 
@@ -1072,7 +1090,7 @@ Changing the literal between `true` and `false` adds or removes generated query 
 
 :::
 
-When enabled, Valiant connects its configurable query parser to generated endpoints in three binding shapes.
+When enabled, Valiant connects its configurable query parser to generated endpoints in three binding shapes. You can use an inline handler or pass a named handler directly as a method group, such as `builder.MapGet("/cars", Handle)`.
 
 #### Whole request binding
 
@@ -1114,7 +1132,7 @@ public sealed partial record CarFilter(int? Year, string? Brand);
 The complex `[FromQuery]` type must be `partial` in this shape. Valiant generates a `TryParse(string, out T)` shim because ASP.NET Core checks property bindability before endpoint filters run.
 The same containing-type rule applies when that complex type is nested.
 
-The Valiant filter runs after native property binding, so it cannot recover from a format that makes ASP.NET Core fail the initial property conversion. For example, comma-separated `?ids=1,2,3` fails before the filter for an `int[] Ids` property. Use generated whole-request binding when every configured format must work without native `[AsParameters]` constraints.
+The Valiant filter reparses the query only after native parameter binding succeeds. For example, ASP.NET Core rejects comma-separated `?ids=1,2,3` for an `int[] Ids` property and controls the resulting HTTP response. Use generated whole-request binding when every configured format must work without native `[AsParameters]` constraints.
 
 #### Direct complex `[FromQuery]`
 
@@ -2159,6 +2177,8 @@ builder.Services.AddValiantSettings(builder.Configuration);
 ```
 
 Valiant emits the equivalent section-aware `services.Configure<S3Settings>(configuration.GetSection("Storage:S3"))` registration.
+
+Use `[ConfigurationKeyName("bucket-name")]` from `Microsoft.Extensions.Configuration` to give a property a different configuration key. The generated schema and runtime values use that key, and the schema retains the CLR property name. On .NET 11, properties marked `[ConfigurationIgnore]` are excluded from binding and from the generated schema and runtime values.
 
 Schema providers register by default. Disable them when the application only needs binding and validation:
 

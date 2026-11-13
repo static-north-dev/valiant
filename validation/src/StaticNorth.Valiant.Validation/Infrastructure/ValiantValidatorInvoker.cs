@@ -18,7 +18,7 @@ public sealed class ValiantValidatorInvoker<T> : IValiantValidatorInvoker
         _ = services ?? throw new ArgumentNullException(nameof(services));
 
         var validators = services.GetService(typeof(IEnumerable<IValidator<T>>)) as IEnumerable<IValidator<T>>;
-        return validators?.ToArray() ?? [];
+        return validators as IValidator<T>[] ?? validators?.ToArray() ?? [];
     }
 
     /// <inheritdoc />

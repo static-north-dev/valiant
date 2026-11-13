@@ -1674,6 +1674,7 @@ public sealed partial class ValiantGenerator
         bool emitStatusOnly)
     {
         builder.AppendLine();
+        AppendControlFlowLabel(builder, namespaceName, indentLevel, node.Label);
         AppendIndent(builder, indentLevel, namespaceName);
         builder.Append("switch (").Append(node.Expression).AppendLine(")");
         AppendIndent(builder, indentLevel, namespaceName);
@@ -1705,6 +1706,7 @@ public sealed partial class ValiantGenerator
         bool emitStatusOnly)
     {
         builder.AppendLine();
+        AppendControlFlowLabel(builder, namespaceName, indentLevel, node.Label);
         AppendIndent(builder, indentLevel, namespaceName);
         switch (node.Kind)
         {
@@ -1731,6 +1733,15 @@ public sealed partial class ValiantGenerator
         }
     }
 
+    private static void AppendControlFlowLabel(StringBuilder builder, string? namespaceName, int indentLevel, string? label)
+    {
+        if (label is not null)
+        {
+            AppendIndent(builder, indentLevel, namespaceName);
+            builder.Append(label).AppendLine(":");
+        }
+    }
+
     private static void AppendFlowControlNode(
         StringBuilder builder,
         string? namespaceName,
@@ -1738,7 +1749,13 @@ public sealed partial class ValiantGenerator
         FlowControlNode node)
     {
         AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append(node.Kind).AppendLine(";");
+        builder.Append(node.Kind);
+        if (node.Label is not null)
+        {
+            builder.Append(' ').Append(node.Label);
+        }
+
+        builder.AppendLine(";");
     }
 
     private static void AppendFailureBehaviorNode(

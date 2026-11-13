@@ -76,6 +76,8 @@ Helpers are available for Minimal API `HttpValidationProblemDetails`, MVC `Valid
 
 The OpenAPI integration uses OpenAPI.NET 2.x on .NET 10 and OpenAPI.NET 3.x on .NET 11.
 
+On .NET 11, ASP.NET Core describes C# 15 union JSON bodies with `anyOf`. The Valiant schema transformer includes validation rules on case models with generated validation metadata. To validate the request at runtime, register a validator for the union parameter type and delegate to the relevant case validator as needed.
+
 ```csharp
 builder.Services.AddOpenApi();
 builder.Services.AddValiantOpenApi();
