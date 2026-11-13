@@ -126,7 +126,7 @@ invalid input, SDK client calls, WebMCP registration, and missing/tampered files
 Publication then runs `docs:check-agent-http` against the exact `pages.dev`
 deployment URL returned by Wrangler, including Markdown and HTML variants,
 exact skill digests, and MCP protocol calls. It verifies the index's source
-revision matches the persisted docs commit and fails if Wrangler returns no
+revision matches the reviewed docs commit and fails if Wrangler returns no
 deployment URL. This validates the deployed artifact and runtime independently
 of the custom domain's bot protection. The built Worker includes license
 notices for its bundled dependencies.
@@ -164,33 +164,22 @@ the site for pushes and pull requests targeting `main`, but never deploys it.
 
 Documentation publication is independent from NuGet releases. Run the
 **Publish Docs** workflow manually whenever the site should be refreshed. It
-pins the current `main` commit, snapshots the major tracked in
-`current-major.json`, merges it into the complete history on `main`, ensures
-the `valiant-docs` Cloudflare Pages project exists, and deploys the exact
-persisted commit.
+pins the current `main` commit and stages snapshot changes on a branch for
+review. After the snapshot is merged, rerun the workflow from `main` to deploy
+the verified commit.
 
 The workflow creates a missing Pages project with production branch `main`.
 The deployed static output is `docs/build`.
 
-Add these GitHub Actions repository secrets:
+Configure these GitHub Actions secrets in the `docs-production` environment.
+Allow deployments to that environment only from the `main` branch.
 
-- `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare **account ID**, not the zone ID;
-- `CLOUDFLARE_API_TOKEN`: a custom token with
-  **Account → Cloudflare Pages → Edit** permission. Its resource scope must
-  include the account identified by `CLOUDFLARE_ACCOUNT_ID`; selecting a
-  domain or zone such as `staticnorth.dev` does not grant access to the
-  account-level Pages API.
+- `CLOUDFLARE_ACCOUNT_ID` is the Cloudflare account ID.
+- `CLOUDFLARE_API_TOKEN` grants **Account → Cloudflare Pages → Edit** for that
+  Cloudflare account.
 
-The deployment job also grants its generated `GITHUB_TOKEN`
-`deployments: write`, allowing Wrangler Action to create a GitHub Deployment
-and attach the Cloudflare Pages URL.
-
-The snapshot persistence job grants its `GITHUB_TOKEN` only `contents: write`.
-Repository rules for `main` must allow `github-actions[bot]` to push this
-generated documentation commit. If `main` requires pull requests, signed
-commits, status checks, or another rule the bot cannot satisfy, add a narrow
-ruleset bypass for GitHub Actions or replace the token with a narrowly scoped
-GitHub App credential. A broad personal access token is not recommended.
+The deployment job also grants its `GITHUB_TOKEN` `deployments: write` so
+Wrangler can attach the Cloudflare Pages URL to the GitHub deployment.
 
 ## Versioning
 
@@ -251,35 +240,23 @@ branch. To publish:
 
 1. Merge the desired documentation and, when beginning a new major, the
    `current-major.json` change into `main`.
-2. Open **Actions → Publish Docs → Run workflow**.
-3. The workflow pins the starting `main` SHA, tests and audits the docs,
-   creates the shared major snapshot, and validates every generated route.
-4. It verifies or creates the Cloudflare Pages project, commits only
-   `versions.json`, `versioned_docs`, and `versioned_sidebars` to `main`,
-   rebuilds the exact persisted commit, and deploys that verified artifact.
+2. Open **Actions → Publish Docs → Run workflow** and select `main`.
+3. If the snapshot changed, follow the compare link in the run summary to open
+   a PR for the generated files. Merge it after CI passes, then rerun
+   **Publish Docs** from `main`.
+4. When the committed snapshot matches the generated snapshot, the workflow
+   builds and validates the site from the reviewed commit, checks that the commit
+   is still current, and deploys to Cloudflare Pages.
 
-If `main` moves before the generated snapshot is persisted, the workflow
-fails instead of publishing stale documentation on top of newer content. Run it
-again to publish the new head. A no-change rerun still verifies and deploys the
-existing persisted commit.
-
-Repository rules for `main` must allow `github-actions[bot]` to push the
-generated snapshot commit. The job has only `contents: write`; it cannot bypass
-required pull requests, signed commits, or status checks. Add a narrow ruleset
-bypass for GitHub Actions or replace the token with a narrowly scoped GitHub App
-credential when those protections are enabled.
-
-Commits pushed with the repository `GITHUB_TOKEN` do not recursively trigger
-the `push` CI workflow. The manual workflow performs its own versioning tests,
-audit, production build, and route checks before deployment.
+If `main` moves during publication, rerun from its new head.
 
 ## Publishing NuGet releases
 
 Publishing a GitHub Release only publishes NuGet packages. The release tag—not
-the release title—sets the package version. Tags must be SemVer without build
-metadata and with an optional `v` prefix, such as `v1.2.0` or
-`1.2.0-preview.1`. The workflow checks out the immutable tag, restores, builds,
-tests, audits, verifies package consumers, runs Native AOT smoke verification,
+the release title—sets the package version. Use `v`-prefixed SemVer tags without build metadata, such as `v1.2.0` or
+`v1.2.0-preview.1`. The production environment accepts `v*` tags. The workflow
+checks out the immutable tag, restores, builds, tests, audits, verifies package
+consumers, runs Native AOT smoke verification,
 and publishes the verified packages through NuGet trusted publishing. Those
 commands use `StaticNorth.Valiant.Release.slnf`, which contains every .NET project but
 deliberately excludes the documentation `.esproj`; a release cannot build or
@@ -288,8 +265,7 @@ deploy the site indirectly.
 Update the NuGet.org trusted-publishing policy to use
 `.github/workflows/release.yml`; trusted-publishing policies can be bound to the
 workflow filename. Configure the repository variable `NUGET_USER` for releases.
-Configure `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` only for the
-separate documentation workflow.
+Configure the Cloudflare secrets in `docs-production`.
 
 Rerunning a partially failed release is safe because NuGet publication uses
 `--skip-duplicate`. CI and documentation publication fail on high or critical

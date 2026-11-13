@@ -109,16 +109,15 @@ test('documentation publication is a separate manual workflow', () => {
     'prepare',
     'generate-docs-snapshot',
     'verify-docs-candidate',
-    'cloudflare-preflight',
-    'persist-docs-snapshot',
+    'propose-docs-snapshot',
     'verify-docs',
     'deploy-docs',
   ]);
 });
 
-test('production publication jobs use the production environment', () => {
+test('NuGet and docs publication use separate production environments', () => {
   assert.match(job(releaseWorkflow, 'publish-nuget'), /^    environment: production$/m);
-  assert.match(job(docsWorkflow, 'deploy-docs'), /^    environment: production$/m);
+  assert.match(job(docsWorkflow, 'deploy-docs'), /^    environment: docs-production$/m);
 });
 
 test('documentation workflows run the dependency audit gate with bounded builds', () => {
@@ -139,21 +138,25 @@ test('documentation workflows run the dependency audit gate with bounded builds'
 
 test('documentation publication pins the tracked major and main source SHA', () => {
   const prepare = job(docsWorkflow, 'prepare');
-  assert.match(prepare, /ref: main/);
+  assert.match(prepare, /if: github\.ref == 'refs\/heads\/main'/);
   assert.match(prepare, /node docs\/scripts\/current-major\.js/);
-  assert.match(prepare, /source_sha: \$\{\{ steps\.source\.outputs\.source_sha \}\}/);
   assert.doesNotMatch(docsWorkflow, /inputs\.major|github\.event\.inputs/);
 
-  const sourceReference = /ref: \$\{\{ needs\.prepare\.outputs\.source_sha \}\}/;
+  const sourceReference = /ref: \$\{\{ github\.sha \}\}/;
+  assert.match(prepare, sourceReference);
   assert.match(job(docsWorkflow, 'generate-docs-snapshot'), sourceReference);
   assert.match(job(docsWorkflow, 'verify-docs-candidate'), sourceReference);
-  assert.match(job(docsWorkflow, 'cloudflare-preflight'), sourceReference);
-  assert.match(job(docsWorkflow, 'persist-docs-snapshot'), sourceReference);
+  assert.match(job(docsWorkflow, 'propose-docs-snapshot'), sourceReference);
 });
 
 test('documentation publication keeps credentials and permissions narrowly scoped', () => {
+  assert.doesNotMatch(docsWorkflow, /^\s+(cache|cache-dependency-path):/m);
+  assert.equal(
+    docsWorkflow.match(/package-manager-cache: false/g)?.length,
+    docsWorkflow.match(/uses: actions\/setup-node@/g)?.length,
+  );
   assert.equal(docsWorkflow.match(/contents: write/g)?.length, 1);
-  assert.match(job(docsWorkflow, 'persist-docs-snapshot'), /contents: write/);
+  assert.match(job(docsWorkflow, 'propose-docs-snapshot'), /contents: write/);
   assert.equal(docsWorkflow.match(/deployments: write/g)?.length, 1);
   assert.match(job(docsWorkflow, 'deploy-docs'), /deployments: write/);
 
@@ -161,7 +164,7 @@ test('documentation publication keeps credentials and permissions narrowly scope
     'prepare',
     'generate-docs-snapshot',
     'verify-docs-candidate',
-    'persist-docs-snapshot',
+    'propose-docs-snapshot',
     'verify-docs',
   ]) {
     assert.doesNotMatch(
@@ -170,60 +173,58 @@ test('documentation publication keeps credentials and permissions narrowly scope
     );
   }
 
-  for (const name of ['cloudflare-preflight', 'deploy-docs']) {
-    assert.match(
-      job(docsWorkflow, name),
-      /secrets\.CLOUDFLARE_ACCOUNT_ID/,
-    );
-    assert.match(
-      job(docsWorkflow, name),
-      /secrets\.CLOUDFLARE_API_TOKEN/,
-    );
-  }
+  const deploy = job(docsWorkflow, 'deploy-docs');
+  assert.match(deploy, /secrets\.CLOUDFLARE_ACCOUNT_ID/);
+  assert.match(deploy, /secrets\.CLOUDFLARE_API_TOKEN/);
 });
 
-test('documentation persistence targets main and fails safely when it moves', () => {
-  const persist = job(docsWorkflow, 'persist-docs-snapshot');
-  assert.match(persist, /remote_head="\$\(git rev-parse origin\/main\)"/);
-  assert.match(persist, /\[ "\$remote_head" != "\$DOCS_SOURCE_SHA" \]/);
-  assert.match(persist, /Run the Publish Docs workflow again/);
-  assert.match(persist, /current_major="\$\(node docs\/scripts\/current-major\.js\)"/);
-  assert.match(persist, /docs_commit="\$DOCS_SOURCE_SHA"/);
-  assert.match(persist, /git push origin HEAD:main/);
-  assert.match(persist, /git rev-parse origin\/main/);
-  assert.doesNotMatch(persist, /origin\/develop|HEAD:develop/);
+test('changed documentation snapshots require a pull request before deployment', () => {
+  const propose = job(docsWorkflow, 'propose-docs-snapshot');
+  assert.match(propose, /remote_head="\$\(git rev-parse origin\/main\)"/);
+  assert.match(propose, /\[ "\$remote_head" != "\$DOCS_SOURCE_SHA" \]/);
+  assert.match(propose, /snapshot_branch="docs\/snapshot-v\$DOCS_MAJOR-\$DOCS_SOURCE_SHA"/);
+  assert.match(propose, /git push origin "HEAD:\$snapshot_ref"/);
+  assert.match(propose, /Open the documentation snapshot pull request/);
+  assert.match(propose, /snapshot_pending=true/);
+  assert.match(propose, /snapshot_pending=false/);
   assert.match(
-    persist,
+    propose,
     /git add \\\n\s+docs\/versions\.json \\\n\s+docs\/versioned_docs \\\n\s+docs\/versioned_sidebars/,
   );
+  assert.match(
+    job(docsWorkflow, 'verify-docs'),
+    /if: needs\.propose-docs-snapshot\.outputs\.snapshot_pending == 'false'/,
+  );
+  assert.match(job(docsWorkflow, 'deploy-docs'), /needs:\n      - prepare\n      - verify-docs/);
+  assert.doesNotMatch(docsWorkflow, /HEAD:(?:main|develop)|pull-requests: write/);
 });
 
-test('the final docs artifact is built and deployed from the persisted SHA', () => {
-  const persistedReference =
-    /ref: \$\{\{ needs\.persist-docs-snapshot\.outputs\.docs_commit \}\}/;
+test('the final docs artifact is built and deployed from the reviewed SHA', () => {
+  const reviewedReference =
+    /ref: \$\{\{ github\.sha \}\}/;
   const verify = job(docsWorkflow, 'verify-docs');
   const deploy = job(docsWorkflow, 'deploy-docs');
 
-  assert.match(verify, persistedReference);
+  assert.match(verify, reviewedReference);
   assert.match(verify, /npm run build/);
   assert.match(verify, /Upload verified documentation site/);
-  assert.match(deploy, persistedReference);
+  assert.match(deploy, reviewedReference);
   assert.match(deploy, /Download verified documentation site/);
   assert.match(deploy, /DOCS_DEPLOYMENT_URL: \$\{\{ steps\.deploy\.outputs\.deployment-url \}\}/);
-  assert.match(deploy, /DOCS_EXPECTED_REVISION: \$\{\{ needs\.persist-docs-snapshot\.outputs\.docs_commit \}\}/);
+  assert.match(deploy, /DOCS_EXPECTED_REVISION: \$\{\{ github\.sha \}\}/);
   assert.match(deploy, /node docs\/scripts\/check-agent-http\.mjs "\$\{DOCS_DEPLOYMENT_URL:\?Wrangler did not return a deployment URL\}"/);
   assert.doesNotMatch(deploy, /check-agent-http\.mjs https:\/\/valiant\.staticnorth\.dev/);
   assert.doesNotMatch(deploy, /npm (ci|run build)/);
 });
 
 test('manual publication idempotently provisions the shared Cloudflare project', () => {
-  const preflight = job(docsWorkflow, 'cloudflare-preflight');
   const deploy = job(docsWorkflow, 'deploy-docs');
 
   assert.match(docsWorkflow, /CLOUDFLARE_PAGES_PROJECT: valiant-docs/);
   assert.match(docsWorkflow, /CLOUDFLARE_PAGES_PRODUCTION_BRANCH: main/);
+  assert.match(deploy, /git ls-remote --exit-code origin refs\/heads\/main/);
   assert.match(
-    preflight,
+    deploy,
     /bash \.github\/scripts\/ensure-cloudflare-pages-project\.sh/,
   );
   assert.match(
@@ -249,7 +250,7 @@ test('manual publication uses one shared documentation version artifact', () => 
     job(docsWorkflow, 'generate-docs-snapshot'),
     /versioned_sidebars\/version-\$DOCS_MAJOR-sidebars\.json/,
   );
-  assert.match(job(docsWorkflow, 'persist-docs-snapshot'), /docs\/versions\.json/);
+  assert.match(job(docsWorkflow, 'propose-docs-snapshot'), /docs\/versions\.json/);
   assert.match(docsWorkflow, /route="docs\/build\/\$major\/\$product\/index\.html"/);
   assert.doesNotMatch(docsWorkflow, /docs\/build\/\$product\/\$major\/index\.html/);
 });

@@ -185,7 +185,7 @@ test('fails before curl when a required secret is missing', () => {
   const result = runHelper([], {CLOUDFLARE_API_TOKEN: ''});
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /CLOUDFLARE_API_TOKEN repository secret is required/);
+  assert.match(result.stderr, /CLOUDFLARE_API_TOKEN secret is required/);
   assert.deepEqual(result.calls, []);
 });
 
