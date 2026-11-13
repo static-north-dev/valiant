@@ -1,0 +1,71 @@
+.page {
+  max-width: 72rem;
+}
+
+.form {
+  align-items: end;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(12rem, 2fr) 1fr 1fr auto;
+  margin-bottom: 1.5rem;
+}
+
+.form label {
+  display: grid;
+  font-weight: 650;
+  gap: 0.35rem;
+}
+
+.form input,
+.form select {
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-600);
+  border-radius: 0.35rem;
+  color: var(--ifm-font-color-base);
+  font: inherit;
+  font-weight: normal;
+  min-height: 2.75rem;
+  min-width: 0;
+  padding: 0.35rem 0.6rem;
+  width: 100%;
+}
+
+.form button {
+  min-height: 2.75rem;
+}
+
+.form :focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+}
+
+.results {
+  list-style: none;
+  padding: 0;
+}
+
+.results li {
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+  padding: 1rem 0;
+}
+
+.results h2,
+.results p {
+  margin-bottom: 0.3rem;
+}
+
+.module {
+  color: var(--ifm-color-emphasis-700);
+  text-transform: capitalize;
+}
+
+@media (max-width: 700px) {
+  .form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .form label:first-child,
+  .form button {
+    grid-column: 1 / -1;
+  }
+}

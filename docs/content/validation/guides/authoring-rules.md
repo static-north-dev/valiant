@@ -60,7 +60,22 @@ context.Property(order => order.Reference)
         message: "Reference must start with ORD-.");
 ```
 
-Async predicate overloads are available for work that accepts a cancellation token.
+Use `SatisfiesAsync` when a rule calls an asynchronous dependency. This example assumes an injected `accountDirectory` whose `IsAvailableAsync` method returns `ValueTask<bool>`:
+
+```csharp
+context.Property(request => request.Email)
+    .Required()
+    .SatisfiesAsync(
+        (email, cancellationToken) => accountDirectory.IsAvailableAsync(email, cancellationToken),
+        code: "EmailUnavailable",
+        message: "Enter an available email address.");
+```
+
+Pass the caller's cancellation token to the validator:
+
+```csharp
+var result = await validator.ValidateAsync(request, cancellationToken);
+```
 
 ## Conditions
 

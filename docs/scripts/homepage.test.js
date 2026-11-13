@@ -18,13 +18,13 @@ test('homepage presents the complete source-generator family', () => {
     assert.match(homepage, new RegExp(marker.replaceAll('[', '\\[').replaceAll(']', '\\]')));
   }
 
-  assert.match(homepage, /incremental source generation/);
-  assert.match(homepage, /outputs across the Valiant family/);
-  assert.doesNotMatch(homepage, /UserMapper|MapperDefinition/);
+  assert.match(homepage, /MapperDefinition<Order, OrderDto>/);
+  assert.match(homepage, /return new OrderDto\(source.Id, source.Total\)/);
 });
 
 test('homepage actions are module-neutral', () => {
   assert.match(homepage, /href="#modules"[\s\S]*Explore the generators/);
-  assert.match(homepage, /href="#approach"[\s\S]*Why source generation/);
+  assert.match(homepage, /to="\/validation\/reference\/packages"[\s\S]*Packages and compatibility/);
+  assert.match(homepage, /to="\/endpoints\/guides\/validated-api"/);
   assert.doesNotMatch(homepage, /Build your first validator/);
 });

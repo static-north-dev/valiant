@@ -11,6 +11,10 @@ Valiant query binding is disabled by default, leaving request parameters to nati
 builder.Services.AddValiantEndpoints(options =>
 {
     options.QueryParameters.EnableBinding = true;
+    options.QueryParameters.Parsing = new QueryParsingOptions
+    {
+        SupportedObjectFormats = [QueryObjectFormat.Flat, QueryObjectFormat.DotNotation]
+    };
 });
 ```
 
@@ -22,7 +26,15 @@ Changing the literal between `true` and `false` adds or removes generated query 
 
 :::
 
-When enabled, Valiant connects its configurable query parser to generated endpoints in three binding shapes.
+Choose a binding shape based on what the client sends. The setup above enables dot notation for nested values in addition to the default flat format.
+
+| Handler parameter | Example request | Failure response |
+| --- | --- | --- |
+| Whole request with generated `BindAsync` | `/cars?filter.year=2025&filter.brand=Volvo` | The generated binder raises a bad-request exception with the first parser error message. The host controls the HTTP 400 response body. |
+| `[AsParameters]` with complex query properties | `/cars?filter.year=2025&filter.brand=Volvo` | ASP.NET Core handles native binding failures. After native binding succeeds, Valiant can return HTTP 400 with structured `QueryError` entries. |
+| Direct complex `[FromQuery] CarFilter filter` | `/cars?filter=%7B%22year%22%3A2025%7D` | ASP.NET Core handles HTTP 400 when generated `TryParse` rejects the JSON. |
+
+The first two examples produce a filter with `Year = 2025` and `Brand = "Volvo"`. In the direct example, the URL-encoded value is `{"year":2025}`.
 
 ## Whole request binding
 
@@ -38,7 +50,11 @@ public sealed partial record ListCarsRequest
     public CarFilter? Filter { get; init; }
 }
 
-public sealed record CarFilter(int? Year, string? Brand);
+public sealed record CarFilter
+{
+    public int? Year { get; init; }
+    public string? Brand { get; init; }
+}
 ```
 
 Valiant emits `BindAsync(HttpContext, ParameterInfo)` on `ListCarsRequest` and parses the full query through the configured policy.
@@ -58,7 +74,11 @@ public sealed record ListCarsRequest
     public CarFilter? Filter { get; init; }
 }
 
-public sealed partial record CarFilter(int? Year, string? Brand);
+public sealed partial record CarFilter
+{
+    public int? Year { get; init; }
+    public string? Brand { get; init; }
+}
 ```
 
 The complex `[FromQuery]` type must be `partial` in this shape. Valiant generates a `TryParse(string, out T)` shim because ASP.NET Core checks property bindability before endpoint filters run.
@@ -93,7 +113,7 @@ The policy is compiled into the generated method, so direct binding does not use
 
 ## Failure response
 
-Generated binders and the Valiant query-binding filter return HTTP 400 with structured `QueryError` entries when values cannot be converted or a client uses a disabled format. Each entry identifies a `Path`, stable `Code`, human-readable `Message`, and `Kind` (`Validation` or `Configuration`).
+For example, `/cars?filter.year=abc` produces HTTP 400 in both full-query examples. The whole-request binder raises a bad-request exception. The `[AsParameters]` filter returns a JSON array with an `InvalidQueryValue` error for `Filter.Year`. Each entry identifies a `Path`, stable `Code`, human-readable `Message`, and `Kind` (`Validation` or `Configuration`).
 
 ## Configure accepted formats
 

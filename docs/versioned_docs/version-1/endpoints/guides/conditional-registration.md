@@ -115,19 +115,6 @@ All rule predicates observe the same initial pre-mapping snapshot. Matching acti
 
 `EnableBinding` remains a compilation-wide generator decision. Set `options.QueryParameters.EnableBinding = true` directly in the `AddValiantEndpoints` setup lambda when generated binding is required. Conditional parsing rules cannot generate or remove `BindAsync` and direct `TryParse` members.
 
-## Migrate from `ShouldMap`
-
-Split the old shared predicate by registration kind:
-
-```csharp
-// Before
-options.ShouldMap = type => !disabled.Contains(type);
-
-// After
-options.MapEndpointGroupsWhen = group => !disabled.Contains(group.GroupType);
-options.MapEndpointWhen = endpoint => !disabled.Contains(endpoint.EndpointType);
-```
-
 :::warning Startup decision, not request routing
 The predicates are evaluated once when endpoints are mapped. They do not change routes after startup and are not a substitute for authorization or per-request feature evaluation.
 :::
@@ -135,3 +122,5 @@ The predicates are evaluated once when endpoints are mapped. They do not change 
 :::info Generated registrations only
 Routes mapped directly with ASP.NET Core are outside Valiant's generated mapping policy. Apply application-specific conditions to those routes directly.
 :::
+
+See [Upgrading Endpoints from preview](./upgrading-from-preview.md#migrate-from-shouldmap) for the earlier shared predicate.

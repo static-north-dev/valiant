@@ -4,14 +4,9 @@ This file is the working guide for coding agents. It summarizes project structur
 
 ## Project Summary
 
-Valiant is an experimental .NET validation library. Users author validators as partial classes marked with `[ValiantValidator]` and either deriving from `ValidatorDefinition<T>` for attribute-based validation or implementing `IValidatorDefinition<T>` for fluent rules. The source generator emits fast `IValidator<T>` implementations, validation metadata providers, and a DI extension when `Microsoft.Extensions.DependencyInjection` is available.
+Valiant is a family of source-generated .NET libraries for Validation, Endpoints, Mapping, and Settings. Each module starts from explicit C# declarations and generates typed code, metadata, or registration. Validation and Mapping support debuggable authoring and generated fast paths. Endpoints generates ASP.NET Core Minimal API registration, and Settings generates configuration schemas with optional Options registration.
 
-Design goals:
-- Small property-focused validation API.
-- Source-generated validation without reflection scanning.
-- Trim and Native AOT friendliness.
-- DI registration generated at compile time.
-- Debuggable fallback mode that executes user-authored `Configure` methods.
+The [public docs](https://valiant.staticnorth.dev/) cover installation, integration, and deployment compatibility. Author them in `docs/content`. The package READMEs are introductions and link to those guides.
 
 ## Repository Layout
 
@@ -33,6 +28,9 @@ Design goals:
 - `validation/samples/StaticNorth.Valiant.Validation.Samples`: selectable console/core validation samples.
 - `validation/samples/StaticNorth.Valiant.Validation.AspNetCore.Samples`: selectable ASP.NET Core validation samples.
 - `mapping/samples/StaticNorth.Valiant.Mapping.Samples`: selectable mapping samples for conventions, explicit rules, conditions, null handling, composition, and generated DI.
+- `endpoints/src/StaticNorth.Valiant.Endpoints.AspNetCore`: Minimal API registration, conventions, and query binding.
+- `mapping/src/StaticNorth.Valiant.Mapping`: mapping contracts and runtime support.
+- `docs/`: Docusaurus site, versioned snapshots, and agent access.
 - `assets/logo.png`: NuGet package icon, expected to be 128x128 PNG.
 
 ## Common Commands
@@ -191,7 +189,7 @@ Core concepts:
 - `ValiantFailureBehavior` controls fail-fast versus validate-all behavior.
 - `ValiantValidationMode` controls generated fast mode versus debuggable runtime mode.
 
-Supported checks are documented in `README.md`; keep the README in sync when adding new public checks.
+Update `docs/content/validation/reference/validation-checks.md` when adding public checks.
 
 ## Test Guidance
 

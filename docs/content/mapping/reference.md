@@ -22,6 +22,12 @@ services.AddValiantMappers(options =>
 
 `Auto` uses the debuggable runtime backend in Debug builds and direct generated mapping in other builds. `Debuggable` executes your `Configure` method at runtime, so breakpoints work; this path uses expression compilation and reflection. `Fast` always uses generated direct mapping code and is the preferred deployment path for trimming and Native AOT.
 
+## Constructor arguments and nulls
+
+A skipped constructor mapping uses the configured fallback or the parameter type's default value. For a reference type, that default is `null`. Use a nullable parameter when absence is valid. For a required value, use an explicit mapping with a non-null fallback or `MapNull()` when the source already guarantees a non-null value and you want to bypass the null-skip rule.
+
+In 1.2.1, convention mapping to a non-nullable reference constructor parameter can emit `CS8604` because the generated branch for `IgnoreSourceNulls` passes `default`. The [explicit mapping guide](./guides/explicit-mapping.md#null-handling) shows how to select a policy for that member.
+
 ## Generator scope
 
 `[ValiantMapper]` is the discovery boundary. The incremental generator processes only marked declarations and emits:

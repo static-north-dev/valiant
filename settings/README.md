@@ -1,127 +1,17 @@
 # Valiant Settings
 
-Valiant Settings is a source-generation area for strongly typed settings models.
+Generate schemas for typed configuration models. Use the schema directly from tooling or opt models into section-aware Microsoft Options binding. The ASP.NET Core explorer exposes the schema and can display masked runtime values behind your application's authorization policy.
 
-The goal is to generate deterministic settings model schemas that can later be consumed by visualization tools, editors, documentation pages, or other design-time experiences without relying on reflection scanning. The same source-generated metadata can also drive section-aware settings binding helpers.
+| Package | Use it for |
+| --- | --- |
+| `StaticNorth.Valiant.Settings` | Schema generation and optional Options binding |
+| `StaticNorth.Valiant.Settings.AspNetCore` | Settings explorer and JSON schema endpoint |
+| `StaticNorth.Valiant.Settings.Validation` | Options validation through Valiant validators |
 
-Install the most specific settings package your application uses. `StaticNorth.Valiant.Settings.AspNetCore` forwards `StaticNorth.Valiant.Settings` runtime, build, and analyzer assets; `StaticNorth.Valiant.Settings.Validation` also forwards the Valiant Validation assets it integrates with. No extra parent package references are required for source generation.
+The integration packages bring in the core runtime and generator.
 
-## Quick Start
-
-```csharp
-using StaticNorth.Valiant.Settings;
-
-[ValiantSettings("ConnectionStrings:Primary")]
-public sealed record DbSettings
-{
-    [ValiantSecret]
-    public string? ConnectionString { get; init; }
-}
-```
-
-The generator uses the marker attribute to emit schema metadata for the settings model. When `SectionPath` is provided, the generated metadata maps the model to that configuration section.
-Use `[ValiantSecret]` on sensitive properties so runtime value visualizers can mask them.
-
-## Configuration Binding
-
-When `Microsoft.Extensions.DependencyInjection`, `Microsoft.Extensions.Configuration`, and `Microsoft.Extensions.Options.ConfigurationExtensions` are available in the compilation, the source generator also emits dependency injection registration:
-
-```csharp
-using StaticNorth.Valiant.Settings.DependencyInjection;
-
-builder.Services.AddValiantSettings(builder.Configuration);
-```
-
-By default, a section-backed settings model is schema-only. Opt into generated options binding with `configure: true`:
-
-```csharp
-[ValiantSettings("ConnectionStrings:Primary", configure: true)]
-public sealed record DbSettings
-{
-    public string? ConnectionString { get; init; }
-}
-```
-
-For configured settings models, the generated extension binds options from the declared section:
-
-```csharp
-services.Configure<DbSettings>(
-    configuration.GetSection("ConnectionStrings:Primary"));
-```
-
-Schema providers are also registered as `IValiantSettingsSchemaProvider` services so UI and tooling code can enumerate generated settings metadata from DI.
-
-Skip schema-provider registration when an application only wants generated binding and validation:
-
-```csharp
-builder.Services.AddValiantSettings(builder.Configuration, options =>
-{
-    options.RegisterSchemaProviders = false;
-});
-```
-
-## Validation
-
-Reference `StaticNorth.Valiant.Settings.Validation` to opt configured settings models into normal ASP.NET Core options validation with matching Valiant validators. No additional attribute is required on the settings model beyond `[ValiantSettings("Section", configure: true)]`.
-
-```csharp
-using StaticNorth.Valiant.Settings.DependencyInjection;
-using StaticNorth.Valiant.Validation.DependencyInjection;
-
-builder.Services.AddValiantValidators();
-builder.Services.AddValiantSettings(builder.Configuration, options =>
-{
-    options.RegisterSchemaProviders = false;
-    options.ValidateWithValiant = true;
-});
-```
-
-When validation is enabled, the generated settings registration adds `IValidateOptions<TSettings>` adapters for settings models that opt into binding. Each adapter looks for a matching `IValidator<TSettings>` from DI. If no validator is registered, validation succeeds by default. Set `RequireValidators = true` to fail when a settings model has no matching validator:
-
-```csharp
-builder.Services.AddValiantSettings(builder.Configuration, options =>
-{
-    options.ValidateWithValiant = true;
-    options.RequireValidators = true;
-});
-```
-
-## ASP.NET Core UI
-
-`StaticNorth.Valiant.Settings.AspNetCore` maps a small built-in UI and JSON endpoint for visualizing generated settings schemas:
-
-Configure your application's authentication scheme and a `SettingsAdministrators` authorization policy, then apply it to the route group. It protects both the HTML explorer and its JSON endpoint.
-
-```csharp
-using StaticNorth.Valiant.Settings.AspNetCore;
-using StaticNorth.Valiant.Settings.DependencyInjection;
-
-builder.Services.AddValiantSettings(builder.Configuration);
-
-var app = builder.Build();
-
-app.MapValiantSettingsUi()
-    .RequireAuthorization("SettingsAdministrators");
-```
-
-The default routes are `/_valiant/settings` and `/_valiant/settings/schemas`. The [explorer guide](https://valiant.staticnorth.dev/settings/guides/aspnetcore-ui) covers local previews, custom routes, masked runtime values, and secret reveal.
-
-## Intended Scope
-
-- Discover settings model declarations through an explicit authoring surface.
-- Generate schema metadata for model properties, nested objects, collections, default values, and validation hints.
-- Preserve configuration section paths such as `ConnectionStrings:Primary` in generated metadata.
-- Generate section-aware options registration for settings models that opt into binding.
-- Optionally visualize masked runtime values from registered schemas in the ASP.NET Core UI.
-- Keep generated schemas deterministic so visualization tools can diff, cache, and render them reliably.
-- Preserve the Valiant source-generation goals around trim and Native AOT friendliness.
-
-## Planned Layout
-
-- `src/StaticNorth.Valiant.Settings`: runtime APIs and schema metadata contracts.
-- `src/StaticNorth.Valiant.Settings.AspNetCore`: ASP.NET Core UI and JSON endpoints for generated schemas.
-- `src/StaticNorth.Valiant.Settings.Validation`: `IValidateOptions<TOptions>` integration for settings models with matching Valiant validators.
-- `src/StaticNorth.Valiant.Settings.SourceGeneration`: source generator project.
-- `tests/StaticNorth.Valiant.Settings.Tests`: generator tests and schema-shape tests.
-- `samples/StaticNorth.Valiant.Settings.Samples`: selectable schema, binding, registry, and registration-options samples.
-- `samples/StaticNorth.Valiant.Settings.AspNetCore.Samples`: selectable ASP.NET Core UI, route configuration, runtime values, secret reveal, and validation samples.
+- [Quick start](https://valiant.staticnorth.dev/settings/quick-start)
+- [Schema generation](https://valiant.staticnorth.dev/settings/guides/schema-generation)
+- [Binding and validation](https://valiant.staticnorth.dev/settings/guides/binding-validation)
+- [Configure and authorize the explorer](https://valiant.staticnorth.dev/settings/guides/aspnetcore-ui)
+- [Runnable samples](https://valiant.staticnorth.dev/settings/samples)

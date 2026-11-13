@@ -47,7 +47,7 @@ Validation results preserve property paths, codes, messages, and severity. Error
 - [Mediator pipelines](./guides/mediator-pipelines.md)
 - [Validation check catalog](./reference/validation-checks.md)
 - [Runtime and generation](./reference/runtime-generation.md)
-- [Package guide](./reference/packages.md)
+- [Packages and compatibility](./reference/packages.md)
 
 The [sample catalog](./samples.md) covers every selectable core and ASP.NET
 Core scenario. The same behaviors are covered by sample-focused tests,

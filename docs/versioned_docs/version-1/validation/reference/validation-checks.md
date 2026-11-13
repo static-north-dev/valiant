@@ -19,6 +19,8 @@ All checks accept optional `code`, `message`, and `severity`. Nullable value che
 | `SatisfiesAsync(predicate)` | Apply a custom asynchronous predicate via `ValidateAsync` or `IsValidAsync` |
 | `UseValidator(validator)` | Delegate to a reusable property validator |
 
+For a string, `Required()` rejects whitespace-only input and `NotEmpty()` accepts it. For an array, use `NotEmpty()` to reject null and empty arrays, or `MinCount(2)` to set a specific minimum. Use `NotNull()` on a nullable value when zero or another default value is valid.
+
 ## Comparable values
 
 `GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`, `InclusiveBetween`, and `ExclusiveBetween` support compatible comparable values and nullable counterparts.
