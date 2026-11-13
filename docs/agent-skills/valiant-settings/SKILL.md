@@ -5,7 +5,7 @@ description: Generate StaticNorth.Valiant settings schemas and Options binding, 
 
 # Valiant Settings
 
-Identify the application's package major and choose the matching version from [the documentation index](https://valiant.staticnorth.dev/agents/documents.json). The default is the latest published major; `current` is development documentation.
+Identify the application's package major and choose the matching version from [the documentation index](https://valiant.staticnorth.dev/agents/documents.json). The default is the latest published major. A preview may also list `current`.
 
 Latest published references: [Quick start](https://valiant.staticnorth.dev/settings/quick-start), [Binding and validation](https://valiant.staticnorth.dev/settings/guides/binding-validation), and [ASP.NET Core UI](https://valiant.staticnorth.dev/settings/guides/aspnetcore-ui).
 
