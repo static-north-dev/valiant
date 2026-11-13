@@ -19,7 +19,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("NotNull", () => property.Value is null, "'" + property.PropertyName + "' must not be null.", code, message, severity);
+        return property.Check("NotNull", static value => value is null, "'" + property.PropertyName + "' must not be null.", code, message, severity);
     }
 
     /// <summary>
@@ -36,7 +36,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("NotNull", () => property.Value is null, "'" + property.PropertyName + "' must not be null.", code, message, severity);
+        return property.Check("NotNull", static value => value is null, "'" + property.PropertyName + "' must not be null.", code, message, severity);
     }
 
     /// <summary>
@@ -53,7 +53,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("Null", () => property.Value is not null, "'" + property.PropertyName + "' must be null.", code, message, severity);
+        return property.Check("Null", static value => value is not null, "'" + property.PropertyName + "' must be null.", code, message, severity);
     }
 
     /// <summary>
@@ -70,7 +70,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("Null", () => property.Value is not null, "'" + property.PropertyName + "' must be null.", code, message, severity);
+        return property.Check("Null", static value => value is not null, "'" + property.PropertyName + "' must be null.", code, message, severity);
     }
 
     /// <summary>
@@ -87,7 +87,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("DefinedEnum", () => !ValidationChecks.IsDefinedEnum(property.Value), "'" + property.PropertyName + "' must be a defined enum value.", code, message, severity);
+        return property.Check("DefinedEnum", static value => !ValidationChecks.IsDefinedEnum(value), "'" + property.PropertyName + "' must be a defined enum value.", code, message, severity);
     }
 
     /// <summary>
@@ -104,7 +104,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("DefinedEnum", () => !ValidationChecks.IsDefinedEnum(property.Value), "'" + property.PropertyName + "' must be a defined enum value.", code, message, severity);
+        return property.Check("DefinedEnum", static value => !ValidationChecks.IsDefinedEnum(value), "'" + property.PropertyName + "' must be a defined enum value.", code, message, severity);
     }
 
     /// <summary>
@@ -121,7 +121,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("EnumName", () => !ValidationChecks.IsEnumName(enumType, property.Value), "'" + property.PropertyName + "' must be a valid enum name.", code, message, severity);
+        return property.Check("EnumName", enumType, static (actual, type) => !ValidationChecks.IsEnumName(type, actual), "'" + property.PropertyName + "' must be a valid enum name.", code, message, severity);
     }
 
     /// <summary>
@@ -332,7 +332,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("LengthBetween", () => !ValidationChecks.HasLengthBetween(property.Value, min, max), "'" + property.PropertyName + "' must be between " + min + " and " + max + " characters.", code, message, severity);
+        return property.Check("LengthBetween", (Min: min, Max: max), static (actual, bounds) => !ValidationChecks.HasLengthBetween(actual, bounds.Min, bounds.Max), "'" + property.PropertyName + "' must be between " + min + " and " + max + " characters.", code, message, severity);
     }
 
     /// <summary>
@@ -350,7 +350,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("MinLength", () => !ValidationChecks.HasMinLength(property.Value, min), "'" + property.PropertyName + "' must be at least " + min + " characters.", code, message, severity);
+        return property.Check("MinLength", min, static (actual, minimum) => !ValidationChecks.HasMinLength(actual, minimum), "'" + property.PropertyName + "' must be at least " + min + " characters.", code, message, severity);
     }
 
     /// <summary>
@@ -368,7 +368,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("MaxLength", () => !ValidationChecks.HasMaxLength(property.Value, max), "'" + property.PropertyName + "' must be at most " + max + " characters.", code, message, severity);
+        return property.Check("MaxLength", max, static (actual, maximum) => !ValidationChecks.HasMaxLength(actual, maximum), "'" + property.PropertyName + "' must be at most " + max + " characters.", code, message, severity);
     }
 
     /// <summary>
@@ -387,7 +387,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("CountBetween", () => !ValidationChecks.HasCountBetween(property.Value, min, max), "'" + property.PropertyName + "' must contain between " + min + " and " + max + " item(s).", code, message, severity);
+        return property.Check("CountBetween", (Min: min, Max: max), static (actual, bounds) => !ValidationChecks.HasCountBetween(actual, bounds.Min, bounds.Max), "'" + property.PropertyName + "' must contain between " + min + " and " + max + " item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -405,7 +405,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("MinCount", () => !ValidationChecks.HasMinCount(property.Value, min), "'" + property.PropertyName + "' must contain at least " + min + " item(s).", code, message, severity);
+        return property.Check("MinCount", min, static (actual, minimum) => !ValidationChecks.HasMinCount(actual, minimum), "'" + property.PropertyName + "' must contain at least " + min + " item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -423,7 +423,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("MaxCount", () => !ValidationChecks.HasMaxCount(property.Value, max), "'" + property.PropertyName + "' must contain at most " + max + " item(s).", code, message, severity);
+        return property.Check("MaxCount", max, static (actual, maximum) => !ValidationChecks.HasMaxCount(actual, maximum), "'" + property.PropertyName + "' must contain at most " + max + " item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -441,7 +441,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("Contains", () => !ValidationChecks.Contains(property.Value, item), "'" + property.PropertyName + "' must contain the expected item.", code, message, severity);
+        return property.Check("Contains", item, static (actual, item) => !ValidationChecks.Contains(actual, item), "'" + property.PropertyName + "' must contain the expected item.", code, message, severity);
     }
 
     /// <summary>
@@ -459,7 +459,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("Excludes", () => ValidationChecks.Contains(property.Value, item), "'" + property.PropertyName + "' must not contain the excluded item.", code, message, severity);
+        return property.Check("Excludes", item, static (actual, excluded) => ValidationChecks.Contains(actual, excluded), "'" + property.PropertyName + "' must not contain the excluded item.", code, message, severity);
     }
 
     /// <summary>
@@ -477,7 +477,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("HasKey", () => !ValidationChecks.HasKey(property.Value, key), "'" + property.PropertyName + "' must contain the expected key.", code, message, severity);
+        return property.Check("HasKey", key, static (actual, key) => !ValidationChecks.HasKey(actual, key), "'" + property.PropertyName + "' must contain the expected key.", code, message, severity);
     }
 
     /// <summary>
@@ -495,7 +495,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("HasValue", () => !ValidationChecks.HasValue(property.Value, value), "'" + property.PropertyName + "' must contain the expected value.", code, message, severity);
+        return property.Check("HasValue", value, static (actual, expected) => !ValidationChecks.HasValue(actual, expected), "'" + property.PropertyName + "' must contain the expected value.", code, message, severity);
     }
 
     /// <summary>
@@ -513,7 +513,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("GreaterThan", () => property.Value.CompareTo(value) <= 0, "'" + property.PropertyName + "' must be greater than " + value + ".", code, message, severity);
+        return property.Check("GreaterThan", value, static (actual, expected) => Comparer<TProperty>.Default.Compare(actual, expected) <= 0, "'" + property.PropertyName + "' must be greater than " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -531,7 +531,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("GreaterThan", () => property.Value.HasValue && property.Value.Value.CompareTo(value) <= 0, "'" + property.PropertyName + "' must be greater than " + value + ".", code, message, severity);
+        return property.Check("GreaterThan", value, static (actual, expected) => actual.HasValue && actual.Value.CompareTo(expected) <= 0, "'" + property.PropertyName + "' must be greater than " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -549,7 +549,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("GreaterThanOrEqualTo", () => property.Value.CompareTo(value) < 0, "'" + property.PropertyName + "' must be greater than or equal to " + value + ".", code, message, severity);
+        return property.Check("GreaterThanOrEqualTo", value, static (actual, expected) => Comparer<TProperty>.Default.Compare(actual, expected) < 0, "'" + property.PropertyName + "' must be greater than or equal to " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -567,7 +567,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("GreaterThanOrEqualTo", () => property.Value.HasValue && property.Value.Value.CompareTo(value) < 0, "'" + property.PropertyName + "' must be greater than or equal to " + value + ".", code, message, severity);
+        return property.Check("GreaterThanOrEqualTo", value, static (actual, expected) => actual.HasValue && actual.Value.CompareTo(expected) < 0, "'" + property.PropertyName + "' must be greater than or equal to " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -585,7 +585,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("LessThan", () => property.Value.CompareTo(value) >= 0, "'" + property.PropertyName + "' must be less than " + value + ".", code, message, severity);
+        return property.Check("LessThan", value, static (actual, expected) => Comparer<TProperty>.Default.Compare(actual, expected) >= 0, "'" + property.PropertyName + "' must be less than " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -603,7 +603,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("LessThan", () => property.Value.HasValue && property.Value.Value.CompareTo(value) >= 0, "'" + property.PropertyName + "' must be less than " + value + ".", code, message, severity);
+        return property.Check("LessThan", value, static (actual, expected) => actual.HasValue && actual.Value.CompareTo(expected) >= 0, "'" + property.PropertyName + "' must be less than " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -621,7 +621,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("LessThanOrEqualTo", () => property.Value.CompareTo(value) > 0, "'" + property.PropertyName + "' must be less than or equal to " + value + ".", code, message, severity);
+        return property.Check("LessThanOrEqualTo", value, static (actual, expected) => Comparer<TProperty>.Default.Compare(actual, expected) > 0, "'" + property.PropertyName + "' must be less than or equal to " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -639,7 +639,7 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("LessThanOrEqualTo", () => property.Value.HasValue && property.Value.Value.CompareTo(value) > 0, "'" + property.PropertyName + "' must be less than or equal to " + value + ".", code, message, severity);
+        return property.Check("LessThanOrEqualTo", value, static (actual, expected) => actual.HasValue && actual.Value.CompareTo(expected) > 0, "'" + property.PropertyName + "' must be less than or equal to " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -658,10 +658,9 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("InclusiveBetween", () =>
+        return property.Check("InclusiveBetween", (From: from, To: to), static (value, bounds) =>
         {
-            var value = property.Value;
-            return value.CompareTo(from) < 0 || value.CompareTo(to) > 0;
+            return Comparer<TProperty>.Default.Compare(value, bounds.From) < 0 || Comparer<TProperty>.Default.Compare(value, bounds.To) > 0;
         }, "'" + property.PropertyName + "' must be between " + from + " and " + to + ".", code, message, severity);
     }
 
@@ -681,10 +680,9 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("InclusiveBetween", () =>
+        return property.Check("InclusiveBetween", (From: from, To: to), static (value, bounds) =>
         {
-            var value = property.Value;
-            return value.HasValue && (value.Value.CompareTo(from) < 0 || value.Value.CompareTo(to) > 0);
+            return value.HasValue && (value.Value.CompareTo(bounds.From) < 0 || value.Value.CompareTo(bounds.To) > 0);
         }, "'" + property.PropertyName + "' must be between " + from + " and " + to + ".", code, message, severity);
     }
 
@@ -704,10 +702,9 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("ExclusiveBetween", () =>
+        return property.Check("ExclusiveBetween", (From: from, To: to), static (value, bounds) =>
         {
-            var value = property.Value;
-            return value.CompareTo(from) <= 0 || value.CompareTo(to) >= 0;
+            return Comparer<TProperty>.Default.Compare(value, bounds.From) <= 0 || Comparer<TProperty>.Default.Compare(value, bounds.To) >= 0;
         }, "'" + property.PropertyName + "' must be between " + from + " and " + to + ", exclusive.", code, message, severity);
     }
 
@@ -727,10 +724,9 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("ExclusiveBetween", () =>
+        return property.Check("ExclusiveBetween", (From: from, To: to), static (value, bounds) =>
         {
-            var value = property.Value;
-            return value.HasValue && (value.Value.CompareTo(from) <= 0 || value.Value.CompareTo(to) >= 0);
+            return value.HasValue && (value.Value.CompareTo(bounds.From) <= 0 || value.Value.CompareTo(bounds.To) >= 0);
         }, "'" + property.PropertyName + "' must be between " + from + " and " + to + ", exclusive.", code, message, severity);
     }
 
@@ -746,6 +742,6 @@ public static class TypedPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("EnumValue", () => !ValidationChecks.IsEnumValue(enumType, property.Value), "'" + property.PropertyName + "' must be a valid enum value.", code, message, severity);
+        return property.Check("EnumValue", enumType, static (actual, type) => !ValidationChecks.IsEnumValue(type, actual), "'" + property.PropertyName + "' must be a valid enum value.", code, message, severity);
     }
 }

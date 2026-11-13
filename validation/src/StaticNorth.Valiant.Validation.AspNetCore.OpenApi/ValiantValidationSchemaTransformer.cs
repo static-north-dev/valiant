@@ -109,7 +109,8 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
         {
             rules.Add(CreateRuleExtension(check));
 
-            if (!property.IsConditional && !check.IsConditional)
+            if (!property.IsConditional && !check.IsConditional &&
+                check.Severity is null or nameof(ValiantSeverity.Error))
             {
                 ApplySchemaConstraint(parentSchema, jsonPropertyName, propertySchema, check);
             }

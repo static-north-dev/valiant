@@ -595,6 +595,19 @@ public sealed class FluentRuleTests
     }
 
     [Test]
+    public async Task Failure_Behavior_Changes_Apply_To_Following_Rules()
+    {
+        var context = new ValidationContext<FailureBehaviorModel>(new FailureBehaviorModel());
+        context.Property(model => model.Name).Required(code: "Before");
+        context.FailFast();
+        context.Property(model => model.Description).Required(code: "After");
+        context.Property(model => model.Name).Required(code: "Skipped");
+
+        await Assert.That(string.Join(",", context.ToResult().Errors.Select(static error => error.ErrorCode)))
+            .IsEqualTo("Before,After");
+    }
+
+    [Test]
     public async Task Validator_FailFast_Overrides_Global_ValidateAll()
     {
         var fastValidator = new ValidatorFailFastBehaviorValidator(FastOptions());

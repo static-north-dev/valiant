@@ -74,7 +74,7 @@ public override void Configure(ValidationContext<CreateUser> context)
 }
 ```
 
-In `Debuggable` mode, the user-authored `Configure` method executes at runtime, so breakpoints in native `if`/`else` and `switch` statements work normally.
+Fluent validators with native `if`/`else` or `switch` statements execute `Configure` at runtime in every mode, so breakpoints in those statements work normally.
 
 Whole-model validators can be reused from another validator for the same model type. Inject the validator through the normal constructor and pass that dependency to `UseValidator`; generated DI registers concrete validators so this resolves out of the box:
 
@@ -172,24 +172,19 @@ public Address? Address { get; init; }
 
 `ValidatorDefinition<T>` authoring is intentionally mutually exclusive: omit `Configure(ValidationContext<T>)` to use model validation attributes, or declare `Configure` to use fluent rules on a model without validation attributes. If both are present, Valiant reports an analyzer error so rule ownership stays explicit.
 
-The generator emits an `IValidator<CreateUser>` implementation with direct property reads and native branch checks. When `Microsoft.Extensions.DependencyInjection` is available in the consumer project, it also emits:
+The generator emits an `IValidator<CreateUser>` implementation that executes generated checks for attributes and eligible straight-line fluent rules. Other fluent validators run through `ValidationContext<CreateUser>`. When `Microsoft.Extensions.DependencyInjection` is available in the consumer project, it also emits:
 
 ```csharp
 services.AddValiantValidators(options =>
 {
-    options.Mode = ValiantValidationMode.Auto;
     options.Lifetime = ValiantValidatorLifetime.Scoped;
     options.FailureBehavior = ValiantFailureBehavior.ValidateAll;
 });
 ```
 
-That generated extension registers validators without reflection scanning and configures the validation backend:
+The generated extension registers validators without reflection scanning. `Lifetime` controls whether registrations are singleton, scoped, or transient. `FailureBehavior` controls whether validators collect failures or stop after the first error.
 
-- `Auto` runs the debuggable runtime backend in Debug builds and the generated fast backend otherwise.
-- `Debuggable` always executes the user-authored `Configure` method, so normal breakpoints work.
-- `Fast` always uses the source-generated direct validation code.
-- `Lifetime` controls DI registration for generated validators: `Singleton`, `Scoped`, or `Transient`.
-- `FailureBehavior` controls whether validators collect every failure or stop after the first one.
+`ValiantValidationOptions.Mode` defaults to `Auto`, which uses generated checks for eligible fluent validators in Debug and Release, just like `Fast`. Set it to `Debuggable` to step through the original `Configure` method. Both paths preserve validation results and rule order. `IsValid()` and `IsValidAsync()` return the validity of the corresponding full result.
 
 The attribute is the generator discovery hook. `ValidatorDefinition<T>` supplies the model type and exposes the overridable `Configure(ValidationContext<T>)` authoring surface for fluent rules. Leaving the override out enables attribute-based default validation.
 
@@ -284,7 +279,7 @@ public sealed partial class UserMapper(AddressMapper addressMapper) : MapperDefi
 }
 ```
 
-Generated mappers use `ValiantMappingMode.Auto` by default: Debug builds execute `Configure(...)` at runtime so breakpoints work, while Release builds use source-generated fast mapping. Pass `new ValiantMappingOptions { Mode = ValiantMappingMode.Fast }` or `Debuggable` to force a backend.
+Generated mappers use `ValiantMappingMode.Auto` by default. Both `Auto` and `Fast` use source-generated mapping in Debug and Release builds. Pass `new ValiantMappingOptions { Mode = ValiantMappingMode.Debuggable }` to step through `Configure(...)` at runtime.
 
 When dependency injection abstractions are available, the generator emits `AddValiantMappers(...)` and registers discovered mappers as concrete services, `IMapper<TSource, TTarget>` services, a convenience `IMapper` facade, `IMapperFactory`, and `ValiantMappingOptions`.
 

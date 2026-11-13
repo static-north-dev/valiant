@@ -1,13 +1,12 @@
 # Validation benchmarks
 
-These benchmarks measure Valiant's generated `Fast` validation path against
-Validly. Both implementations validate five independent properties with one
+These benchmarks measure Valiant's fluent validation against Validly. Both implementations validate five independent properties with one
 equivalent rule per property.
 
 - `ValidationBenchmarks` measures full diagnostic result creation.
 - `ValidationFailurePatternBenchmarks` alternates one/all failures or cycles
   through all 32 combinations, measuring result lookup after every rule executes.
-- `ValidationStatusBenchmarks` measures status-only validation.
+- `ValidationStatusBenchmarks` measures the boolean API, which runs the same rules and diagnostics and returns validity directly.
 - `ValidationResultConstructionBenchmarks` isolates result construction for
   homogeneous and mixed severities.
 - `ValidationResultAccessBenchmarks` measures indexed and enumerated severity
@@ -22,10 +21,7 @@ equivalent rule per property.
 `GlobalSetup` validates the result status, exact failure count, and failed
 property names before timing begins. Validator construction and input creation
 are excluded. Full validation includes result creation or reuse, and Validly
-result disposal is included because its result is pool-backed. Generated Valiant
-validators with at most six checks and fixed default failure content lazily reuse
-immutable results. These benchmarks warm those results; first-use allocations
-are excluded. Dynamic content and larger validators use owned result construction.
+result disposal is included because its result is pool-backed. The simple fluent workload uses generated checks and the bounded result cache in Auto and Fast.
 
 ## Run
 
@@ -50,7 +46,7 @@ dotnet run --project validation/benchmarks/StaticNorth.Valiant.Validation.Benchm
 ```
 
 BenchmarkDotNet compiles two jobs with Runtime Async off and on. Both use
-generated Fast validators and the same successful `SatisfiesAsync` rule. The
+the same fluent validators and successful `SatisfiesAsync` rule. The
 nested case calls the single validator through `UseValidator`. The rule either
 returns a completed `ValueTask` or suspends on a reusable completion source
 that the benchmark completes after the validator yields. This models one
@@ -122,5 +118,4 @@ control, not a replacement for before/after Valiant measurements.
 
 For result representation changes, mixed-severity construction must not regress
 by more than 5%, partition access must remain allocation-free, and allocated
-bytes must decrease. For status-only validation, generated Valiant and Validly
-must return the same status before measurement.
+bytes must decrease. For the boolean API, Valiant and Validly must return the same status before measurement.

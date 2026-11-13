@@ -3,35 +3,17 @@ namespace StaticNorth.Valiant.Validation.Tests;
 public sealed class ValidationStatusFastPathTests
 {
     [Test]
-    public async Task Fast_IsValid_Skips_Diagnostics_But_Evaluates_Severity()
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    [Arguments(ValiantValidationMode.Auto)]
+    public async Task IsValid_Evaluates_All_Diagnostic_Arguments(ValiantValidationMode mode)
     {
         var counters = new ValidationStatusCounters();
-        var validator = new DiagnosticStatusValidator(
-            counters,
-            new ValiantValidationOptions { Mode = ValiantValidationMode.Fast });
+        var validator = new DiagnosticStatusValidator(counters, new ValiantValidationOptions { Mode = mode });
 
-        var isValid = validator.IsValid(new ValidationStatusModel());
-
-        await Assert.That(isValid).IsFalse();
-        await Assert.That(counters.CodeCalls).IsEqualTo(0);
-        await Assert.That(counters.MessageCalls).IsEqualTo(0);
-        await Assert.That(counters.SeverityCalls).IsEqualTo(1);
-    }
-
-    [Test]
-    public async Task Debuggable_IsValid_Retains_Materialized_Diagnostic_Evaluation()
-    {
-        var counters = new ValidationStatusCounters();
-        var validator = new DiagnosticStatusValidator(
-            counters,
-            new ValiantValidationOptions { Mode = ValiantValidationMode.Debuggable });
-
-        var isValid = validator.IsValid(new ValidationStatusModel());
-
-        await Assert.That(isValid).IsFalse();
-        await Assert.That(counters.CodeCalls).IsEqualTo(1);
-        await Assert.That(counters.MessageCalls).IsEqualTo(1);
-        await Assert.That(counters.SeverityCalls).IsEqualTo(1);
+        await Assert.That(validator.IsValid(new ValidationStatusModel())).IsFalse();
+        await Assert.That(await validator.IsValidAsync(new ValidationStatusModel())).IsFalse();
+        await Assert.That((counters.CodeCalls, counters.MessageCalls, counters.SeverityCalls)).IsEqualTo((2, 2, 2));
     }
 
     [Test]
@@ -53,7 +35,7 @@ public sealed class ValidationStatusFastPathTests
     }
 
     [Test]
-    public async Task Fast_Status_Composition_Uses_Model_Status_And_Property_Result_Fallbacks()
+    public async Task Status_Composition_Uses_Materialized_Model_And_Property_Results()
     {
         var reusedValidator = new StatusReuseProbeValidator();
         var modelValidator = new ReusingStatusValidator(
@@ -73,9 +55,9 @@ public sealed class ValidationStatusFastPathTests
 
         await Assert.That(modelIsValid).IsFalse();
         await Assert.That(modelIsValidAsync).IsFalse();
-        await Assert.That(reusedValidator.ValidateCalls).IsEqualTo(0);
-        await Assert.That(reusedValidator.IsValidCalls).IsEqualTo(1);
-        await Assert.That(reusedValidator.IsValidAsyncCalls).IsEqualTo(1);
+        await Assert.That(reusedValidator.ValidateCalls).IsEqualTo(2);
+        await Assert.That(reusedValidator.IsValidCalls).IsEqualTo(0);
+        await Assert.That(reusedValidator.IsValidAsyncCalls).IsEqualTo(0);
         await Assert.That(propertyIsValid).IsTrue();
         await Assert.That(propertyValidator.ValidateCalls).IsEqualTo(1);
         await Assert.That(propertyCounters.PredicateCalls).IsEqualTo(0);

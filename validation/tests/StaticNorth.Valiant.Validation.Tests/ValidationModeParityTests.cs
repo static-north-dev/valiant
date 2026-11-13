@@ -1,5 +1,5 @@
 using System.Globalization;
-using System.Reflection;
+using StaticNorth.Valiant.Validation.Tests.EdgeParity;
 using SampleAddressPropertyValidator = StaticNorth.Valiant.Validation.Samples.Catalog.AddressPropertyValidator;
 using SampleAddressValidator = StaticNorth.Valiant.Validation.Samples.Catalog.AddressValidator;
 using SampleCatalogItemFactory = StaticNorth.Valiant.Validation.Samples.Catalog.CatalogItemFactory;
@@ -676,19 +676,250 @@ public sealed class ValidationModeParityTests
     }
 
     [Test]
-    public async Task Explicit_And_Auto_Mode_Selection_Use_The_Generated_Dispatch()
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    [Arguments(ValiantValidationMode.Auto)]
+    public async Task Each_Property_Chain_Uses_One_Value(ValiantValidationMode mode)
     {
-        await Assert.That(GetEffectiveMode(new RequiredValidator(Options(ValiantValidationMode.Fast))))
-            .IsEqualTo(ValiantValidationMode.Fast);
-        await Assert.That(GetEffectiveMode(new RequiredValidator(Options(ValiantValidationMode.Debuggable))))
-            .IsEqualTo(ValiantValidationMode.Debuggable);
+        var validator = new ParityChangingPropertyValidator(Options(mode));
+        var syncModel = new ParityChangingProperty();
+        var asyncModel = new ParityChangingProperty();
+        var syncResult = validator.Validate(syncModel);
+        var asyncResult = await validator.ValidateAsync(asyncModel);
 
-        var autoMode = GetEffectiveMode(new RequiredValidator(Options(ValiantValidationMode.Auto)));
-#if DEBUG
-        await Assert.That(autoMode).IsEqualTo(ValiantValidationMode.Debuggable);
-#else
-        await Assert.That(autoMode).IsEqualTo(ValiantValidationMode.Fast);
-#endif
+        AssertEquivalentResults(mode.ToString(), syncResult, asyncResult);
+        AssertExpectedResult(mode.ToString(), syncResult, Invalid(
+            static () => new ParityChangingProperty(),
+            Failure("Value", "Missing", message: "Provide a value."),
+            Failure("Value", "Empty", ValiantSeverity.Warning, "Value is empty.")));
+        await Assert.That((syncModel.Reads, asyncModel.Reads)).IsEqualTo((1, 1));
+        await Assert.That(validator.IsValid(new ParityChangingProperty())).IsFalse();
+        await Assert.That(await validator.IsValidAsync(new ParityChangingProperty())).IsFalse();
+    }
+
+    [Test]
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    [Arguments(ValiantValidationMode.Auto)]
+    public async Task Sync_Only_Validator_Honors_PreCancelled_Async_Calls(ValiantValidationMode mode)
+    {
+        var validator = new ParityChangingPropertyValidator(Options(mode));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var model = new ParityChangingProperty();
+
+        var validate = await CaptureExceptionAsync(async () => await validator.ValidateAsync(model, cancellation.Token));
+        var isValid = await CaptureExceptionAsync(async () => await validator.IsValidAsync(model, cancellation.Token));
+
+        await Assert.That(((OperationCanceledException)validate).CancellationToken).IsEqualTo(cancellation.Token);
+        await Assert.That(((OperationCanceledException)isValid).CancellationToken).IsEqualTo(cancellation.Token);
+        await Assert.That(model.Reads).IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments(ValiantValidationMode.Fast, false)]
+    [Arguments(ValiantValidationMode.Debuggable, false)]
+    [Arguments(ValiantValidationMode.Fast, true)]
+    [Arguments(ValiantValidationMode.Debuggable, true)]
+    public async Task Sync_APIs_Reject_Async_Validators_Even_When_Rule_Is_Inactive(ValiantValidationMode mode, bool enableAsync)
+    {
+        var validator = new ParityConditionalAsyncValidator(Options(mode));
+        var model = new ParityChangingProperty { EnableAsyncRule = enableAsync };
+        var validate = await CaptureExceptionAsync(() => Task.FromResult(validator.Validate(model)));
+        var isValid = await CaptureExceptionAsync(() => Task.FromResult(validator.IsValid(model)));
+
+        await Assert.That(validate).IsTypeOf<InvalidOperationException>();
+        await Assert.That(validate.Message).Contains("Call ValidateAsync instead");
+        await Assert.That(isValid.Message).IsEqualTo(validate.Message);
+        await Assert.That(model.Reads).IsEqualTo(0);
+        await Assert.That(await validator.IsValidAsync(model)).IsEqualTo(!enableAsync);
+    }
+
+    [Test]
+    public async Task Late_FailFast_Does_Not_Change_Earlier_Rules()
+    {
+        var input = Invalid(
+            static () => new FailureBehaviorModel(),
+            Failure("Name", "NameMissing"),
+            Failure("Description", "DescriptionMissing"),
+            Failure("Name", "AfterFailFast"));
+        await AssertSyncParity("LateFailFast", mode => new ParityLateFailFastValidator(Options(mode)), input);
+        await AssertAsyncParity("LateFailFast", mode => new ParityLateFailFastValidator(Options(mode)), input);
+    }
+
+    [Test]
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    public async Task Reused_Validator_Merges_Only_Through_The_First_Error(ValiantValidationMode mode)
+    {
+        var validator = new EdgeParentValidator(new EdgeReusedValidator(), Options(mode, ValiantFailureBehavior.FailFast));
+        await AssertValidationApis(
+            validator,
+            static () => new EdgeReuseInput(),
+            ["inner1"],
+            static model => model.TailCalls,
+            0);
+    }
+
+    [Test]
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    public async Task When_Predicate_Runs_Once_Per_Property_Chain(ValiantValidationMode mode)
+    {
+        await AssertValidationApis(
+            new EdgeWhenValidator(Options(mode)),
+            static () => new EdgeWhenInput(),
+            ["required", "notEmpty"],
+            static model => model.WhenCalls,
+            1);
+    }
+
+    [Test]
+    public async Task Required_Rejects_Whitespace_In_Boxed_Strings()
+    {
+        var whitespace = Invalid(static () => new EdgeBoxedInput(" \t"), Failure("Value", "Required"));
+        var nonString = Valid(static () => new EdgeBoxedInput(0));
+        await AssertSyncParity("BoxedRequired", mode => new EdgeBoxedValidator(Options(mode)), whitespace, nonString);
+        await AssertAsyncParity("BoxedRequired", mode => new EdgeBoxedValidator(Options(mode)), whitespace, nonString);
+    }
+
+    [Test]
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    public async Task Computed_Severity_Is_Used_Consistently_For_FailFast(ValiantValidationMode mode)
+    {
+        var validator = new EdgeSeverityValidator(Options(mode, ValiantFailureBehavior.FailFast));
+        await AssertValidationApis(
+            validator,
+            static () => new EdgeSeverityInput(),
+            ["first"],
+            static model => model.Calls,
+            1);
+        await Assert.That(validator.Validate(new EdgeSeverityInput()).Failures.Single().Severity).IsEqualTo(ValiantSeverity.Error);
+    }
+
+    [Test]
+    public async Task A_Passing_Check_Still_Evaluates_Its_Computed_Severity()
+    {
+        var input = ValidWithFailures(static () => new EdgeSeverityInput(), Failure("Value", "warning", ValiantSeverity.Warning));
+        await AssertSyncParity("PassingSeverity", mode => new EdgePassingSeverityValidator(Options(mode)), input);
+        await AssertAsyncParity("PassingSeverity", mode => new EdgePassingSeverityValidator(Options(mode)), input);
+    }
+
+    [Test]
+    public async Task Unavailable_Chained_Selectors_Skip_The_Rule()
+    {
+        var missingParent = Valid(static () => new EdgeThrowingInput { Child = null });
+        var getterNullReference = Valid(static () => new EdgeThrowingInput());
+        await AssertSyncParity("ChainedRead", mode => new EdgeThrowingValidator(Options(mode)), missingParent, getterNullReference);
+        await AssertAsyncParity("ChainedRead", mode => new EdgeThrowingValidator(Options(mode)), missingParent, getterNullReference);
+    }
+
+    [Test]
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    public async Task Child_ValidateAll_Does_Not_Override_Parent_FailFast(ValiantValidationMode mode)
+    {
+        var validator = new EdgeChildValidator(Options(mode, ValiantFailureBehavior.FailFast));
+        await AssertValidationApis(
+            validator,
+            static () => new EdgeChildInput(),
+            ["child1"],
+            static model => model.Child!.Calls,
+            2);
+        await Assert.That(validator.Validate(new EdgeChildInput()).Failures.Single().PropertyName).IsEqualTo("Child.Counted");
+    }
+
+    [Test]
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    public async Task Collection_Item_ValidateAll_Does_Not_Override_Parent_FailFast(ValiantValidationMode mode)
+    {
+        var validator = new EdgeItemValidator(Options(mode, ValiantFailureBehavior.FailFast));
+        await AssertValidationApis(
+            validator,
+            static () => new EdgeChildInput { Items = [new EdgeChildValue(), new EdgeChildValue()] },
+            ["item1"],
+            static model => model.Items.Sum(static item => item.Calls),
+            2);
+        var result = validator.Validate(new EdgeChildInput { Items = [new EdgeChildValue()] });
+        await Assert.That(result.Failures.Single().PropertyName).IsEqualTo("Items[0].Counted");
+    }
+
+    [Test]
+    public async Task Children_Model_Aware_Predicates_Receive_The_Child_Instance()
+    {
+        await AssertSyncParity(
+            "ChildPredicate",
+            mode => new EdgeChildPredicateValidator(Options(mode)),
+            Valid(static () => new EdgeChildInput { Child = new EdgeChildValue { Value = "match" } }),
+            Invalid(static () => new EdgeChildInput(), Failure("Child.Counted", "child")));
+        await AssertAsyncParity(
+            "AsyncChildPredicate",
+            mode => new EdgeChildAsyncPredicateValidator(Options(mode)),
+            Valid(static () => new EdgeChildInput { Child = new EdgeChildValue { Value = "match" } }),
+            Invalid(static () => new EdgeChildInput(), Failure("Child.Counted", "async-child")));
+    }
+
+    [Test]
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    public async Task Cancellation_Between_Rules_Stops_Materialized_And_Status_Validation(ValiantValidationMode mode)
+    {
+        var validator = new EdgeCancelBetweenRulesValidator(Options(mode));
+        using var validateCancellation = new CancellationTokenSource();
+        using var statusCancellation = new CancellationTokenSource();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            validator.ValidateAsync(new EdgeCancelInput(validateCancellation), validateCancellation.Token).AsTask());
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            validator.IsValidAsync(new EdgeCancelInput(statusCancellation), statusCancellation.Token).AsTask());
+    }
+
+    [Test]
+    public async Task Null_In_A_Reference_Comparison_Produces_A_Failure()
+    {
+        var input = Invalid(static () => new EdgeNullComparisonInput(), Failure("Value", "GreaterThan"));
+        await AssertSyncParity("NullComparison", mode => new EdgeNullComparisonValidator(Options(mode)), input);
+        await AssertAsyncParity("NullComparison", mode => new EdgeNullComparisonValidator(Options(mode)), input);
+    }
+
+    [Test]
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    public async Task Validate_Evaluates_Explicit_Diagnostics_Even_When_A_Check_Passes(ValiantValidationMode mode)
+    {
+        var validator = new EdgeDynamicMessageValidator(Options(mode));
+        var syncModel = new EdgeDynamicMessageInput();
+        var asyncModel = new EdgeDynamicMessageInput();
+
+        await Assert.That(validator.Validate(syncModel).IsValid).IsTrue();
+        await Assert.That((await validator.ValidateAsync(asyncModel)).IsValid).IsTrue();
+        await Assert.That((syncModel.Calls, asyncModel.Calls)).IsEqualTo((1, 1));
+    }
+
+    private static async Task AssertValidationApis<T>(
+        IValidator<T> validator,
+        Func<T> createModel,
+        string[] expectedCodes,
+        Func<T, int> getCalls,
+        int expectedCalls)
+    {
+        var syncModel = createModel();
+        var asyncModel = createModel();
+        var syncStatusModel = createModel();
+        var asyncStatusModel = createModel();
+
+        var syncResult = validator.Validate(syncModel);
+        var asyncResult = await validator.ValidateAsync(asyncModel);
+
+        AssertEquivalentResults(typeof(T).Name, syncResult, asyncResult);
+        await Assert.That(string.Join(",", syncResult.Failures.Select(static failure => failure.ErrorCode)))
+            .IsEqualTo(string.Join(",", expectedCodes));
+        await Assert.That(validator.IsValid(syncStatusModel)).IsFalse();
+        await Assert.That(await validator.IsValidAsync(asyncStatusModel)).IsFalse();
+        await Assert.That((getCalls(syncModel), getCalls(asyncModel), getCalls(syncStatusModel), getCalls(asyncStatusModel)))
+            .IsEqualTo((expectedCalls, expectedCalls, expectedCalls, expectedCalls));
     }
 
     private static async Task AssertSyncParity<T>(
@@ -914,15 +1145,6 @@ public sealed class ValidationModeParityTests
         throw new InvalidOperationException("Expected the action to throw.");
     }
 
-    private static ValiantValidationMode GetEffectiveMode(object validator)
-    {
-        var method = validator.GetType().GetMethod(
-            "GetEffectiveValidationMode",
-            BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("Generated mode selector was not found.");
-        return (ValiantValidationMode)method.Invoke(validator, null)!;
-    }
-
     private static string ResultSnapshot(ValidationResult result)
     {
         return string.Join(
@@ -972,9 +1194,10 @@ public sealed class ValidationModeParityTests
     private static FailureExpectation Failure(
         string propertyName,
         string errorCode,
-        ValiantSeverity severity = ValiantSeverity.Error)
+        ValiantSeverity severity = ValiantSeverity.Error,
+        string? message = null)
     {
-        return new FailureExpectation(propertyName, errorCode, severity, null);
+        return new FailureExpectation(propertyName, errorCode, severity, message);
     }
 
     private static ParityInput<T> Valid<T>(Func<T> create)

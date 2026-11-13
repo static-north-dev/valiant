@@ -13,8 +13,8 @@ public readonly struct PropertyValidation<T, TProperty>
     private readonly ValiantFailureBehavior? _failureBehavior;
     private readonly PropertyValidationState _state;
 
-    internal PropertyValidation(ValidationContext<T> context, Func<T, TProperty> property, string propertyName)
-        : this(context, property, propertyName, null, new PropertyValidationState())
+    internal PropertyValidation(ValidationContext<T> context, Func<T, TProperty> property, string propertyName, bool isNestedSelector)
+        : this(context, property, propertyName, null, new PropertyValidationState(isNestedSelector))
     {
     }
 
@@ -156,14 +156,7 @@ public readonly struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        var propertyValidation = this;
-        return Check("Required", () =>
-        {
-            var value = propertyValidation.Value;
-            return value is string text
-                ? string.IsNullOrWhiteSpace(text)
-                : EqualityComparer<TProperty>.Default.Equals(value, default!);
-        }, "'" + _propertyName + "' is required.", code, message, severity);
+        return Check("Required", static value => ValidationChecks.IsRequiredValueMissing(value), "'" + _propertyName + "' is required.", code, message, severity);
     }
 
     /// <summary>
@@ -180,8 +173,7 @@ public readonly struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        var propertyValidation = this;
-        return Check("NotEmpty", () => ValidationChecks.IsEmpty(propertyValidation.Value), "'" + _propertyName + "' must not be empty.", code, message, severity);
+        return Check("NotEmpty", static value => ValidationChecks.IsEmpty(value), "'" + _propertyName + "' must not be empty.", code, message, severity);
     }
 
     /// <summary>
@@ -198,8 +190,7 @@ public readonly struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        var propertyValidation = this;
-        return Check("Empty", () => !ValidationChecks.IsEmpty(propertyValidation.Value), "'" + _propertyName + "' must be empty.", code, message, severity);
+        return Check("Empty", static value => !ValidationChecks.IsEmpty(value), "'" + _propertyName + "' must be empty.", code, message, severity);
     }
 
     /// <summary>
@@ -218,8 +209,7 @@ public readonly struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        var propertyValidation = this;
-        return Check("EnumName", () => propertyValidation.Value switch
+        return Check("EnumName", static value => value switch
         {
             null => false,
             string text => !ValidationChecks.IsEnumName<TEnum>(text),
@@ -243,8 +233,7 @@ public readonly struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        var propertyValidation = this;
-        return Check("EnumValue", () => !ValidationChecks.IsEnumValue<TEnum, TProperty>(propertyValidation.Value), "'" + _propertyName + "' must be a valid enum value.", code, message, severity);
+        return Check("EnumValue", static value => !ValidationChecks.IsEnumValue<TEnum, TProperty>(value), "'" + _propertyName + "' must be a valid enum value.", code, message, severity);
     }
 
     /// <summary>
@@ -262,8 +251,7 @@ public readonly struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        var propertyValidation = this;
-        return Check("Equal", () => !EqualityComparer<TProperty>.Default.Equals(propertyValidation.Value, value), "'" + _propertyName + "' must be equal to " + value + ".", code, message, severity);
+        return Check("Equal", value, static (actual, expected) => !EqualityComparer<TProperty>.Default.Equals(actual, expected), "'" + _propertyName + "' must be equal to " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -281,8 +269,7 @@ public readonly struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        var propertyValidation = this;
-        return Check("NotEqual", () => EqualityComparer<TProperty>.Default.Equals(propertyValidation.Value, value), "'" + _propertyName + "' must not be equal to " + value + ".", code, message, severity);
+        return Check("NotEqual", value, static (actual, expected) => EqualityComparer<TProperty>.Default.Equals(actual, expected), "'" + _propertyName + "' must not be equal to " + value + ".", code, message, severity);
     }
 
     /// <summary>
@@ -301,8 +288,7 @@ public readonly struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        var propertyValidation = this;
-        return Check("Satisfies", () => !predicate(propertyValidation.Value), "'" + _propertyName + "' did not satisfy the custom validation predicate.", code, message, severity);
+        return Check("Satisfies", predicate, static (value, test) => !test(value), "'" + _propertyName + "' did not satisfy the custom validation predicate.", code, message, severity);
     }
 
     /// <summary>
@@ -321,9 +307,7 @@ public readonly struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        var context = _context;
-        var propertyValidation = this;
-        return Check("Satisfies", () => !predicate(context.Instance, propertyValidation.Value), "'" + _propertyName + "' did not satisfy the custom validation predicate.", code, message, severity);
+        return Check("Satisfies", (Model: _context.Instance, Test: predicate), static (value, check) => !check.Test(check.Model, value), "'" + _propertyName + "' did not satisfy the custom validation predicate.", code, message, severity);
     }
 
     /// <summary>
@@ -342,9 +326,7 @@ public readonly struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        var context = _context;
-        var property = _property;
-        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", cancellationToken => predicate(property(context.Instance), cancellationToken), code, message, severity);
+        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", predicate, code, message, severity);
     }
 
     /// <summary>
@@ -364,8 +346,7 @@ public readonly struct PropertyValidation<T, TProperty>
         }
 
         var context = _context;
-        var property = _property;
-        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", cancellationToken => predicate(context.Instance, property(context.Instance), cancellationToken), code, message, severity);
+        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", (value, cancellationToken) => predicate(context.Instance, value, cancellationToken), code, message, severity);
     }
 
     /// <summary>
@@ -384,9 +365,7 @@ public readonly struct PropertyValidation<T, TProperty>
             return this;
         }
 
-        var context = _context;
-        var property = _property;
-        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", async cancellationToken => await predicate(property(context.Instance), cancellationToken).ConfigureAwait(false), code, message, severity);
+        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", async (value, cancellationToken) => await predicate(value, cancellationToken).ConfigureAwait(false), code, message, severity);
     }
 
     /// <summary>
@@ -406,8 +385,7 @@ public readonly struct PropertyValidation<T, TProperty>
         }
 
         var context = _context;
-        var property = _property;
-        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", async cancellationToken => await predicate(context.Instance, property(context.Instance), cancellationToken).ConfigureAwait(false), code, message, severity);
+        return AddAsync("SatisfiesAsync", "'" + _propertyName + "' did not satisfy the custom validation predicate.", async (value, cancellationToken) => await predicate(context.Instance, value, cancellationToken).ConfigureAwait(false), code, message, severity);
     }
 
     internal TProperty Value => TryGetValue(out var value) ? value : default!;
@@ -419,65 +397,33 @@ public readonly struct PropertyValidation<T, TProperty>
     internal bool ShouldSkip => _context.ShouldStopValidation ||
         (_state.HasFailure && EffectiveFailureBehavior == ValiantFailureBehavior.FailFast);
 
-    internal PropertyValidation<T, TProperty> Check(string defaultCode, Func<bool> failed, string defaultMessage, string? code, string? message, ValiantSeverity severity = ValiantSeverity.Error)
+    internal PropertyValidation<T, TProperty> Check(
+        string defaultCode,
+        Func<TProperty, bool> failed,
+        string defaultMessage,
+        string? code,
+        string? message,
+        ValiantSeverity severity)
     {
-        _ = failed ?? throw new ArgumentNullException(nameof(failed));
+        return Check(defaultCode, failed, static (value, predicate) => predicate(value), defaultMessage, code, message, severity);
+    }
+
+    internal PropertyValidation<T, TProperty> Check<TArgument>(
+        string defaultCode,
+        TArgument argument,
+        Func<TProperty, TArgument, bool> failed,
+        string defaultMessage,
+        string? code,
+        string? message,
+        ValiantSeverity severity)
+    {
         if (ShouldSkip)
         {
             return this;
         }
 
-        var context = _context;
-        var propertyName = _propertyName;
-        var state = _state;
-        var errorCode = code ?? defaultCode;
-        var errorMessage = message ?? defaultMessage;
-        var failureBehavior = EffectiveFailureBehavior;
-        var propertyValidation = this;
-        context.AddDeferredValidation(
-            () =>
-            {
-                if (context.ShouldStopValidation ||
-                    !state.ShouldRun(context.Instance) ||
-                    (state.HasFailure && failureBehavior == ValiantFailureBehavior.FailFast))
-                {
-                    return;
-                }
-
-                if (!propertyValidation.TryGetValue(out _))
-                {
-                    return;
-                }
-
-                if (failed())
-                {
-                    context.AddFailure(propertyName, errorCode, errorMessage, severity);
-                    state.HasFailure = true;
-                }
-            },
-            cancellationToken =>
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (context.ShouldStopValidation ||
-                    !state.ShouldRun(context.Instance) ||
-                    (state.HasFailure && failureBehavior == ValiantFailureBehavior.FailFast))
-                {
-                    return default;
-                }
-
-                if (!propertyValidation.TryGetValue(out _))
-                {
-                    return default;
-                }
-
-                if (failed())
-                {
-                    context.AddFailure(propertyName, errorCode, errorMessage, severity);
-                    state.HasFailure = true;
-                }
-
-                return default;
-            });
+        _context.AddSyncValidation(new DeferredPropertyCheck<TArgument>(
+            this, argument, failed, code ?? defaultCode, message ?? defaultMessage, severity, EffectiveFailureBehavior));
 
         return this;
     }
@@ -494,22 +440,13 @@ public readonly struct PropertyValidation<T, TProperty>
 
     internal bool TryGetValue(out TProperty value)
     {
-        try
-        {
-            value = _property(_context.Instance);
-            return true;
-        }
-        catch (NullReferenceException) when (_propertyName.IndexOf('.') >= 0)
-        {
-            value = default!;
-            return false;
-        }
+        return _state.TryGetValue(_property, _context.Instance, out value);
     }
 
     private PropertyValidation<T, TProperty> AddAsync(
         string defaultCode,
         string defaultMessage,
-        Func<CancellationToken, ValueTask<bool>> predicate,
+        Func<TProperty, CancellationToken, ValueTask<bool>> predicate,
         string? code,
         string? message,
         ValiantSeverity severity)
@@ -530,12 +467,12 @@ public readonly struct PropertyValidation<T, TProperty>
                 return;
             }
 
-            if (!propertyValidation.TryGetValue(out _))
+            if (!propertyValidation.TryGetValue(out var value))
             {
                 return;
             }
 
-            if (!await predicate(cancellationToken).ConfigureAwait(false))
+            if (!await predicate(value, cancellationToken).ConfigureAwait(false))
             {
                 context.AddFailure(propertyName, errorCode, errorMessage, severity);
                 state.HasFailure = true;
@@ -581,14 +518,47 @@ public readonly struct PropertyValidation<T, TProperty>
             : propertyName + "." + childPropertyName;
     }
 
-    private sealed class PropertyValidationState
+    private sealed class DeferredPropertyCheck<TArgument>(
+        PropertyValidation<T, TProperty> property,
+        TArgument argument,
+        Func<TProperty, TArgument, bool> failed,
+        string errorCode,
+        string errorMessage,
+        ValiantSeverity severity,
+        ValiantFailureBehavior failureBehavior) : IDeferredValidationCheck
+    {
+        public void Execute()
+        {
+            var context = property._context;
+            var state = property._state;
+            if (context.ShouldStopValidation ||
+                !state.ShouldRun(context.Instance) ||
+                (state.HasFailure && failureBehavior == ValiantFailureBehavior.FailFast))
+            {
+                return;
+            }
+
+            if (property.TryGetValue(out var value) && failed(value, argument))
+            {
+                context.AddFailure(property._propertyName, errorCode, errorMessage, severity);
+                state.HasFailure = true;
+            }
+        }
+    }
+
+    private sealed class PropertyValidationState(bool isNestedSelector)
     {
         private Func<T, bool>? _condition;
+        private bool? _shouldRun;
+        private bool _hasReadValue;
+        private bool _hasValue;
+        private TProperty _value = default!;
 
         public bool HasFailure { get; set; }
 
         public void AddCondition(Func<T, bool> condition)
         {
+            _shouldRun = null;
             _ = condition ?? throw new ArgumentNullException(nameof(condition));
             if (_condition is null)
             {
@@ -602,7 +572,28 @@ public readonly struct PropertyValidation<T, TProperty>
 
         public bool ShouldRun(T instance)
         {
-            return _condition?.Invoke(instance) ?? true;
+            return _shouldRun ??= _condition?.Invoke(instance) ?? true;
+        }
+
+        public bool TryGetValue(Func<T, TProperty> property, T instance, out TProperty value)
+        {
+            if (!_hasReadValue)
+            {
+                if (isNestedSelector)
+                {
+                    _hasValue = ValidationChecks.TryReadNestedProperty(instance, property, out _value);
+                }
+                else
+                {
+                    _value = property(instance);
+                    _hasValue = true;
+                }
+
+                _hasReadValue = true;
+            }
+
+            value = _value;
+            return _hasValue;
         }
     }
 }

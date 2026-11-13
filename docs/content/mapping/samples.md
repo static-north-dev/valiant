@@ -29,8 +29,8 @@ and the `Sample` class owns the explanation of the behavior it invokes.
 The basic and convention samples show what the generator can infer. Samples
 with a `Configure` override demonstrate behavior supported by both the
 debuggable runtime backend and the fast generated backend. The dependency
-injection sample leaves `ValiantMappingMode.Auto` selected, so Debug builds use
-the debuggable backend and Release builds use generated fast mapping.
+injection sample uses the default `ValiantMappingMode.Auto` setting, which runs
+generated mapping in Debug and Release builds.
 
 Continue with [Convention mapping](./guides/conventions.md),
 [Explicit mapping](./guides/explicit-mapping.md), or

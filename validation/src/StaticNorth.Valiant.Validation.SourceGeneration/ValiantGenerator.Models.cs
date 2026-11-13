@@ -35,7 +35,8 @@ public sealed partial class ValiantGenerator
         ImmutableArray<string> usings,
         ImmutableArray<ValidationNode> nodes,
         ImmutableArray<DiagnosticInfo> diagnostics,
-        string fingerprint)
+        string fingerprint,
+        bool generateSimpleFluent = false)
     {
         public ValidatorDeclarationModel Declaration { get; } = declaration;
 
@@ -50,6 +51,8 @@ public sealed partial class ValiantGenerator
         public bool ImplementsValidatorDefinition { get; } = implementsValidatorDefinition;
 
         public bool HasConfigureMethod { get; } = hasConfigureMethod;
+
+        public bool UsesRuntimeValidation => HasConfigureMethod && !generateSimpleFluent;
 
         public bool RegisterAsDefault { get; } = registerAsDefault;
 

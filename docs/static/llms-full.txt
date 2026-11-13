@@ -296,7 +296,7 @@ public void Configure(ValidationContext<CreateOrder> context)
 }
 ```
 
-In `Debuggable` mode this method executes at runtime, so ordinary breakpoints and step-through debugging work.
+Validators with control flow execute `Configure` at runtime in every mode, so ordinary breakpoints and step-through debugging work.
 
 With C# 15, label an enclosing loop to target it from a nested loop. For a loop labeled `outer`, `break outer;` exits it and `continue outer;` advances it to the next iteration. A labeled `break` can also exit an enclosing `switch`.
 
@@ -365,7 +365,9 @@ services.AddValiantValidators(options =>
     options.FailureBehavior = ValiantFailureBehavior.ValidateAll);
 ```
 
-Use `FailFast` to stop within the configured scope after the first failure; use `ValidateAll` to collect all applicable failures. Narrower configuration overrides the global option.
+Use `FailFast` to stop a validator after the first error; use `ValidateAll` to collect all applicable failures. At property-chain scope, `FailFast` stops that chain after its first failed check, including warnings and informational failures.
+
+A `Children()` or `ForEach()` callback has its own failure policy and defaults to `ValidateAll`. Its policy does not change the parent's policy. A parent using `FailFast` adds the child or item failures through the first error, then stops.
 ### ASP.NET Core and OpenAPI
 
 Install the integrations you use:
@@ -411,6 +413,8 @@ failures do not block the handler.
 
 #### MVC
 
+MVC model validation is synchronous. For validators with async rules, invoke `ValidateAsync` explicitly from an async action in place of the automatic Valiant MVC integration for that model.
+
 Register the global model-validation filter directly or through MVC builders:
 
 ```csharp
@@ -453,7 +457,7 @@ builder.Services.AddOpenApi(options =>
     options.AddValiantValidationRules());
 ```
 
-Valiant projects generated metadata into native constraints where possible—such as required, length, count, and comparison bounds—and preserves richer details in `x-valiant-rules` extensions.
+Valiant projects unconditional rules with a known blocking severity into native constraints such as required, length, count, and comparison bounds. Rules with advisory, dynamic, or conditional severity remain available in the `x-valiant-rules` extension.
 
 :::info Package references
 Each integration package forwards the core Valiant runtime and generator assets. Add both ASP.NET Core packages when you need request validation and OpenAPI; do not add a redundant direct `StaticNorth.Valiant.Validation` reference.
@@ -603,20 +607,20 @@ See [Microsoft’s Runtime Async documentation](https://learn.microsoft.com/en-u
 | `FailureBehavior` | `ValidateAll`, `FailFast` | `ValidateAll` |
 | `Lifetime` | `Scoped`, `Transient`, `Singleton` | `Scoped` |
 
-`Auto` uses the runtime, debuggable backend in Debug builds and generated fast code otherwise. `Debuggable` lets you step through `Configure`; `Fast` always uses direct generated checks.
+All modes execute the same rules in the same order and propagate the same exceptions. `Auto` and `Fast` use generated checks for eligible straight-line fluent validators in Debug and Release builds. Set `Mode` to `Debuggable` to step through the original `Configure` method. Attribute validators always use generated checks, and fluent validators outside the generated subset always run `Configure`.
 
 Choose validator lifetime based on constructor dependencies. A singleton validator must not capture scoped services.
 
 #### Result model
 
-`ValidationResult` exposes all failures as well as `Errors`, `Warnings`, and `Infos`. Only error severity makes `IsValid` false. Each `ValidationFailure` includes `PropertyName`, `ErrorCode`, `ErrorMessage`, and `Severity`.
+`ValidationResult` exposes all failures as well as `Errors`, `Warnings`, and `Infos`. Each `ValidationFailure` includes `PropertyName`, `ErrorCode`, `ErrorMessage`, and `Severity`. Errors and unknown severity values make the result invalid.
 
-Results are immutable and do not need disposal. In `Fast` mode, simple validators
-with at most six checks and fixed default failure content reuse results after
-each failure combination is first seen. All checks still run on every call.
-Reuse is bounded to 63 nonempty combinations per validator type. Custom diagnostic
-expressions, culture-dependent messages, composition, async checks, and larger
-validators keep the owned-result path.
+`IsValid()` and `IsValidAsync()` execute the same rules, diagnostic expressions, and reused validators as the full result APIs. The fluent runtime returns the validity of the collected failures directly.
+
+Results are immutable and do not need disposal. Generated validators with at
+most six checks and fixed default failure content can reuse a result for each
+failure combination. Each call evaluates the applicable rules again. Reuse is
+bounded to 63 nonempty combinations per validator type.
 
 #### Generator scope
 
@@ -1609,8 +1613,8 @@ and the `Sample` class owns the explanation of the behavior it invokes.
 The basic and convention samples show what the generator can infer. Samples
 with a `Configure` override demonstrate behavior supported by both the
 debuggable runtime backend and the fast generated backend. The dependency
-injection sample leaves `ValiantMappingMode.Auto` selected, so Debug builds use
-the debuggable backend and Release builds use generated fast mapping.
+injection sample uses the default `ValiantMappingMode.Auto` setting, which runs
+generated mapping in Debug and Release builds.
 
 Continue with [Convention mapping](https://valiant.staticnorth.dev/mapping/guides/conventions/),
 [Explicit mapping](https://valiant.staticnorth.dev/mapping/guides/explicit-mapping/), or
@@ -1818,6 +1822,8 @@ builder.Services.AddValiantMappers();
 
 Valiant registers each mapper as its concrete type and as `IMapper<TSource, TTarget>`. It also registers `IMapper` and `IMapperFactory`. Mapper registrations are transient; the facade, factory, and options are singleton services.
 
+Call the generated registration from each project that declares mappers. The facade and factory then see all registered pairs, in either registration order.
+
 #### Choose an API
 
 ##### Typed mapper
@@ -1875,7 +1881,7 @@ services.AddValiantMappers(options =>
 | `Mode` | `Auto`, `Debuggable`, `Fast` | `Auto` |
 | `NullHandling` | `MapNulls`, `IgnoreSourceNulls` | `MapNulls` |
 
-`Auto` uses the debuggable runtime backend in Debug builds and direct generated mapping in other builds. `Debuggable` executes your `Configure` method at runtime, so breakpoints work; this path uses expression compilation and reflection. `Fast` always uses generated direct mapping code and is the preferred deployment path for trimming and Native AOT.
+`Auto` and `Fast` use direct generated mapping in Debug and Release builds. Both modes support trimming and Native AOT. Select `Debuggable` to execute your `Configure` method at runtime and use breakpoints. This path uses expression compilation and reflection.
 
 #### Generator scope
 

@@ -29,6 +29,7 @@
     <ProjectReference Include="../../samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/StaticNorth.Valiant.Settings.AspNetCore.Samples.csproj" />
     <ProjectReference Include="../../samples/StaticNorth.Valiant.Settings.Samples/StaticNorth.Valiant.Settings.Samples.csproj" />
     <ProjectReference Include="../../../validation/src/StaticNorth.Valiant.Validation/StaticNorth.Valiant.Validation.csproj" />
+    <ProjectReference Include="../../../validation/src/StaticNorth.Valiant.Validation.SourceGeneration/StaticNorth.Valiant.Validation.SourceGeneration.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

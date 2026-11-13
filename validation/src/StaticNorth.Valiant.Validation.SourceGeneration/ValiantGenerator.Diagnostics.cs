@@ -22,7 +22,8 @@ public sealed partial class ValiantGenerator
         string configureMethodName,
         ImmutableArray<string> usings,
         ImmutableArray<ValidationNode> nodes,
-        ImmutableArray<DiagnosticInfo> diagnostics)
+        ImmutableArray<DiagnosticInfo> diagnostics,
+        bool generateSimpleFluent = false)
     {
         var builder = new StringBuilder();
         AppendFingerprintValue(builder, declaration.HintName);
@@ -54,6 +55,7 @@ public sealed partial class ValiantGenerator
         AppendFingerprintValue(builder, inheritsValidatorBase ? "base" : "no-base");
         AppendFingerprintValue(builder, implementsValidatorDefinition ? "definition" : "no-definition");
         AppendFingerprintValue(builder, hasConfigureMethod ? "configure" : "no-configure");
+        AppendFingerprintValue(builder, generateSimpleFluent ? "simple-fluent" : null);
         AppendFingerprintValue(builder, registerAsDefault ? "default" : "non-default");
         AppendFingerprintValue(builder, configureMethodName);
         foreach (var usingDirective in usings)

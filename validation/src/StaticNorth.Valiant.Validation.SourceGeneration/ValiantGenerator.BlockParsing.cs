@@ -38,54 +38,7 @@ public sealed partial class ValiantGenerator
         switch (statement)
         {
             case ExpressionStatementSyntax { Expression: InvocationExpressionSyntax invocation }:
-                if (TryParseFailureBehavior(invocation, scope, out var failureBehaviorNode))
-                {
-                    nodes.Add(failureBehaviorNode);
-                }
-                else if (TryParseCollectionIteration(invocation, scope, semanticModel, cancellationToken, diagnostics, out var iterationNode, out var iterationDiagnostic))
-                {
-                    nodes.Add(iterationNode);
-                }
-                else if (TryParseChildPropertyValidation(invocation, scope, semanticModel, cancellationToken, diagnostics, out var childNode, out var childDiagnostic))
-                {
-                    nodes.Add(childNode);
-                }
-                else if (TryParseItemRule(invocation, scope, semanticModel, cancellationToken, out var itemRule, out var itemDiagnostic))
-                {
-                    nodes.Add(new RuleNode(itemRule));
-                }
-                else if (TryParseBarePropertyDeclaration(invocation, scope))
-                {
-                }
-                else if (TryParseRule(invocation, scope, semanticModel, cancellationToken, out var rule, out var diagnostic))
-                {
-                    nodes.Add(new RuleNode(rule));
-                }
-                else if (TryParseValidatorReuse(invocation, scope, semanticModel, cancellationToken, out var reuseNode, out var reuseDiagnostic))
-                {
-                    nodes.Add(reuseNode);
-                }
-                else if (iterationDiagnostic is not null)
-                {
-                    diagnostics.Add(iterationDiagnostic);
-                }
-                else if (childDiagnostic is not null)
-                {
-                    diagnostics.Add(childDiagnostic);
-                }
-                else if (itemDiagnostic is not null)
-                {
-                    diagnostics.Add(itemDiagnostic);
-                }
-                else if (reuseDiagnostic is not null)
-                {
-                    diagnostics.Add(reuseDiagnostic);
-                }
-                else if (diagnostic is not null)
-                {
-                    diagnostics.Add(diagnostic);
-                }
-
+                ParseInvocation(invocation, scope, semanticModel, cancellationToken, nodes, diagnostics);
                 return;
 
             case IfStatementSyntax ifStatement:
@@ -145,6 +98,63 @@ public sealed partial class ValiantGenerator
                     statement.GetLocation(),
                     "Only Property declarations, UseValidator declarations, if/else statements, switch statements, loops, blocks, break/continue statements, and return statements are supported in validator declarations."));
                 return;
+        }
+    }
+
+    private static void ParseInvocation(
+        InvocationExpressionSyntax invocation,
+        ParseScope scope,
+        SemanticModel semanticModel,
+        CancellationToken cancellationToken,
+        ImmutableArray<ValidationNode>.Builder nodes,
+        ImmutableArray<DiagnosticInfo>.Builder diagnostics)
+    {
+        if (TryParseFailureBehavior(invocation, scope, out var failureBehaviorNode))
+        {
+            nodes.Add(failureBehaviorNode);
+        }
+        else if (TryParseCollectionIteration(invocation, scope, semanticModel, cancellationToken, diagnostics, out var iterationNode, out var iterationDiagnostic))
+        {
+            nodes.Add(iterationNode);
+        }
+        else if (TryParseChildPropertyValidation(invocation, scope, semanticModel, cancellationToken, diagnostics, out var childNode, out var childDiagnostic))
+        {
+            nodes.Add(childNode);
+        }
+        else if (TryParseItemRule(invocation, scope, semanticModel, cancellationToken, out var itemRule, out var itemDiagnostic))
+        {
+            nodes.Add(new RuleNode(itemRule));
+        }
+        else if (TryParseBarePropertyDeclaration(invocation, scope))
+        {
+        }
+        else if (TryParseRule(invocation, scope, semanticModel, cancellationToken, out var rule, out var diagnostic))
+        {
+            nodes.Add(new RuleNode(rule));
+        }
+        else if (TryParseValidatorReuse(invocation, scope, semanticModel, cancellationToken, out var reuseNode, out var reuseDiagnostic))
+        {
+            nodes.Add(reuseNode);
+        }
+        else if (iterationDiagnostic is not null)
+        {
+            diagnostics.Add(iterationDiagnostic);
+        }
+        else if (childDiagnostic is not null)
+        {
+            diagnostics.Add(childDiagnostic);
+        }
+        else if (itemDiagnostic is not null)
+        {
+            diagnostics.Add(itemDiagnostic);
+        }
+        else if (reuseDiagnostic is not null)
+        {
+            diagnostics.Add(reuseDiagnostic);
+        }
+        else if (diagnostic is not null)
+        {
+            diagnostics.Add(diagnostic);
         }
     }
 

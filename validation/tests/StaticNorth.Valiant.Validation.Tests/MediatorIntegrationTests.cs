@@ -5,11 +5,13 @@ namespace StaticNorth.Valiant.Validation.Tests;
 public sealed class MediatorIntegrationTests
 {
     [Test]
-    public async Task MediatR_Behavior_Runs_Validators_Before_Next()
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    public async Task MediatR_Behavior_Runs_Validators_Before_Next(ValiantValidationMode mode)
     {
         var behavior = new StaticNorth.Valiant.Validation.MediatR.ValiantValidationBehavior<MediatRTestRequest, string>(
         [
-            new MediatRTestRequestValidator()
+            new MediatRTestRequestValidator(new ValiantValidationOptions { Mode = mode })
         ]);
         var nextWasCalled = false;
 
@@ -27,11 +29,13 @@ public sealed class MediatorIntegrationTests
     }
 
     [Test]
-    public async Task MediatR_Behavior_Throws_When_Validation_Fails()
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    public async Task MediatR_Behavior_Throws_When_Validation_Fails(ValiantValidationMode mode)
     {
         var behavior = new StaticNorth.Valiant.Validation.MediatR.ValiantValidationBehavior<MediatRTestRequest, string>(
         [
-            new MediatRTestRequestValidator()
+            new MediatRTestRequestValidator(new ValiantValidationOptions { Mode = mode })
         ]);
         var nextWasCalled = false;
 
@@ -44,16 +48,18 @@ public sealed class MediatorIntegrationTests
             },
             CancellationToken.None));
 
-        await Assert.That(exception!.Errors).Count().IsEqualTo(1);
+        await AssertFailures(exception!);
         await Assert.That(nextWasCalled).IsFalse();
     }
 
     [Test]
-    public async Task Mediator_Behavior_Runs_Validators_Before_Next()
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    public async Task Mediator_Behavior_Runs_Validators_Before_Next(ValiantValidationMode mode)
     {
         var behavior = new StaticNorth.Valiant.Validation.Mediator.ValiantValidationBehavior<MediatorTestRequest, string>(
         [
-            new MediatorTestRequestValidator()
+            new MediatorTestRequestValidator(new ValiantValidationOptions { Mode = mode })
         ]);
         var nextWasCalled = false;
 
@@ -71,11 +77,13 @@ public sealed class MediatorIntegrationTests
     }
 
     [Test]
-    public async Task Mediator_Behavior_Throws_When_Validation_Fails()
+    [Arguments(ValiantValidationMode.Fast)]
+    [Arguments(ValiantValidationMode.Debuggable)]
+    public async Task Mediator_Behavior_Throws_When_Validation_Fails(ValiantValidationMode mode)
     {
         var behavior = new StaticNorth.Valiant.Validation.Mediator.ValiantValidationBehavior<MediatorTestRequest, string>(
         [
-            new MediatorTestRequestValidator()
+            new MediatorTestRequestValidator(new ValiantValidationOptions { Mode = mode })
         ]);
         var nextWasCalled = false;
 
@@ -88,65 +96,18 @@ public sealed class MediatorIntegrationTests
             },
             CancellationToken.None));
 
-        await Assert.That(exception!.Errors).Count().IsEqualTo(1);
+        await AssertFailures(exception!);
         await Assert.That(nextWasCalled).IsFalse();
+    }
+
+    private static async Task AssertFailures(ValiantValidationException exception)
+    {
+        await Assert.That(exception.Result.Failures.Select(static failure =>
+            (failure.PropertyName, failure.ErrorCode, failure.ErrorMessage, failure.Severity)).ToArray())
+            .IsEquivalentTo([("Name", "Required", "Name is required.", ValiantSeverity.Error)]);
     }
 }
 
 public sealed record MediatRTestRequest(string Name) : IRequest<string>;
 
-public sealed class MediatRTestRequestValidator : IValidator<MediatRTestRequest>
-{
-    public ValidationResult Validate(MediatRTestRequest instance)
-    {
-        return string.IsNullOrWhiteSpace(instance.Name)
-            ? new ValidationResult([new ValidationFailure(nameof(instance.Name), "Required", "Name is required.")])
-            : ValidationResult.Valid;
-    }
-
-    public ValueTask<ValidationResult> ValidateAsync(MediatRTestRequest instance, CancellationToken cancellationToken = default)
-    {
-        _ = cancellationToken;
-        return new ValueTask<ValidationResult>(Validate(instance));
-    }
-
-    public bool IsValid(MediatRTestRequest instance)
-    {
-        return Validate(instance).IsValid;
-    }
-
-    public ValueTask<bool> IsValidAsync(MediatRTestRequest instance, CancellationToken cancellationToken = default)
-    {
-        _ = cancellationToken;
-        return new ValueTask<bool>(IsValid(instance));
-    }
-}
-
 public sealed record MediatorTestRequest(string Name) : global::Mediator.IRequest<string>;
-
-public sealed class MediatorTestRequestValidator : IValidator<MediatorTestRequest>
-{
-    public ValidationResult Validate(MediatorTestRequest instance)
-    {
-        return string.IsNullOrWhiteSpace(instance.Name)
-            ? new ValidationResult([new ValidationFailure(nameof(instance.Name), "Required", "Name is required.")])
-            : ValidationResult.Valid;
-    }
-
-    public ValueTask<ValidationResult> ValidateAsync(MediatorTestRequest instance, CancellationToken cancellationToken = default)
-    {
-        _ = cancellationToken;
-        return new ValueTask<ValidationResult>(Validate(instance));
-    }
-
-    public bool IsValid(MediatorTestRequest instance)
-    {
-        return Validate(instance).IsValid;
-    }
-
-    public ValueTask<bool> IsValidAsync(MediatorTestRequest instance, CancellationToken cancellationToken = default)
-    {
-        _ = cancellationToken;
-        return new ValueTask<bool>(IsValid(instance));
-    }
-}

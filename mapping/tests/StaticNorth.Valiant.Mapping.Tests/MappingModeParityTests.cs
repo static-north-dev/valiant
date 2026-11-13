@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+using StaticNorth.Valiant.Mapping.Tests.EdgeParity;
 using CompositionAddress = StaticNorth.Valiant.Mapping.Samples.Composition.Address;
 using CompositionAddressMapper = StaticNorth.Valiant.Mapping.Samples.Composition.AddressMapper;
 using CompositionCustomer = StaticNorth.Valiant.Mapping.Samples.Composition.Customer;
@@ -17,6 +19,65 @@ namespace StaticNorth.Valiant.Mapping.Tests;
 
 public sealed class MappingModeParityTests
 {
+    [Test]
+    [Arguments(ValiantMappingMode.Fast)]
+    [Arguments(ValiantMappingMode.Debuggable)]
+    public async Task Conditional_Mapper_Uses_Only_The_Active_Branch(ValiantMappingMode mode)
+    {
+        var mapper = new EdgeConditionalNestedMapper(Options(mode));
+        var value = new EdgeInner("Ada");
+
+        var first = mapper.Map(new EdgeNestedInput(true, value) { Groups = [[value]] });
+        var second = mapper.Map(new EdgeNestedInput(false, value) { Groups = [[value]] });
+
+        await Assert.That(first.Value!.Name).IsEqualTo("first:Ada");
+        await Assert.That(second.Value!.Name).IsEqualTo("second:Ada");
+        await Assert.That(first.Groups.Single().Single().Name).IsEqualTo("first:Ada");
+        await Assert.That(second.Groups.Single().Single().Name).IsEqualTo("second:Ada");
+    }
+
+    [Test]
+    [Arguments(ValiantMappingMode.Fast)]
+    [Arguments(ValiantMappingMode.Debuggable)]
+    public async Task Conditional_Ignore_And_Source_Nulls_Preserve_Init_Default(ValiantMappingMode mode)
+    {
+        var mapper = new EdgeConditionalInitMapper(new ValiantMappingOptions
+        {
+            Mode = mode,
+            NullHandling = ValiantNullHandling.IgnoreSourceNulls
+        });
+
+        await Assert.That(mapper.Map(new EdgeInitInput(false, null)).Value).IsEqualTo("original");
+        await Assert.That(mapper.Map(new EdgeInitInput(true, "value")).Value).IsEqualTo("original");
+        await Assert.That(mapper.Map(new EdgeInitInput(false, "value")).Value).IsEqualTo("value");
+    }
+
+    [Test]
+    [Arguments(ValiantMappingMode.Fast)]
+    [Arguments(ValiantMappingMode.Debuggable)]
+    public async Task Native_Integer_Widening_Works_For_Constructor_Members(ValiantMappingMode mode)
+    {
+        var mapper = new EdgeNativeMapper(Options(mode));
+
+        var converted = mapper.Map(new EdgeNativeInput(-7, uint.MaxValue, -10));
+        var nullInput = mapper.Map(new EdgeNativeInput(0, null, 0));
+
+        await Assert.That(converted.Value).IsEqualTo((nint)(-7));
+        await Assert.That(converted.Count).IsEqualTo((nuint?)uint.MaxValue);
+        await Assert.That(converted.Widen).IsEqualTo(-10L);
+        await Assert.That(nullInput.Count).IsNull();
+    }
+
+    [Test]
+    [Arguments(ValiantMappingMode.Fast)]
+    [Arguments(ValiantMappingMode.Debuggable)]
+    public async Task Nested_Mapper_Uses_The_Requested_Explicit_Interface(ValiantMappingMode mode)
+    {
+        var mapper = new EdgeDerivedNestedMapper(Options(mode));
+
+        await Assert.That(mapper.Map(new EdgeNestedInput(true, new EdgeInner("Ada"))).Value!.Name).IsEqualTo("Ada");
+    }
+
     [Test]
     public async Task Explicit_Transform_Rename_And_Ignore_Have_Mode_Parity()
     {
@@ -126,36 +187,167 @@ public sealed class MappingModeParityTests
     }
 
     [Test]
-    public async Task Explicit_And_Auto_Mode_Dispatch_Execute_The_Selected_Backend()
+    public async Task Struct_Assignments_And_Set_Conversion_Have_Mode_Parity()
     {
-        var fastProbe = new MappingModeProbe();
-        var fastTarget = new MappingModeProbeMapper(
-            fastProbe,
-            Options(ValiantMappingMode.Fast)).Map(new MappingModeSource { Value = "fast" });
-        await Assert.That(fastTarget.Value).IsEqualTo("fast");
-        await Assert.That(fastProbe.FastCaptures).IsEqualTo(1);
-        await Assert.That(fastProbe.DebuggableCaptures).IsEqualTo(0);
+        await AssertParity(
+            mode => new StructCollectionParityMapper(Options(mode)),
+            static () => new StructCollectionParitySource(42, [3, 1, 3]),
+            static target => $"{target.Value}|{string.Join(",", target.Items.Order())}",
+            "42|1,3");
+    }
 
-        var debuggableProbe = new MappingModeProbe();
-        var debuggableTarget = new MappingModeProbeMapper(
-            debuggableProbe,
-            Options(ValiantMappingMode.Debuggable)).Map(new MappingModeSource { Value = "debuggable" });
-        await Assert.That(debuggableTarget.Value).IsEqualTo("debuggable");
-        await Assert.That(debuggableProbe.FastCaptures).IsEqualTo(0);
-        await Assert.That(debuggableProbe.DebuggableCaptures).IsEqualTo(1);
+    [Test]
+    [Arguments(true, true, "preferred|7|2,4|constructor")]
+    [Arguments(false, true, "alternate|7|2,4|constructor")]
+    [Arguments(false, false, "unknown|7|2,4|constructor")]
+    public async Task Constructor_Selection_Conditional_Arguments_And_Init_Members_Have_Mode_Parity(
+        bool preferred,
+        bool alternate,
+        string expected)
+    {
+        await AssertParity(
+            mode => new ImmutableParityMapper(Options(mode)),
+            () => new ImmutableParitySource(preferred, alternate),
+            static target => $"{target.Name}|{target.Number}|{string.Join(",", target.Numbers!)}|{target.Constructor}",
+            expected);
+    }
 
-        var autoProbe = new MappingModeProbe();
-        var autoTarget = new MappingModeProbeMapper(
-            autoProbe,
-            Options(ValiantMappingMode.Auto)).Map(new MappingModeSource { Value = "auto" });
-        await Assert.That(autoTarget.Value).IsEqualTo("auto");
-#if DEBUG
-        await Assert.That(autoProbe.FastCaptures).IsEqualTo(0);
-        await Assert.That(autoProbe.DebuggableCaptures).IsEqualTo(1);
-#else
-        await Assert.That(autoProbe.FastCaptures).IsEqualTo(1);
-        await Assert.That(autoProbe.DebuggableCaptures).IsEqualTo(0);
-#endif
+    [Test]
+    [Arguments(ValiantMappingMode.Fast)]
+    [Arguments(ValiantMappingMode.Debuggable)]
+    public async Task Null_Converted_Collection_And_Constructor_Exception_Have_Mode_Parity(ValiantMappingMode mode)
+    {
+        var mapper = new ImmutableParityMapper(Options(mode));
+        var target = mapper.Map(new ImmutableParitySource(true, false) { Numbers = null });
+        await Assert.That(target.Numbers).IsNull();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => Task.FromResult(
+            mapper.Map(new ImmutableParitySource(true, false) { NameOverride = "invalid" })));
+        await Assert.That(exception!.Message).IsEqualTo("Cannot construct target.");
+    }
+
+    [Test]
+    [Arguments(ValiantMappingMode.Fast, false, false)]
+    [Arguments(ValiantMappingMode.Debuggable, false, false)]
+    [Arguments(ValiantMappingMode.Fast, true, false)]
+    [Arguments(ValiantMappingMode.Debuggable, true, false)]
+    [Arguments(ValiantMappingMode.Fast, false, true)]
+    [Arguments(ValiantMappingMode.Debuggable, false, true)]
+    public async Task Ignore_Source_Nulls_Reads_Each_Active_Selector_Once(
+        ValiantMappingMode mode,
+        bool firstReadIsNull,
+        bool skipValue)
+    {
+        var source = new SingleReadSource(firstReadIsNull, skipValue);
+        var target = new SingleReadMapper(Options(mode, ValiantNullHandling.IgnoreSourceNulls)).Map(source);
+
+        await Assert.That(target.ConstructorValue).IsEqualTo(firstReadIsNull ? "fallback" : "first");
+        await Assert.That(target.InitValue).IsEqualTo(firstReadIsNull ? null : "first");
+        await Assert.That(target.Value).IsEqualTo(firstReadIsNull || skipValue ? "original" : "first");
+        await Assert.That((source.ConstructorReads, source.InitReads, source.ValueReads)).IsEqualTo((1, 1, skipValue ? 0 : 1));
+    }
+
+    [Test]
+    [Arguments(ValiantMappingMode.Fast)]
+    [Arguments(ValiantMappingMode.Debuggable)]
+    public async Task Unused_Fallback_Is_Evaluated_Once_Before_Mapping(ValiantMappingMode mode)
+    {
+        var mapper = new AssignmentParityMapper(Options(mode));
+        var unused = new AssignmentParitySource();
+        var used = new AssignmentParitySource(value: null);
+        await Assert.That(mapper.Map(unused).Second).IsEqualTo("mapped");
+        await Assert.That(mapper.Map(used).Second).IsEqualTo("fallback");
+        await Assert.That(unused.Calls.First()).IsEqualTo("fallback");
+        await Assert.That(used.Calls.First()).IsEqualTo("fallback");
+        await Assert.That(unused.Calls.Count(call => call == "fallback")).IsEqualTo(1);
+        await Assert.That(used.Calls.Count(call => call == "fallback")).IsEqualTo(1);
+        await Assert.That(unused.Calls.Count(call => call == "branch")).IsEqualTo(1);
+        await Assert.That(unused.Calls).Contains("primary");
+        await Assert.That(unused.Calls).DoesNotContain("secondary");
+    }
+
+    [Test]
+    [Arguments(ValiantMappingMode.Fast)]
+    [Arguments(ValiantMappingMode.Debuggable)]
+    public async Task Setters_Run_In_Rule_Declaration_Order(ValiantMappingMode mode)
+    {
+        var source = new AssignmentParitySource();
+        var target = new AssignmentParityMapper(Options(mode)).Map(source);
+
+        await Assert.That(string.Join(",", source.Calls)).IsEqualTo("fallback,branch,primary,second,init,first");
+        await Assert.That((target.First, target.Second, target.Initial, target.InitWrites))
+            .IsEqualTo(("mapped", "mapped", "mapped", 1));
+    }
+
+    [Test]
+    [Arguments(ValiantMappingMode.Fast)]
+    [Arguments(ValiantMappingMode.Debuggable)]
+    public async Task Conditionally_Ignored_Init_Only_Property_Keeps_Initializer(ValiantMappingMode mode)
+    {
+        var source = new AssignmentParitySource(skipInit: true);
+        var target = new AssignmentParityMapper(Options(mode)).Map(source);
+
+        await Assert.That((target.Initial, target.InitWrites)).IsEqualTo(("original", 0));
+        await Assert.That(source.Calls).DoesNotContain("init");
+    }
+
+    [Test]
+    [Arguments(ValiantMappingMode.Auto, 1, 0)]
+    [Arguments(ValiantMappingMode.Fast, 1, 0)]
+    [Arguments(ValiantMappingMode.Debuggable, 0, 1)]
+    public async Task Explicit_Mode_Dispatch_Uses_The_Selected_Backend(
+        ValiantMappingMode mode, int fastCaptures, int debuggableCaptures)
+    {
+        var probe = new MappingModeProbe();
+        var target = new MappingModeProbeMapper(probe, Options(mode)).Map(new MappingModeSource { Value = "mapped" });
+
+        await Assert.That(target.Value).IsEqualTo("mapped");
+        await Assert.That(probe.FastCaptures).IsEqualTo(fastCaptures);
+        await Assert.That(probe.DebuggableCaptures).IsEqualTo(debuggableCaptures);
+    }
+
+    [Test]
+    public async Task Mapper_Without_Options_Uses_The_Generated_Backend()
+    {
+        var probe = new MappingModeProbe();
+        var target = new MappingModeProbeMapper(probe).Map(new MappingModeSource { Value = "mapped" });
+
+        await Assert.That(target.Value).IsEqualTo("mapped");
+        await Assert.That(probe.FastCaptures).IsEqualTo(1);
+        await Assert.That(probe.DebuggableCaptures).IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments(ValiantMappingMode.Auto, false, 1, 0)]
+    [Arguments(ValiantMappingMode.Auto, true, 1, 0)]
+    [Arguments(ValiantMappingMode.Fast, false, 1, 0)]
+    [Arguments(ValiantMappingMode.Fast, true, 1, 0)]
+    [Arguments(ValiantMappingMode.Debuggable, false, 0, 1)]
+    [Arguments(ValiantMappingMode.Debuggable, true, 0, 1)]
+    public async Task DI_And_Factory_Select_The_Same_Backend_For_Parent_And_Nested_Mappers(
+        ValiantMappingMode mode, bool useFactory, int fastCaptures, int debuggableCaptures)
+    {
+        var parentProbe = new MappingModeProbe();
+        var nestedProbe = new MappingModeProbe();
+        var services = new ServiceCollection();
+        services.AddSingleton(nestedProbe);
+        // The sample assembly also exposes a generated registration class with this name.
+#pragma warning disable CS0436
+        ValiantMappingServiceCollectionExtensions.AddValiantMappers(services, options => options.Mode = mode);
+#pragma warning restore CS0436
+        using var provider = services.BuildServiceProvider();
+
+        var mapper = useFactory
+            ? provider.GetRequiredService<IMapperFactory>().CreateMapper<MappingModeParentSource, MappingModeParentTarget>()
+            : provider.GetRequiredService<IMapper<MappingModeParentSource, MappingModeParentTarget>>();
+        var source = new MappingModeParentSource(parentProbe, new MappingModeSource { Value = "nested value" });
+        var target = mapper.Map(source);
+
+        await Assert.That(target).IsEqualTo(new MappingModeParentTarget(new MappingModeTarget("nested value")));
+        await Assert.That(parentProbe.FastCaptures).IsEqualTo(fastCaptures);
+        await Assert.That(parentProbe.DebuggableCaptures).IsEqualTo(debuggableCaptures);
+        await Assert.That(nestedProbe.FastCaptures).IsEqualTo(fastCaptures);
+        await Assert.That(nestedProbe.DebuggableCaptures).IsEqualTo(debuggableCaptures);
     }
 
     private static async Task AssertParity<TSource, TTarget>(
@@ -233,10 +425,7 @@ public sealed class MappingModeSource
     public string? Value { get; init; }
 }
 
-public sealed class MappingModeTarget
-{
-    public string? Value { get; set; }
-}
+public sealed record MappingModeTarget(string? Value);
 
 public sealed class MappingModeProbe
 {
@@ -244,9 +433,7 @@ public sealed class MappingModeProbe
 
     public int DebuggableCaptures { get; private set; }
 
-    public string? Capture(
-        string? value,
-        [System.Runtime.CompilerServices.CallerMemberName] string? caller = null)
+    public bool CaptureBackend([System.Runtime.CompilerServices.CallerMemberName] string? caller = null)
     {
         if (string.Equals(caller, "Map", StringComparison.Ordinal))
         {
@@ -257,7 +444,7 @@ public sealed class MappingModeProbe
             DebuggableCaptures++;
         }
 
-        return value;
+        return true;
     }
 }
 
@@ -267,6 +454,9 @@ public sealed partial class MappingModeProbeMapper(
 {
     public override void Configure(MappingContext<MappingModeSource, MappingModeTarget> context)
     {
-        context.Map(source => probe.Capture(source.Value), target => target.Value);
+        if (probe.CaptureBackend())
+        {
+            context.Map(source => source.Value, target => target.Value);
+        }
     }
 }

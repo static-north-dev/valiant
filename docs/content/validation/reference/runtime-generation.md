@@ -40,20 +40,20 @@ See [Microsoft’s Runtime Async documentation](https://learn.microsoft.com/en-u
 | `FailureBehavior` | `ValidateAll`, `FailFast` | `ValidateAll` |
 | `Lifetime` | `Scoped`, `Transient`, `Singleton` | `Scoped` |
 
-`Auto` uses the runtime, debuggable backend in Debug builds and generated fast code otherwise. `Debuggable` lets you step through `Configure`; `Fast` always uses direct generated checks.
+All modes execute the same rules in the same order and propagate the same exceptions. `Auto` and `Fast` use generated checks for eligible straight-line fluent validators in Debug and Release builds. Set `Mode` to `Debuggable` to step through the original `Configure` method. Attribute validators always use generated checks, and fluent validators outside the generated subset always run `Configure`.
 
 Choose validator lifetime based on constructor dependencies. A singleton validator must not capture scoped services.
 
 ## Result model
 
-`ValidationResult` exposes all failures as well as `Errors`, `Warnings`, and `Infos`. Only error severity makes `IsValid` false. Each `ValidationFailure` includes `PropertyName`, `ErrorCode`, `ErrorMessage`, and `Severity`.
+`ValidationResult` exposes all failures as well as `Errors`, `Warnings`, and `Infos`. Each `ValidationFailure` includes `PropertyName`, `ErrorCode`, `ErrorMessage`, and `Severity`. Errors and unknown severity values make the result invalid.
 
-Results are immutable and do not need disposal. In `Fast` mode, simple validators
-with at most six checks and fixed default failure content reuse results after
-each failure combination is first seen. All checks still run on every call.
-Reuse is bounded to 63 nonempty combinations per validator type. Custom diagnostic
-expressions, culture-dependent messages, composition, async checks, and larger
-validators keep the owned-result path.
+`IsValid()` and `IsValidAsync()` execute the same rules, diagnostic expressions, and reused validators as the full result APIs. The fluent runtime returns the validity of the collected failures directly.
+
+Results are immutable and do not need disposal. Generated validators with at
+most six checks and fixed default failure content can reuse a result for each
+failure combination. Each call evaluates the applicable rules again. Reuse is
+bounded to 63 nonempty combinations per validator type.
 
 ## Generator scope
 

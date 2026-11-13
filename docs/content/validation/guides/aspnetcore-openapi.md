@@ -48,6 +48,8 @@ failures do not block the handler.
 
 ## MVC
 
+MVC model validation is synchronous. For validators with async rules, invoke `ValidateAsync` explicitly from an async action in place of the automatic Valiant MVC integration for that model.
+
 Register the global model-validation filter directly or through MVC builders:
 
 ```csharp
@@ -90,7 +92,7 @@ builder.Services.AddOpenApi(options =>
     options.AddValiantValidationRules());
 ```
 
-Valiant projects generated metadata into native constraints where possible—such as required, length, count, and comparison bounds—and preserves richer details in `x-valiant-rules` extensions.
+Valiant projects unconditional rules with a known blocking severity into native constraints such as required, length, count, and comparison bounds. Rules with advisory, dynamic, or conditional severity remain available in the `x-valiant-rules` extension.
 
 :::info Package references
 Each integration package forwards the core Valiant runtime and generator assets. Add both ASP.NET Core packages when you need request validation and OpenAPI; do not add a redundant direct `StaticNorth.Valiant.Validation` reference.

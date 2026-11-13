@@ -20,7 +20,7 @@ services.AddValiantMappers(options =>
 | `Mode` | `Auto`, `Debuggable`, `Fast` | `Auto` |
 | `NullHandling` | `MapNulls`, `IgnoreSourceNulls` | `MapNulls` |
 
-`Auto` uses the debuggable runtime backend in Debug builds and direct generated mapping in other builds. `Debuggable` executes your `Configure` method at runtime, so breakpoints work; this path uses expression compilation and reflection. `Fast` always uses generated direct mapping code and is the preferred deployment path for trimming and Native AOT.
+`Auto` and `Fast` use direct generated mapping in Debug and Release builds. Both modes support trimming and Native AOT. Select `Debuggable` to execute your `Configure` method at runtime and use breakpoints. This path uses expression compilation and reflection.
 
 ## Generator scope
 
