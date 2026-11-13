@@ -57,7 +57,6 @@ When the project references Microsoft dependency-injection abstractions, Valiant
 
 ```csharp
 using StaticNorth.Valiant.Mapping;
-using StaticNorth.Valiant.Mapping.DependencyInjection;
 
 builder.Services.AddValiantMappers(options =>
 {

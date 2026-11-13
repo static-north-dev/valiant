@@ -1598,7 +1598,6 @@ When the project references Microsoft dependency-injection abstractions, Valiant
 
 ```csharp
 using StaticNorth.Valiant.Mapping;
-using StaticNorth.Valiant.Mapping.DependencyInjection;
 
 builder.Services.AddValiantMappers(options =>
 {
@@ -1842,7 +1841,7 @@ public sealed partial class UserMapper(AddressMapper addressMapper)
 #### Generated registration
 
 ```csharp
-using StaticNorth.Valiant.Mapping.DependencyInjection;
+using StaticNorth.Valiant.Mapping;
 
 builder.Services.AddValiantMappers();
 ```
