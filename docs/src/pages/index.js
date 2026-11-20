@@ -33,7 +33,7 @@ const modules = [
     label: 'Settings',
     href: '/settings/',
     marker: '[ValiantSettings]',
-    description: 'Deterministic settings schemas, Options binding, validation, and a protected configuration explorer.',
+    description: 'Deterministic settings schemas, Options binding, validation, and an ASP.NET Core configuration explorer.',
     output: 'Schema provider',
   },
 ];

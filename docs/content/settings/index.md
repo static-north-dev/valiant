@@ -1,6 +1,6 @@
 ---
 title: Settings
-description: Generated settings schemas, optional Options binding and validation, and a secure ASP.NET Core explorer.
+description: Generated settings schemas, optional Options binding and validation, and a ASP.NET Core settings explorer.
 ---
 
 # Settings with a generated contract
@@ -27,7 +27,7 @@ public sealed record PaymentSettings
 | Schema | Model, property, nesting, collection, default, nullability, required, and secret metadata |
 | Options | Generated section-aware `Configure<TSettings>` registration on opt-in models |
 | Validation | `IValidateOptions<TSettings>` backed by a generated Valiant validator |
-| UI | Built-in schema explorer and JSON endpoint with safe secret masking |
+| UI | Built-in schema explorer and JSON endpoint with host-configured authorization and secret masking |
 | Tooling | `IValiantSettingsSchemaProvider` for custom consumers |
 
 ## Documentation map

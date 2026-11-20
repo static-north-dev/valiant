@@ -90,6 +90,8 @@ builder.Services.AddValiantSettings(builder.Configuration, options =>
 
 `StaticNorth.Valiant.Settings.AspNetCore` maps a small built-in UI and JSON endpoint for visualizing generated settings schemas:
 
+Configure your application's authentication scheme and a `SettingsAdministrators` authorization policy, then apply it to the route group. It protects both the HTML explorer and its JSON endpoint.
+
 ```csharp
 using StaticNorth.Valiant.Settings.AspNetCore;
 using StaticNorth.Valiant.Settings.DependencyInjection;
@@ -98,41 +100,11 @@ builder.Services.AddValiantSettings(builder.Configuration);
 
 var app = builder.Build();
 
-app.MapValiantSettingsUi();
+app.MapValiantSettingsUi()
+    .RequireAuthorization("SettingsAdministrators");
 ```
 
-The default route is `/_valiant/settings`. The UI reads from `/_valiant/settings/schemas`, which returns a JSON document built from registered `IValiantSettingsSchemaProvider` services.
-
-Override the route prefix when mapping the UI:
-
-```csharp
-app.MapValiantSettingsUi(options => options.Path = "/admin/settings");
-```
-
-The schema endpoint follows the configured prefix, for example `/admin/settings/schemas`.
-
-Opt into runtime values at the UI mapping level:
-
-```csharp
-app.MapValiantSettingsUi(options =>
-{
-    options.ShowRuntimeValues = true;
-});
-```
-
-Runtime values are read dynamically from `IOptions<TSettings>` for registered schemas only. If `RegisterSchemaProviders = false`, the UI has no generated schema catalog and runtime values are not available. Values marked with `[ValiantSecret]` are masked, and common sensitive property names such as `Password`, `Secret`, `Token`, `ApiKey`, `ClientSecret`, and `ConnectionString` are masked by default.
-
-Allow the UI to request unmasked secret values only when that is acceptable for the mapped endpoint:
-
-```csharp
-app.MapValiantSettingsUi(options =>
-{
-    options.ShowRuntimeValues = true;
-    options.AllowSecretReveal = true;
-});
-```
-
-When `AllowSecretReveal` is enabled, the UI shows a reveal/hide control in the runtime values panel. Secret values are still masked until the user explicitly reveals them.
+The default routes are `/_valiant/settings` and `/_valiant/settings/schemas`. The [explorer guide](https://valiant.staticnorth.dev/settings/guides/aspnetcore-ui) covers local previews, custom routes, masked runtime values, and secret reveal.
 
 ## Intended Scope
 
