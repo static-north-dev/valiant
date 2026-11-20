@@ -11,7 +11,7 @@ Install the most specific package for each integration you use. Integration pack
 | --- | --- | --- |
 | `StaticNorth.Valiant.Validation` | Core validators without a host integration | .NET 8 and .NET Standard 2.0 |
 | `StaticNorth.Valiant.Validation.AspNetCore` | Minimal APIs, MVC, and problem details | .NET 8 |
-| `StaticNorth.Valiant.Validation.AspNetCore.OpenApi` | Native ASP.NET Core OpenAPI schema rules | .NET 10 |
+| `StaticNorth.Valiant.Validation.AspNetCore.OpenApi` | Native ASP.NET Core OpenAPI schema rules | .NET 10 and .NET 11 |
 | `StaticNorth.Valiant.Validation.MediatR` | MediatR 12.5 pipeline validation | .NET 8 |
 | `StaticNorth.Valiant.Validation.Mediator` | Source-generated Mediator pipeline validation | .NET 8 |
 

@@ -53,9 +53,16 @@ public sealed partial class ValiantMappingGenerator
             AppendFingerprintValue(builder, mapping.HasConfigureMethod ? "configure" : "no-configure");
             AppendFingerprintValue(builder, mapping.UsesServiceProviderMapper ? "service-provider-mappers" : "no-service-provider-mappers");
 
+            foreach (var local in mapping.ConfigureLocals)
+            {
+                AppendFingerprintValue(builder, local);
+            }
+
             foreach (var argument in mapping.Constructor.Arguments)
             {
                 AppendFingerprintValue(builder, argument.ParameterName);
+                AppendFingerprintValue(builder, argument.ParameterType);
+                AppendFingerprintValue(builder, argument.RuntimeParameterType);
                 AppendFingerprintValue(builder, argument.SourceExpression);
             }
 
@@ -64,6 +71,8 @@ public sealed partial class ValiantMappingGenerator
                 AppendFingerprintValue(builder, assignment.TargetMemberName);
                 AppendFingerprintValue(builder, assignment.SourceExpression);
                 AppendFingerprintValue(builder, assignment.ConditionExpression);
+                AppendFingerprintValue(builder, assignment.UseInitializer ? "initializer" : "assignment");
+                AppendFingerprintValue(builder, assignment.InitPropertyType);
             }
 
             foreach (var collectionMapping in mapping.CollectionMappings)
@@ -74,7 +83,9 @@ public sealed partial class ValiantMappingGenerator
                 AppendFingerprintValue(builder, collectionMapping.SourceType);
                 AppendFingerprintValue(builder, collectionMapping.SourceElementType);
                 AppendFingerprintValue(builder, collectionMapping.TargetElementType);
+                AppendFingerprintValue(builder, collectionMapping.ArrayAllocationFormat);
                 AppendFingerprintValue(builder, collectionMapping.MappedElementExpression);
+                AppendFingerprintValue(builder, collectionMapping.RequiresElementMapper ? "captured" : "inline");
                 AppendFingerprintValue(builder, collectionMapping.CapacityExpression);
             }
         }

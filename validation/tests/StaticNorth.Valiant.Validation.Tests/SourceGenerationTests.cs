@@ -9,31 +9,223 @@ namespace StaticNorth.Valiant.Validation.Tests;
 public sealed class SourceGenerationTests
 {
     [Test]
-    [Arguments("context.Property(x => x.Name).Required();", true)]
-    [Arguments("context.Property(x => x.Name).Required().Required().Required().Required().Required().Required();", true)]
-    [Arguments("context.Property(x => x.Name).Required().Required().Required().Required().Required().Required().Required();", false)]
-    [Arguments("context.Property(x => x.Name).Required(message: \"custom\");", false)]
-    [Arguments("context.Property(x => x.Name).Required(code: \"custom\");", false)]
-    [Arguments("context.Property(x => x.Name).Required(severity: ValiantSeverity.Warning);", false)]
-    [Arguments("context.Property(x => x.Amount).GreaterThan(0.5m);", false)]
-    [Arguments("if (true) { context.Property(x => x.Name).Required(); }", false)]
-    [Arguments("context.Property(x => x.Name).SatisfiesAsync(static (_, _) => new System.Threading.Tasks.ValueTask<bool>(false));", false)]
-    public async Task Immutable_Failure_Reuse_Is_Bounded_And_Excludes_Dynamic_Content(string rules, bool expectedCache)
+    [Arguments("context.Property(x => x.Name).Required().MinLength(3);", true)]
+    [Arguments("context.Property(x => x.Name).Required(); return;", false)]
+    [Arguments("context.Property(x => x.Name).Required(message: BuildMessage());", false)]
+    [Arguments("context.Property(x => x.Name).MinLength(Threshold);", false)]
+    [Arguments("context.Property(x => x.Name).MinLength(3, \"custom\");", false)]
+    [Arguments("context.Property(x => x.Name).When(static _ => true).Required();", false)]
+    [Arguments("context.Property(x => x.Name).MaxLength(3);", false)]
+    [Arguments("context.Property(x => x.Name).Required(); context.Property(x => x.Name);", false)]
+    public async Task Simple_Fluent_Emission_Requires_Bound_Built_In_Checks_And_Safe_Declarations(string rules, bool generated)
     {
-        var source = $$"""
+        var result = RunGenerator(
+            $$"""
             using StaticNorth.Valiant.Validation;
+
+            public static class CustomRules
+            {
+                public static PropertyValidation<Person, string?> MaxLength(this PropertyValidation<Person, string?> property, int length) =>
+                    property.Required(message: length.ToString());
+            }
+
             [ValiantValidator]
             public sealed partial class PersonValidator : ValidatorDefinition<Person>
             {
+                private static string BuildMessage() => "custom";
+                private const int Threshold = 3;
+
                 public override void Configure(ValidationContext<Person> context)
                 {
                     {{rules}}
                 }
             }
+
             public sealed class Person
             {
                 public string? Name { get; init; }
-                public decimal Amount { get; init; }
+            }
+            """);
+
+        var source = result.GeneratedSources.Single(static item =>
+            item.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
+
+        await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(source.Contains("var value0 = instance.Name;", StringComparison.Ordinal)).IsEqualTo(generated);
+        await Assert.That(source).Contains("Configure(context);");
+        await Assert.That(source.Contains("_valiantValidationOptions?.Mode == global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable", StringComparison.Ordinal))
+            .IsEqualTo(generated);
+        if (generated)
+        {
+            await Assert.That(source).Contains("return ConfigureValidation(instance).ToResult();");
+            await Assert.That(source).Contains("return await ConfigureValidation(instance).ToResultAsync(cancellationToken).ConfigureAwait(false);");
+            await Assert.That(source).Contains("instance) => Validate(instance).IsValid;");
+            await Assert.That(source).Contains("await ValidateAsync(instance, cancellationToken).ConfigureAwait(false)");
+        }
+    }
+
+    [Test]
+    [Arguments("_child", true)]
+    [Arguments("GetChild()", false)]
+    public async Task Simple_Fluent_Child_Reuse_Only_Skips_Configure_For_A_Readonly_Dependency(string dependency, bool generated)
+    {
+        var source = $$"""
+            using StaticNorth.Valiant.Validation;
+
+            public sealed record Parent(Child? Child);
+            public sealed record Child(string? Name);
+
+            [ValiantValidator]
+            public sealed partial class ParentValidator(IValidator<Child> child) : ValidatorDefinition<Parent>
+            {
+                private readonly IValidator<Child> _child = child;
+
+                public override void Configure(ValidationContext<Parent> context)
+                {
+                    context.Property(x => x.Child).Children(nested => nested.UseValidator({{dependency}}));
+                }
+
+                private IValidator<Child> GetChild() => _child;
+            }
+            """;
+
+        var result = RunGenerator(source);
+        var emitted = result.GeneratedSources.Single(static item =>
+            item.HintName.EndsWith("ParentValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
+
+        await Assert.That(RunCompilation(source).Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(emitted).Contains("Configure(context);");
+        await Assert.That(emitted.Contains("Mode == global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable", StringComparison.Ordinal))
+            .IsEqualTo(generated);
+        if (generated)
+        {
+            await Assert.That(emitted).Contains("childValidator0.Validate(child0)");
+            await Assert.That(emitted).Contains("await childValidator0.ValidateAsync(child0, cancellationToken)");
+        }
+    }
+
+    [Test]
+    public async Task DI_Status_Only_Configures_Parent_And_Child_In_Explicit_Debuggable_Mode()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using StaticNorth.Valiant.Validation;
+            using StaticNorth.Valiant.Validation.DependencyInjection;
+
+            public static class StatusProbe
+            {
+                public static async Task<(bool Valid, int ParentCalls, int ChildCalls)> Run(
+                    ValiantValidationMode mode, bool useAsync, bool validChild)
+                {
+                    var services = new ServiceCollection();
+                    ValiantServiceCollectionExtensions.AddValiantValidators(services, options => options.Mode = mode);
+                    using var provider = services.BuildServiceProvider();
+                    var validator = provider.GetRequiredService<IValidator<Parent>>();
+                    var child = new Child(validChild ? "valid" : "");
+                    var parent = new Parent("valid", child);
+                    var valid = useAsync ? await validator.IsValidAsync(parent) : validator.IsValid(parent);
+                    return (valid, parent.ConfigureCalls, child.ConfigureCalls);
+                }
+            }
+
+            public sealed record Parent(string Title, Child Child)
+            {
+                public int ConfigureCalls { get; set; }
+            }
+
+            public sealed record Child(string Name)
+            {
+                public int ConfigureCalls { get; set; }
+            }
+
+            [ValiantValidator]
+            public sealed partial class ParentValidator(IValidator<Child> child) : ValidatorDefinition<Parent>
+            {
+                private readonly IValidator<Child> _child = child;
+
+                public override void Configure(ValidationContext<Parent> context)
+                {
+            #if COUNT_CONFIGURE_CALLS
+                    context.Instance.ConfigureCalls++;
+            #endif
+                    context.Property(x => x.Title).Required();
+                    context.Property(x => x.Child).Children(nested => nested.UseValidator(_child));
+                }
+            }
+
+            [ValiantValidator]
+            public sealed partial class ChildValidator : ValidatorDefinition<Child>
+            {
+                public override void Configure(ValidationContext<Child> context)
+                {
+            #if COUNT_CONFIGURE_CALLS
+                    context.Instance.ConfigureCalls++;
+            #endif
+                    context.Property(x => x.Name).Required();
+                }
+            }
+            """;
+
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var compilation = GeneratorTestHarness.CreateCompilation(source, parseOptions, GetTrustedPlatformReferences(),
+            "StaticNorth.Valiant.Validation.GeneratedStatusProbe");
+#if !DEBUG
+        compilation = compilation.WithOptions(compilation.Options.WithOptimizationLevel(OptimizationLevel.Release));
+#endif
+        var generated = GeneratorTestHarness.Run(new ValiantGenerator(), compilation, parseOptions);
+        await Assert.That(generated.GeneratorDiagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+
+        // Enable the counters after generation so Configure still qualifies for generated validation.
+        var originalTree = compilation.SyntaxTrees.Single();
+        var instrumentedTree = CSharpSyntaxTree.ParseText(source, parseOptions.WithPreprocessorSymbols("COUNT_CONFIGURE_CALLS"), originalTree.FilePath);
+        var instrumented = generated.OutputCompilation.ReplaceSyntaxTree(originalTree, instrumentedTree);
+        using var stream = new MemoryStream();
+        var emit = instrumented.Emit(stream);
+        if (!emit.Success)
+        {
+            throw new InvalidOperationException(string.Join(Environment.NewLine, emit.Diagnostics));
+        }
+
+        var assembly = System.Reflection.Assembly.Load(stream.ToArray());
+        var run = assembly.GetType("StatusProbe")!.GetMethod("Run")!
+            .CreateDelegate<Func<ValiantValidationMode, bool, bool, Task<(bool Valid, int ParentCalls, int ChildCalls)>>>();
+
+        foreach (var mode in new[] { ValiantValidationMode.Auto, ValiantValidationMode.Fast, ValiantValidationMode.Debuggable })
+        {
+            var expectedCalls = mode == ValiantValidationMode.Debuggable ? 1 : 0;
+            foreach (var useAsync in new[] { false, true })
+            {
+                foreach (var validChild in new[] { false, true })
+                {
+                    var result = await run(mode, useAsync, validChild);
+                    var scenario = $"{mode}, {(useAsync ? "IsValidAsync" : "IsValid")}, valid child: {validChild}";
+                    await Assert.That(result).IsEqualTo((validChild, expectedCalls, expectedCalls)).Because(scenario);
+                }
+            }
+        }
+    }
+
+    [Test]
+    [Arguments("[Required]", true, 1)]
+    [Arguments("[Required]", true, 6)]
+    [Arguments("[Required]", false, 7)]
+    [Arguments("[Required(Message = \"custom\")]", false, 1)]
+    [Arguments("[Required(Code = \"custom\")]", false, 1)]
+    [Arguments("[Required(Severity = ValiantSeverity.Warning)]", false, 1)]
+    public async Task Attribute_Failure_Reuse_Is_Bounded_And_Uses_Default_Diagnostics(string attributes, bool expectedCache, int checkCount)
+    {
+        var properties = string.Join(Environment.NewLine, Enumerable.Range(0, checkCount)
+            .Select(index => attributes + " public string? Name" + index + " { get; init; }"));
+        var source = $$"""
+            using StaticNorth.Valiant.Validation;
+
+            [ValiantValidator]
+            public sealed partial class PersonValidator : ValidatorDefinition<Person>;
+
+            public sealed class Person
+            {
+                {{properties}}
             }
             """;
         var result = RunGenerator(source);
@@ -79,7 +271,7 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
-    public async Task Generated_Validator_Contains_Fast_Debuggable_And_Auto_Dispatch_Paths()
+    public async Task Fluent_Validator_Uses_One_Execution_Path_In_Every_Mode()
     {
         var result = RunGenerator(
             """
@@ -108,49 +300,30 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static diagnostic =>
             diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated).Contains(
-            "if (GetEffectiveValidationMode() == global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable)");
-        await Assert.That(generated).Contains("return ValidateRuntime(instance);");
-        await Assert.That(generated).Contains(
-            "return await ValidateRuntimeAsync(instance, cancellationToken).ConfigureAwait(false);");
-        await Assert.That(generated).Contains(
-            "var mode = _valiantValidationOptions?.Mode ?? global::StaticNorth.Valiant.Validation.ValiantValidationMode.Auto;");
-        await Assert.That(generated).Contains("#if DEBUG");
-        await Assert.That(generated).Contains(
-            "return global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable;");
-        await Assert.That(generated).Contains("#else");
-        await Assert.That(generated).Contains(
-            "return global::StaticNorth.Valiant.Validation.ValiantValidationMode.Fast;");
-        await Assert.That(generated).Contains("var value0 = instance.Name;");
-        await Assert.That(generated).Contains(
-            "global::System.String.IsNullOrWhiteSpace(value0)");
-        await Assert.That(generated).Contains(
-            "var failures = new global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultAccumulator(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : 2);");
-        await Assert.That(generated).Contains("var hasErrors = false;");
-        await Assert.That(generated).Contains("return !hasErrors;");
+        await Assert.That(generated).Contains("This validator contains asynchronous validations. Call ValidateAsync instead.");
+        await Assert.That(generated).Contains("return await ConfigureValidation(instance).ToResultAsync(cancellationToken).ConfigureAwait(false);");
+        await Assert.That(generated).Contains("instance) => Validate(instance).IsValid;");
+        await Assert.That(generated).Contains("return await ConfigureValidation(instance).ToStatusAsync(cancellationToken).ConfigureAwait(false);");
+        await Assert.That(generated.Contains("GetEffectiveValidationMode", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(generated.Contains("var value0 = instance.Name;", StringComparison.Ordinal)).IsFalse();
     }
 
     [Test]
-    public async Task Generated_Validator_Precomputes_Only_Culture_Invariant_Integer_Literal_Messages()
+    public async Task Attribute_Validator_Precomputes_Only_Culture_Invariant_Integer_Literal_Messages()
     {
         var result = RunGenerator(
             """
             using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
-            public sealed partial class PersonValidator : ValidatorDefinition<Person>
-            {
-                public override void Configure(ValidationContext<Person> context)
-                {
-                    var minimumScore = 10;
-                    context.Property(x => x.Age).InclusiveBetween(18, 99);
-                    context.Property(x => x.Score).GreaterThan(minimumScore);
-                }
-            }
+            public sealed partial class PersonValidator : ValidatorDefinition<Person>;
 
             public sealed class Person
             {
+                [InclusiveBetween(18, 99)]
                 public int Age { get; init; }
+
+                [GreaterThan(-10)]
                 public int Score { get; init; }
             }
             """);
@@ -161,7 +334,7 @@ public sealed class SourceGenerationTests
             .ToString();
 
         await Assert.That(generated).Contains("\"'Age' must be between 18 and 99.\"");
-        await Assert.That(generated).Contains("\" must be greater than \" + (minimumScore) + \".\"");
+        await Assert.That(generated).Contains("\" must be greater than \" + (-10) + \".\"");
     }
 
     [Test]
@@ -759,7 +932,7 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
-    public async Task If_Else_Conditions_Generate_Runtime_Branches()
+    public async Task If_Else_Rules_Have_Conditional_Metadata()
     {
         var result = RunGenerator(
             """
@@ -794,12 +967,12 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("if (instance.RequiresName)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("else", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains("\"Name\", typeof(string), true");
+        await Assert.That(generated).Contains("\"Age\", typeof(int), true");
     }
 
     [Test]
-    public async Task Property_When_Condition_Generates_Runtime_Branch()
+    public async Task When_Rule_Has_Conditional_Metadata()
     {
         var result = RunGenerator(
             """
@@ -827,11 +1000,11 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("if (((global::System.Func<global::Person, bool>)(request => request.RequiresAge))(instance))", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains("\"Age\", typeof(int), true");
     }
 
     [Test]
-    public async Task Property_When_Nullable_HasValue_Condition_Generates_Runtime_Branch()
+    public async Task When_Nullable_Rule_Has_Conditional_Metadata()
     {
         var result = RunGenerator(
             """
@@ -859,11 +1032,11 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("ProductValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("if (((global::System.Func<global::Product, bool>)(request => request.PriceMax.HasValue))(instance))", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains("\"PriceMin\", typeof(decimal), true");
     }
 
     [Test]
-    public async Task Child_Property_Rule_Generates_Null_Guard_And_Full_Path()
+    public async Task Child_Property_Rule_Metadata_Uses_Full_Path()
     {
         var result = RunGenerator(
             """
@@ -892,13 +1065,11 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("if (instance.Address is not null)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("var value0 = instance.Address.Line1;", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("new global::StaticNorth.Valiant.Validation.ValidationFailure(\"Address.Line1\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains("\"Address.Line1\", typeof(string), false");
     }
 
     [Test]
-    public async Task Children_Rule_Generates_Child_Context_Block()
+    public async Task Children_Rules_Have_Conditional_Metadata()
     {
         var result = RunGenerator(
             """
@@ -936,15 +1107,12 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("var __valiantChild", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("if (__valiantChild", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("if (instance.Address is not null)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("new global::StaticNorth.Valiant.Validation.ValidationFailure(\"Address.\" + \"Line1\"", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("new global::StaticNorth.Valiant.Validation.ValidationFailure(\"Address.\" + \"Zip\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains("\"Line1\", typeof(string), true");
+        await Assert.That(generated).Contains("\"Zip\", typeof(string), true");
     }
 
     [Test]
-    public async Task Child_Property_When_Condition_Generates_Runtime_Branch()
+    public async Task Child_When_Rule_Has_Conditional_Metadata()
     {
         var result = RunGenerator(
             """
@@ -981,11 +1149,11 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("if (((global::System.Func<global::Address, bool>)(address => address.RequiresLine1))(__valiantChild", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains("\"Line1\", typeof(string), true");
     }
 
     [Test]
-    public async Task Switch_Conditions_Generate_Runtime_Switches()
+    public async Task Switch_Rules_Have_Conditional_Metadata()
     {
         var result = RunGenerator(
             """
@@ -1032,8 +1200,7 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("switch (instance.Kind)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("case PersonKind.Adult when instance.RequiresName:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains("\"Name\", typeof(string), true");
     }
 
     [Test]
@@ -1082,7 +1249,7 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
-    public async Task Loops_Generate_Runtime_Loops()
+    public async Task Loop_Rules_Have_Conditional_Metadata()
     {
         var result = RunGenerator(
             """
@@ -1147,18 +1314,11 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("foreach (var value in instance.Values)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("for (var index = 0; index < instance.Values.Count; index++)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("while (instance.RunWhile)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("var runDo = instance.RunDo;", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("while (runDo);", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("runDo = false;", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("continue;", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("break;", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains("\"Name\", typeof(string), true");
     }
 
     [Test]
-    public async Task Collection_Iteration_And_Predicates_Generate_Fast_Code()
+    public async Task Collection_Iteration_And_Predicates_Generate_Metadata()
     {
         var result = RunGenerator(
             """
@@ -1202,16 +1362,15 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("global::StaticNorth.Valiant.Validation.ValidationChecks.HasCount", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("global::StaticNorth.Valiant.Validation.ValidationChecks.All", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("global::StaticNorth.Valiant.Validation.ValidationChecks.Any", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("global::StaticNorth.Valiant.Validation.ValidationChecks.None", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("foreach (var __valiantItem", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("\"Children[\" + (__valiantIndex", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains("\"Count\"");
+        await Assert.That(generated).Contains("\"All\"");
+        await Assert.That(generated).Contains("\"Any\"");
+        await Assert.That(generated).Contains("\"None\"");
+        await Assert.That(generated).Contains("\"Name\", typeof(string), true");
     }
 
     [Test]
-    public async Task Native_Foreach_Item_Context_Generates_Item_Property_Path()
+    public async Task Native_Foreach_Item_Metadata_Is_Conditional()
     {
         var result = RunGenerator(
             """
@@ -1248,11 +1407,7 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("var index = 0;", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("foreach (var child in instance.Children)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("var value0 = child.Name;", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("\"Children[\" + (index).ToString(global::System.Globalization.CultureInfo.InvariantCulture)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("index++;", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains("\"Name\", typeof(string), true");
     }
 
     [Test]
@@ -1265,12 +1420,14 @@ public sealed class SourceGenerationTests
             [ValiantValidator]
             public sealed partial class PersonValidator : IValidatorDefinition<Person>
             {
+                private const ValiantSeverity Advisory = ValiantSeverity.Warning;
+
                 public static void Configure(ValidationContext<Person> context)
                 {
                     context.Property(x => x.Name).Required(
                         code: "NameRequired",
                         message: "Name is required.",
-                        severity: ValiantSeverity.Warning);
+                        severity: Advisory);
                 }
             }
 
@@ -1283,9 +1440,7 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("\"NameRequired\" ?? \"Required\"", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("\"Name is required.\" ?? \"'Name' is required.\"", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("ValiantSeverity.Warning", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains("\"NameRequired\", \"Name is required.\", \"Warning\"");
     }
 
     [Test]
@@ -1408,8 +1563,7 @@ public sealed class SourceGenerationTests
         var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("var reusedResult0 = _requiredNameValidator.Validate(instance);", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("var reusedResult0 = await _requiredNameValidator.ValidateAsync(instance, cancellationToken).ConfigureAwait(false);", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains(".Configure(context);");
     }
 
     [Test]
@@ -1494,9 +1648,7 @@ public sealed class SourceGenerationTests
         var dependencyInjection = result.GeneratedSources.Single(static x => x.HintName == "StaticNorth.Valiant.Validation.DependencyInjection.g.cs").SourceText.ToString();
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains("var propertyValidatorResult0 = _addressPropertyValidator.Validate(value0);", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("var propertyValidatorResult0 = await _addressPropertyValidator.ValidateAsync(value0, cancellationToken).ConfigureAwait(false);", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("CombinePropertyPath(\"Address\", propertyValidatorFailure0.PropertyName)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains(".Configure(context);");
         await Assert.That(dependencyInjection.Contains("CreateValidatorDescriptor<global::AddressPropertyValidator, global::AddressPropertyValidator>(valiantValidationOptions.Lifetime)", StringComparison.Ordinal)).IsTrue();
         await Assert.That(dependencyInjection.Contains("CreateValidatorDescriptor<global::StaticNorth.Valiant.Validation.IPropertyValidator<global::Address>, global::AddressPropertyValidator>(valiantValidationOptions.Lifetime)", StringComparison.Ordinal)).IsTrue();
     }
@@ -1766,15 +1918,17 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
-    public async Task Unrelated_Edit_Leaves_Tracked_Validator_Step_Cached_Or_Unchanged()
+    [Arguments("IValidatorDefinition<Person>", "static")]
+    [Arguments("ValidatorDefinition<Person>", "override")]
+    public async Task Unrelated_Edit_Leaves_Tracked_Validator_Step_Cached_Or_Unchanged(string definition, string modifier)
     {
-        const string validator = """
+        var validator = $$"""
             using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
-            public sealed partial class PersonValidator : IValidatorDefinition<Person>
+            public sealed partial class PersonValidator : {{definition}}
             {
-                public static void Configure(ValidationContext<Person> context)
+                public {{modifier}} void Configure(ValidationContext<Person> context)
                 {
                     context.Property(x => x.Name).Required();
                 }
@@ -1793,6 +1947,63 @@ public sealed class SourceGenerationTests
 
         await Assert.That(reasons).IsNotEmpty();
         await Assert.That(reasons.All(static reason => reason is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged)).IsTrue();
+    }
+
+    [Test]
+    public async Task Labeled_Jump_Tracking_Changes_When_The_Target_Changes()
+    {
+        const string imports = "using StaticNorth.Valiant.Validation;";
+        const string validator = """
+            [ValiantValidator]
+            public sealed partial class PersonValidator : ValidatorDefinition<Person>
+            {
+                public override void Configure(ValidationContext<Person> context)
+                {
+                    outer: for (var row = 0; row < 2; row++)
+                    {
+                        inner: for (var column = 0; column < 2; column++)
+                        {
+                            if (row == 0)
+                            {
+                                break outer;
+                            }
+
+                            if (column == 0)
+                            {
+                                continue inner;
+                            }
+
+                            context.Property(person => person.Name).Required();
+                        }
+
+                        continue outer;
+                    }
+                }
+            }
+
+            public sealed class Person
+            {
+                public string? Name { get; init; }
+            }
+            """;
+        const string stepName = "Validation.NonGenericValidator";
+        var source = imports + "\n" + validator;
+
+        var retargeted = RunTrackedGeneratorEdit(
+            source,
+            source.Replace("break outer;", "break inner;", StringComparison.Ordinal),
+            stepName);
+        var originalSource = RunGenerator(source).GeneratedSources
+            .Single(static generated => generated.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+        var shiftedSource = RunGenerator(imports + "\npublic sealed class Unrelated { }\n" + validator).GeneratedSources
+            .Single(static generated => generated.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal))
+            .SourceText
+            .ToString();
+
+        await Assert.That(retargeted).Contains(IncrementalStepRunReason.Modified);
+        await Assert.That(shiftedSource).IsEqualTo(originalSource);
     }
 
     [Test]
@@ -1870,15 +2081,14 @@ public sealed class SourceGenerationTests
             using StaticNorth.Valiant.Validation;
 
             [ValiantValidator]
-            public sealed partial class PersonValidator : IValidatorDefinition<Person>
-            {
-                public static void Configure(ValidationContext<Person> context)
-                {
-                    context.Property(x => x.Name).Required(message: "required").MaxLength(100);
-                }
-            }
+            public sealed partial class PersonValidator : ValidatorDefinition<Person>;
 
-            public sealed class Person { public string? Name { get; init; } }
+            public sealed class Person
+            {
+                [Required(Message = "required")]
+                [MaxLength(100)]
+                public string? Name { get; init; }
+            }
             """);
         var generated = result.GeneratedSources
             .Single(static source => source.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal))
@@ -2036,9 +2246,9 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
-    public async Task Nullable_Comparable_Checks_Compile_And_Generate_Null_Guards()
+    public async Task Nullable_Comparable_Checks_Compile()
     {
-        var result = RunGenerator(
+        var diagnostics = RunCompilation(
             """
             using System;
             using StaticNorth.Valiant.Validation;
@@ -2103,11 +2313,7 @@ public sealed class SourceGenerationTests
             }
             """);
 
-        var generated = result.GeneratedSources.Single(static x => x.HintName.EndsWith("PersonValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
-
-        await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
-        await Assert.That(generated.Contains(".HasValue && global::System.Collections.Generic.Comparer<decimal?>.Default.Compare(", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains(", 0m) <= 0", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
     }
 
     [Test]

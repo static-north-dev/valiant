@@ -48,6 +48,8 @@ failures do not block the handler.
 
 ## MVC
 
+MVC model validation is synchronous. For validators with async rules, invoke `ValidateAsync` explicitly from an async action in place of the automatic Valiant MVC integration for that model.
+
 Register the global model-validation filter directly or through MVC builders:
 
 ```csharp
@@ -74,6 +76,10 @@ Helpers are available for Minimal API `HttpValidationProblemDetails`, MVC `Valid
 
 ## OpenAPI
 
+The OpenAPI integration uses OpenAPI.NET 2.x on .NET 10 and OpenAPI.NET 3.x on .NET 11.
+
+On .NET 11, ASP.NET Core describes C# 15 union JSON bodies with `anyOf`. The Valiant schema transformer includes validation rules on case models with generated validation metadata. To validate the request at runtime, register a validator for the union parameter type and delegate to the relevant case validator as needed.
+
 ```csharp
 builder.Services.AddOpenApi();
 builder.Services.AddValiantOpenApi();
@@ -86,7 +92,7 @@ builder.Services.AddOpenApi(options =>
     options.AddValiantValidationRules());
 ```
 
-Valiant projects generated metadata into native constraints where possible—such as required, length, count, and comparison bounds—and preserves richer details in `x-valiant-rules` extensions.
+Valiant projects unconditional rules with a known blocking severity into native constraints such as required, length, count, and comparison bounds. Rules with advisory, dynamic, or conditional severity remain available in the `x-valiant-rules` extension.
 
 :::info Package references
 Each integration package forwards the core Valiant runtime and generator assets. Add both ASP.NET Core packages when you need request validation and OpenAPI; do not add a redundant direct `StaticNorth.Valiant.Validation` reference.

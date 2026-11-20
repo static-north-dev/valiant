@@ -11,7 +11,6 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
     <ProjectReference Include="../StaticNorth.Valiant.Endpoints/StaticNorth.Valiant.Endpoints.csproj" PrivateAssets="all" Pack="false" />
     <ProjectReference Include="../StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration/StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" Condition="'$(BuildProjectReferences)' != 'false'" />
   </ItemGroup>

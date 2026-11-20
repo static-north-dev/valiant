@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <IsTestProject>true</IsTestProject>
     <IsTestingPlatformApplication>true</IsTestingPlatformApplication>
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
@@ -16,7 +16,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
-    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
     <PackageReference Include="TUnit" />
   </ItemGroup>
 
@@ -30,6 +29,7 @@
     <ProjectReference Include="../../samples/StaticNorth.Valiant.Settings.AspNetCore.Samples/StaticNorth.Valiant.Settings.AspNetCore.Samples.csproj" />
     <ProjectReference Include="../../samples/StaticNorth.Valiant.Settings.Samples/StaticNorth.Valiant.Settings.Samples.csproj" />
     <ProjectReference Include="../../../validation/src/StaticNorth.Valiant.Validation/StaticNorth.Valiant.Validation.csproj" />
+    <ProjectReference Include="../../../validation/src/StaticNorth.Valiant.Validation.SourceGeneration/StaticNorth.Valiant.Validation.SourceGeneration.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

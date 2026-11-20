@@ -38,6 +38,8 @@ builder.Services.AddValiantMappers();
 
 Valiant registers each mapper as its concrete type and as `IMapper<TSource, TTarget>`. It also registers `IMapper` and `IMapperFactory`. Mapper registrations are transient; the facade, factory, and options are singleton services.
 
+Call the generated registration from each project that declares mappers. The facade and factory then see all registered pairs, in either registration order.
+
 ## Choose an API
 
 ### Typed mapper

@@ -11,6 +11,40 @@ namespace StaticNorth.Valiant.Validation.Tests;
 public sealed class OpenApiIntegrationTests
 {
     [Test]
+    public async Task Advisory_Rules_Appear_In_Metadata_Without_Restricting_The_Schema()
+    {
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var schema = new OpenApiSchema
+        {
+            Type = JsonSchemaType.Object,
+            Properties = new Dictionary<string, IOpenApiSchema>
+            {
+                ["userName"] = new OpenApiSchema { Type = JsonSchemaType.String },
+                ["Age"] = new OpenApiSchema { Type = JsonSchemaType.Integer },
+                ["Other"] = new OpenApiSchema { Type = JsonSchemaType.String }
+            }
+        };
+        var transformer = new ValiantValidationSchemaTransformer([new AdvisoryMetadataProvider()]);
+        await transformer.TransformAsync(schema, new OpenApiSchemaTransformerContext
+        {
+            DocumentName = "v1",
+            ParameterDescription = null,
+            JsonTypeInfo = JsonSerializerOptions.Default.GetTypeInfo<OpenApiUser>(),
+            JsonPropertyInfo = null,
+            ApplicationServices = services
+        }, CancellationToken.None);
+
+        var name = (OpenApiSchema)schema.Properties["userName"];
+        var age = (OpenApiSchema)schema.Properties["Age"];
+        await Assert.That(schema.Required?.Contains("userName") ?? false).IsFalse();
+        await Assert.That(name.MinLength).IsNull();
+        await Assert.That(age.Minimum).IsNull();
+        await Assert.That(schema.Required?.Contains("Other") ?? false).IsFalse();
+        await Assert.That(((JsonNodeExtension)name.Extensions!["x-valiant-rules"]).Node[0]!["severity"]!.GetValue<string>()).IsEqualTo("Warning");
+        await Assert.That(((JsonNodeExtension)age.Extensions!["x-valiant-rules"]).Node[0]!["severity"]!.GetValue<string>()).IsEqualTo("Info");
+    }
+
+    [Test]
     public async Task Schema_Transformer_Applies_Static_Validation_Metadata_To_OpenApi_Schema()
     {
         var schema = new OpenApiSchema
@@ -27,7 +61,7 @@ public sealed class OpenApiIntegrationTests
         {
             DocumentName = "v1",
             ParameterDescription = null,
-            JsonTypeInfo = JsonSerializerOptions.Default.GetTypeInfo(typeof(OpenApiUser)),
+            JsonTypeInfo = JsonSerializerOptions.Default.GetTypeInfo<OpenApiUser>(),
             JsonPropertyInfo = null,
             ApplicationServices = new ServiceCollection().BuildServiceProvider()
         };
@@ -57,6 +91,18 @@ public sealed class OpenApiIntegrationTests
         services.AddValiantOpenApi();
 
         await Assert.That(services.Any(static descriptor => descriptor.ServiceType == typeof(ValiantValidationSchemaTransformer))).IsTrue();
+    }
+
+    private sealed class AdvisoryMetadataProvider : IValiantValidationMetadataProvider
+    {
+        public Type ModelType => typeof(OpenApiUser);
+
+        public IReadOnlyList<ValiantPropertyValidationMetadata> Properties { get; } =
+        [
+            new("Name", typeof(string), false, [new("Required", [], [], null, null, "Warning", false, false)]),
+            new("Age", typeof(int), false, [new("GreaterThanOrEqualTo", ["18"], [], null, null, "Info", false, false)]),
+            new("Other", typeof(string), false, [new("Required", [], [], null, null, "(GetSeverity())", false, false)])
+        ];
     }
 
     private sealed class OpenApiUserMetadataProvider : IValiantValidationMetadataProvider
@@ -122,5 +168,7 @@ public sealed class OpenApiIntegrationTests
         public string? Name { get; init; }
 
         public int Age { get; init; }
+
+        public string? Other { get; init; }
     }
 }

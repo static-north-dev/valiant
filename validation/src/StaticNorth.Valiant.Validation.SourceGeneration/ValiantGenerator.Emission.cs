@@ -86,10 +86,6 @@ public sealed partial class ValiantGenerator
         var namespaceName = declaration.NamespaceName;
         var modelType = validator.ModelType!;
         var modifier = declaration.Modifier;
-        var hasAsyncChecks = HasAsyncChecks(validator.Nodes);
-        var requiresAsyncValidationBody = hasAsyncChecks || HasValidatorReuse(validator.Nodes);
-        var totalChecks = Math.Max(CountChecks(validator.Nodes), 1);
-        var cacheFixedFailures = CanCacheFixedFailures(validator.Nodes, totalChecks);
 
         AppendGeneratedFileHeader(builder);
         if (!validator.Usings.IsDefaultOrEmpty)
@@ -124,128 +120,27 @@ public sealed partial class ValiantGenerator
         builder.AppendLine("{");
 
         AppendValidationOptionsMembers(builder, namespaceName, validator);
-        if (cacheFixedFailures)
-        {
-            AppendFixedFailureCache(builder, namespaceName, validator.Nodes);
-        }
-
         if (validator.ImplementsValidatorDefinition && !validator.InheritsValidatorBase)
         {
             AppendValidatorDefinitionImplementation(builder, namespaceName, modelType, validator);
         }
 
-        AppendXmlDocumentation(
-            builder,
-            namespaceName,
-            1,
-            "Validates the specified instance.",
-            "The validation result for the specified instance.",
-            ("instance", "The instance to validate."));
-        AppendIndent(builder, 1, namespaceName);
-        builder.Append(GetGeneratedValidatorMethodModifier(validator))
-            .Append("global::StaticNorth.Valiant.Validation.ValidationResult Validate(")
-            .Append(modelType)
-            .AppendLine(" instance)");
-        AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("{");
+        if (validator.UsesRuntimeValidation)
+        {
+            AppendFluentValidationMethods(builder, namespaceName, modelType, validator);
+        }
+        else
+        {
+            AppendGeneratedValidationMethods(builder, namespaceName, modelType, validator);
+        }
+
         if (validator.HasConfigureMethod)
         {
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("if (GetEffectiveValidationMode() == global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable)");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("{");
-            AppendIndent(builder, 3, namespaceName);
-            builder.AppendLine("return ValidateRuntime(instance);");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("}");
-            builder.AppendLine();
+            AppendConfigureValidationMethod(builder, namespaceName, modelType, validator);
         }
 
-        if (hasAsyncChecks)
-        {
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("throw new global::System.InvalidOperationException(\"This validator contains asynchronous validations. Call ValidateAsync instead.\");");
-            AppendIndent(builder, 1, namespaceName);
-            builder.AppendLine("}");
-
-            AppendCommonMembers(
-                builder,
-                namespaceName,
-                modelType,
-                validator,
-                totalChecks,
-                hasAsyncChecks,
-                requiresAsyncValidationBody);
-            AppendIndent(builder, 0, namespaceName);
-            builder.AppendLine("}");
-            AppendContainingTypeClosures(builder, namespaceName, containingTypeCount);
-            AppendValidationMetadataProvider(builder, namespaceName, validator);
-
-            if (namespaceName is not null)
-            {
-                builder.AppendLine("}");
-            }
-
-            return builder.ToString();
-        }
-
-        if (!validator.IsModelValueType)
-        {
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("if (instance is null)");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("{");
-            AppendIndent(builder, 3, namespaceName);
-            builder.AppendLine("throw new global::System.ArgumentNullException(nameof(instance));");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("}");
-            builder.AppendLine();
-        }
-
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("var validationFailureBehavior = GetEffectiveFailureBehavior();");
-        AppendIndent(builder, 2, namespaceName);
-        if (cacheFixedFailures)
-        {
-            builder.AppendLine("var failures = 0;");
-        }
-        else
-        {
-            builder.Append("var failures = new global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultAccumulator(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
-                .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
-                .AppendLine(");");
-        }
-
-        var ruleIndex = 0;
-        if (cacheFixedFailures)
-        {
-            var failureIndex = 0;
-            foreach (RuleNode node in validator.Nodes)
-            {
-                AppendRule(builder, namespaceName, 2, node.Rule, ref ruleIndex, totalChecks, false, false, failureIndex);
-                failureIndex += node.Rule.Checks.Length;
-            }
-        }
-        else
-        {
-            AppendValidationNodes(builder, namespaceName, 2, validator.Nodes, ref ruleIndex, totalChecks, false);
-        }
-
-        builder.AppendLine();
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine(cacheFixedFailures
-            ? "return failures == 0 ? global::StaticNorth.Valiant.Validation.ValidationResult.Valid : __valiantFixedFailureCache.Get(failures);"
-            : "return failures.Count == 0 ? global::StaticNorth.Valiant.Validation.ValidationResult.Valid : failures.Build();");
-        AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("}");
-        AppendCommonMembers(
-            builder,
-            namespaceName,
-            modelType,
-            validator,
-            totalChecks,
-            hasAsyncChecks,
-            requiresAsyncValidationBody);
+        AppendStatusMethods(builder, namespaceName, modelType, validator);
+        AppendEffectiveFailureBehaviorMember(builder, namespaceName);
         AppendIndent(builder, 0, namespaceName);
         builder.AppendLine("}");
         AppendContainingTypeClosures(builder, namespaceName, containingTypeCount);
@@ -269,11 +164,6 @@ public sealed partial class ValiantGenerator
             .ToArray();
 
         AppendXmlDocumentation(builder, namespaceName, 1, "Initializes a new validator instance.", null, parameters);
-    }
-
-    private static string GetGeneratedValidatorMethodModifier(ValidatorModel validator)
-    {
-        return "public ";
     }
 
     private static void AppendValidationOptionsMembers(
@@ -386,14 +276,11 @@ public sealed partial class ValiantGenerator
             .FirstOrDefault();
     }
 
-    private static void AppendCommonMembers(
+    private static void AppendStatusMethods(
         StringBuilder builder,
         string? namespaceName,
         string modelType,
-        ValidatorModel validator,
-        int totalChecks,
-        bool hasAsyncChecks,
-        bool requiresAsyncValidationBody)
+        ValidatorModel validator)
     {
         builder.AppendLine();
         AppendXmlDocumentation(
@@ -404,166 +291,42 @@ public sealed partial class ValiantGenerator
             "True when the specified instance is valid; otherwise, false.",
             ("instance", "The instance to validate."));
         AppendIndent(builder, 1, namespaceName);
-        builder.Append(GetGeneratedValidatorMethodModifier(validator))
-            .Append("bool IsValid(")
+        builder.Append("public bool IsValid(").Append(modelType).Append(" instance) => ");
+        builder.AppendLine(validator.UsesRuntimeValidation && !HasAsyncChecks(validator.Nodes)
+            ? "ConfigureValidation(instance).ToStatus();"
+            : "Validate(instance).IsValid;");
+
+        builder.AppendLine();
+        AppendXmlDocumentation(
+            builder,
+            namespaceName,
+            1,
+            "Asynchronously determines whether the specified instance is valid.",
+            "A value task containing true when the specified instance is valid; otherwise, false.",
+            ("instance", "The instance to validate."),
+            ("cancellationToken", "A cancellation token used to cancel asynchronous validation."));
+        AppendIndent(builder, 1, namespaceName);
+        builder.Append("public async global::System.Threading.Tasks.ValueTask<bool> IsValidAsync(")
             .Append(modelType)
-            .AppendLine(" instance)");
+            .AppendLine(" instance, global::System.Threading.CancellationToken cancellationToken = default)");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
-        if (hasAsyncChecks)
+        AppendIndent(builder, 2, namespaceName);
+        if (validator.UsesRuntimeValidation)
         {
+            builder.AppendLine("cancellationToken.ThrowIfCancellationRequested();");
             AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("return Validate(instance).IsValid;");
+            builder.AppendLine("return await ConfigureValidation(instance).ToStatusAsync(cancellationToken).ConfigureAwait(false);");
         }
         else
         {
-            if (validator.HasConfigureMethod)
-            {
-                AppendIndent(builder, 2, namespaceName);
-                builder.AppendLine("if (GetEffectiveValidationMode() == global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable)");
-                AppendIndent(builder, 2, namespaceName);
-                builder.AppendLine("{");
-                AppendIndent(builder, 3, namespaceName);
-                builder.AppendLine("return ValidateRuntime(instance).IsValid;");
-                AppendIndent(builder, 2, namespaceName);
-                builder.AppendLine("}");
-                builder.AppendLine();
-            }
-
-            if (!validator.IsModelValueType)
-            {
-                AppendIndent(builder, 2, namespaceName);
-                builder.AppendLine("if (instance is null)");
-                AppendIndent(builder, 2, namespaceName);
-                builder.AppendLine("{");
-                AppendIndent(builder, 3, namespaceName);
-                builder.AppendLine("throw new global::System.ArgumentNullException(nameof(instance));");
-                AppendIndent(builder, 2, namespaceName);
-                builder.AppendLine("}");
-                builder.AppendLine();
-            }
-
+            builder.AppendLine("var result = await ValidateAsync(instance, cancellationToken).ConfigureAwait(false);");
             AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("var hasErrors = false;");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("var validationFailureBehavior = GetEffectiveFailureBehavior();");
-
-            var statusRuleIndex = 0;
-            AppendValidationNodes(
-                builder,
-                namespaceName,
-                2,
-                validator.Nodes,
-                ref statusRuleIndex,
-                totalChecks,
-                emitAsync: false,
-                emitStatusOnly: true);
-
-            builder.AppendLine();
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("return !hasErrors;");
+            builder.AppendLine("return result.IsValid;");
         }
 
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
-
-        builder.AppendLine();
-        AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("private static string CombinePropertyPath(string propertyName, string childPropertyName)");
-        AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("{");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("if (global::System.String.IsNullOrEmpty(childPropertyName))");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("{");
-        AppendIndent(builder, 3, namespaceName);
-        builder.AppendLine("return propertyName;");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("}");
-        builder.AppendLine();
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return childPropertyName.StartsWith(\"[\", global::System.StringComparison.Ordinal)");
-        AppendIndent(builder, 3, namespaceName);
-        builder.AppendLine("? propertyName + childPropertyName");
-        AppendIndent(builder, 3, namespaceName);
-        builder.AppendLine(": propertyName + \".\" + childPropertyName;");
-        AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("}");
-
-        builder.AppendLine();
-        AppendEffectiveFailureBehaviorMember(builder, namespaceName);
-
-        builder.AppendLine();
-        if (validator.HasConfigureMethod)
-        {
-            AppendRuntimeValidationMembers(builder, namespaceName, modelType, validator);
-        }
-
-        builder.AppendLine();
-        if (requiresAsyncValidationBody)
-        {
-            AppendAsyncValidationMembers(builder, namespaceName, modelType, validator, totalChecks);
-        }
-        else
-        {
-            AppendXmlDocumentation(
-                builder,
-                namespaceName,
-                1,
-                "Asynchronously validates the specified instance.",
-                "A value task containing the validation result for the specified instance.",
-                ("instance", "The instance to validate."),
-                ("cancellationToken", "A cancellation token used to cancel asynchronous validation."));
-            AppendIndent(builder, 1, namespaceName);
-            builder.Append(GetGeneratedValidatorMethodModifier(validator))
-                .Append("global::System.Threading.Tasks.ValueTask<global::StaticNorth.Valiant.Validation.ValidationResult> ValidateAsync(")
-                .Append(modelType)
-                .AppendLine(" instance, global::System.Threading.CancellationToken cancellationToken = default)");
-            AppendIndent(builder, 1, namespaceName);
-            builder.AppendLine("{");
-            if (validator.HasConfigureMethod)
-            {
-                AppendIndent(builder, 2, namespaceName);
-                builder.AppendLine("if (GetEffectiveValidationMode() == global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable)");
-                AppendIndent(builder, 2, namespaceName);
-                builder.AppendLine("{");
-                AppendIndent(builder, 3, namespaceName);
-                builder.AppendLine("return ValidateRuntimeAsync(instance, cancellationToken);");
-                AppendIndent(builder, 2, namespaceName);
-                builder.AppendLine("}");
-                builder.AppendLine();
-            }
-
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("_ = cancellationToken;");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("return new global::System.Threading.Tasks.ValueTask<global::StaticNorth.Valiant.Validation.ValidationResult>(Validate(instance));");
-            AppendIndent(builder, 1, namespaceName);
-            builder.AppendLine("}");
-
-            builder.AppendLine();
-            AppendXmlDocumentation(
-                builder,
-                namespaceName,
-                1,
-                "Asynchronously determines whether the specified instance is valid.",
-                "A value task containing true when the specified instance is valid; otherwise, false.",
-                ("instance", "The instance to validate."),
-                ("cancellationToken", "A cancellation token used to cancel asynchronous validation."));
-            AppendIndent(builder, 1, namespaceName);
-            builder.Append(GetGeneratedValidatorMethodModifier(validator))
-                .Append("global::System.Threading.Tasks.ValueTask<bool> IsValidAsync(")
-                .Append(modelType)
-                .AppendLine(" instance, global::System.Threading.CancellationToken cancellationToken = default)");
-            AppendIndent(builder, 1, namespaceName);
-            builder.AppendLine("{");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("_ = cancellationToken;");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("return new global::System.Threading.Tasks.ValueTask<bool>(IsValid(instance));");
-            AppendIndent(builder, 1, namespaceName);
-            builder.AppendLine("}");
-        }
     }
 
     private static void AppendEffectiveFailureBehaviorMember(StringBuilder builder, string? namespaceName)
@@ -578,46 +341,44 @@ public sealed partial class ValiantGenerator
         builder.AppendLine("}");
     }
 
-    private static void AppendRuntimeValidationMembers(
+    private static void AppendFluentValidationMethods(
         StringBuilder builder,
         string? namespaceName,
         string modelType,
         ValidatorModel validator)
     {
-        AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("private global::StaticNorth.Valiant.Validation.ValiantValidationMode GetEffectiveValidationMode()");
-        AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("{");
+        // Configure can run user code while declaring rules. Every mode must use the same
+        // declaration and execution order, including code that throws during declaration.
+        AppendValidateMethodStart(builder, namespaceName, modelType, emitAsync: false);
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("var mode = _valiantValidationOptions?.Mode ?? global::StaticNorth.Valiant.Validation.ValiantValidationMode.Auto;");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("if (mode != global::StaticNorth.Valiant.Validation.ValiantValidationMode.Auto)");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("{");
-        AppendIndent(builder, 3, namespaceName);
-        builder.AppendLine("return mode;");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("}");
-        builder.AppendLine("#if DEBUG");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable;");
-        builder.AppendLine("#else");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return global::StaticNorth.Valiant.Validation.ValiantValidationMode.Fast;");
-        builder.AppendLine("#endif");
+        builder.AppendLine(HasAsyncChecks(validator.Nodes)
+            ? "throw new global::System.InvalidOperationException(\"This validator contains asynchronous validations. Call ValidateAsync instead.\");"
+            : "return ConfigureValidation(instance).ToResult();");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
 
+        AppendValidateMethodStart(builder, namespaceName, modelType, emitAsync: true, awaitResult: true);
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("return await ConfigureValidation(instance).ToResultAsync(cancellationToken).ConfigureAwait(false);");
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("}");
+    }
+
+    private static void AppendConfigureValidationMethod(
+        StringBuilder builder,
+        string? namespaceName,
+        string modelType,
+        ValidatorModel validator)
+    {
         builder.AppendLine();
         AppendIndent(builder, 1, namespaceName);
-        builder.Append("private global::StaticNorth.Valiant.Validation.ValidationResult ValidateRuntime(").Append(modelType).AppendLine(" instance)");
+        builder.Append("private global::StaticNorth.Valiant.Validation.ValidationContext<")
+            .Append(modelType).Append("> ConfigureValidation(").Append(modelType).AppendLine(" instance)");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendRuntimeNullCheck(builder, namespaceName, validator);
         AppendIndent(builder, 2, namespaceName);
         builder.Append("var context = new global::StaticNorth.Valiant.Validation.ValidationContext<").Append(modelType).AppendLine(">(instance);");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("context.ValidateAll();");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("if (GetEffectiveFailureBehavior() == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast)");
         AppendIndent(builder, 2, namespaceName);
@@ -627,38 +388,9 @@ public sealed partial class ValiantGenerator
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("}");
         AppendIndent(builder, 2, namespaceName);
-        AppendConfigureInvocation(builder, modelType, namespaceName, validator);
+        AppendConfigureInvocation(builder, modelType, validator);
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return context.ToResult();");
-        AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("}");
-
-        builder.AppendLine();
-        AppendIndent(builder, 1, namespaceName);
-        builder.Append("private async global::System.Threading.Tasks.ValueTask<global::StaticNorth.Valiant.Validation.ValidationResult> ValidateRuntimeAsync(")
-            .Append(modelType)
-            .AppendLine(" instance, global::System.Threading.CancellationToken cancellationToken = default)");
-        AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("{");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("cancellationToken.ThrowIfCancellationRequested();");
-        AppendRuntimeNullCheck(builder, namespaceName, validator);
-        AppendIndent(builder, 2, namespaceName);
-        builder.Append("var context = new global::StaticNorth.Valiant.Validation.ValidationContext<").Append(modelType).AppendLine(">(instance);");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("context.ValidateAll();");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("if (GetEffectiveFailureBehavior() == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast)");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("{");
-        AppendIndent(builder, 3, namespaceName);
-        builder.AppendLine("context.FailFast();");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("}");
-        AppendIndent(builder, 2, namespaceName);
-        AppendConfigureInvocation(builder, modelType, namespaceName, validator);
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return await context.ToResultAsync(cancellationToken).ConfigureAwait(false);");
+        builder.AppendLine("return context;");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
     }
@@ -666,7 +398,6 @@ public sealed partial class ValiantGenerator
     private static void AppendConfigureInvocation(
         StringBuilder builder,
         string modelType,
-        string? namespaceName,
         ValidatorModel validator)
     {
         if (validator.ImplementsValidatorDefinition && !validator.InheritsValidatorBase)
@@ -880,13 +611,13 @@ public sealed partial class ValiantGenerator
             return ToLiteral("Error");
         }
 
-        if (TryGetStringLiteralValue(expression, out var literalValue))
+        return expression switch
         {
-            return ToLiteral(literalValue);
-        }
-
-        var lastDot = expression.LastIndexOf('.');
-        return ToLiteral(lastDot >= 0 ? expression.Substring(lastDot + 1) : expression);
+            "global::StaticNorth.Valiant.Validation.ValiantSeverity.Error" => ToLiteral("Error"),
+            "global::StaticNorth.Valiant.Validation.ValiantSeverity.Warning" => ToLiteral("Warning"),
+            "global::StaticNorth.Valiant.Validation.ValiantSeverity.Info" => ToLiteral("Info"),
+            _ => ToLiteral("(" + expression + ")")
+        };
     }
 
     private static bool TryGetStringLiteralValue(string expression, out string value)
@@ -907,141 +638,266 @@ public sealed partial class ValiantGenerator
         return false;
     }
 
-    private static void AppendAsyncValidationMembers(
+    private static void AppendValidateMethodStart(
         StringBuilder builder,
         string? namespaceName,
         string modelType,
-        ValidatorModel validator,
-        int totalChecks)
+        bool emitAsync,
+        bool awaitResult = false)
     {
-        AppendXmlDocumentation(
-            builder,
-            namespaceName,
-            1,
-            "Asynchronously validates the specified instance.",
-            "A value task containing the validation result for the specified instance.",
-            ("instance", "The instance to validate."),
-            ("cancellationToken", "A cancellation token used to cancel asynchronous validation."));
+        const string resultType = "global::StaticNorth.Valiant.Validation.ValidationResult";
+        builder.AppendLine();
+        if (emitAsync)
+        {
+            AppendXmlDocumentation(
+                builder,
+                namespaceName,
+                1,
+                "Asynchronously validates the specified instance.",
+                "A value task containing the validation result for the specified instance.",
+                ("instance", "The instance to validate."),
+                ("cancellationToken", "A cancellation token used to cancel asynchronous validation."));
+        }
+        else
+        {
+            AppendXmlDocumentation(
+                builder,
+                namespaceName,
+                1,
+                "Validates the specified instance.",
+                "The validation result for the specified instance.",
+                ("instance", "The instance to validate."));
+        }
+
         AppendIndent(builder, 1, namespaceName);
-        builder.Append(GetGeneratedValidatorMethodModifier(validator))
-            .Append("async global::System.Threading.Tasks.ValueTask<global::StaticNorth.Valiant.Validation.ValidationResult> ValidateAsync(")
-            .Append(modelType)
-            .AppendLine(" instance, global::System.Threading.CancellationToken cancellationToken = default)");
+        if (emitAsync)
+        {
+            builder.Append(awaitResult ? "public async " : "public ")
+                .Append("global::System.Threading.Tasks.ValueTask<").Append(resultType).Append("> ValidateAsync(")
+                .Append(modelType).AppendLine(" instance, global::System.Threading.CancellationToken cancellationToken = default)");
+        }
+        else
+        {
+            builder.Append("public ").Append(resultType).Append(" Validate(").Append(modelType).AppendLine(" instance)");
+        }
+
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
+        if (emitAsync)
+        {
+            AppendIndent(builder, 2, namespaceName);
+            builder.AppendLine("cancellationToken.ThrowIfCancellationRequested();");
+        }
+    }
+
+    private static void AppendGeneratedValidationMethods(
+        StringBuilder builder,
+        string? namespaceName,
+        string modelType,
+        ValidatorModel validator)
+    {
+        var rules = validator.Nodes.OfType<RuleNode>().Select(static node => node.Rule).ToImmutableArray();
+        var totalChecks = Math.Max(rules.Sum(static rule => rule.Checks.Length), 1);
+        var hasChildReuse = rules.Length != validator.Nodes.Length;
+        var cacheFixedFailures = !hasChildReuse && CanCacheFixedFailures(rules, totalChecks);
+        var hasPropertyReuse = rules.Any(static rule => rule.Checks[0].Kind == "UseValidator");
+        var hasReuse = hasChildReuse || hasPropertyReuse;
+        if (cacheFixedFailures)
+        {
+            AppendFixedFailureCache(builder, namespaceName, rules);
+        }
+
+        AppendValidateMethodStart(builder, namespaceName, modelType, emitAsync: false);
         if (validator.HasConfigureMethod)
         {
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("if (GetEffectiveValidationMode() == global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable)");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("{");
-            AppendIndent(builder, 3, namespaceName);
-            builder.AppendLine("return await ValidateRuntimeAsync(instance, cancellationToken).ConfigureAwait(false);");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("}");
-            builder.AppendLine();
+            AppendDebuggableDispatch(builder, namespaceName, "ConfigureValidation(instance).ToResult()");
         }
 
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("cancellationToken.ThrowIfCancellationRequested();");
-
-        if (!validator.IsModelValueType)
-        {
-            builder.AppendLine();
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("if (instance is null)");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("{");
-            AppendIndent(builder, 3, namespaceName);
-            builder.AppendLine("throw new global::System.ArgumentNullException(nameof(instance));");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("}");
-        }
-
-        builder.AppendLine();
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("var validationFailureBehavior = GetEffectiveFailureBehavior();");
-        AppendIndent(builder, 2, namespaceName);
-        builder.Append("var failures = new global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultAccumulator(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
-            .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
-            .AppendLine(");");
-
-        var ruleIndex = 0;
-        AppendValidationNodes(builder, namespaceName, 2, validator.Nodes, ref ruleIndex, totalChecks, true);
-
-        builder.AppendLine();
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return failures.Count == 0 ? global::StaticNorth.Valiant.Validation.ValidationResult.Valid : failures.Build();");
+        AppendGeneratedChecks(builder, namespaceName, validator, totalChecks, cacheFixedFailures, emitAsync: false);
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
 
-        builder.AppendLine();
-        AppendXmlDocumentation(
-            builder,
-            namespaceName,
-            1,
-            "Asynchronously determines whether the specified instance is valid.",
-            "A value task containing true when the specified instance is valid; otherwise, false.",
-            ("instance", "The instance to validate."),
-            ("cancellationToken", "A cancellation token used to cancel asynchronous validation."));
-        AppendIndent(builder, 1, namespaceName);
-        builder.Append(GetGeneratedValidatorMethodModifier(validator))
-            .Append("async global::System.Threading.Tasks.ValueTask<bool> IsValidAsync(")
-            .Append(modelType)
-            .AppendLine(" instance, global::System.Threading.CancellationToken cancellationToken = default)");
-        AppendIndent(builder, 1, namespaceName);
-        builder.AppendLine("{");
+        AppendValidateMethodStart(builder, namespaceName, modelType, emitAsync: true, awaitResult: hasReuse || validator.HasConfigureMethod);
         if (validator.HasConfigureMethod)
         {
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("if (GetEffectiveValidationMode() == global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable)");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("{");
-            AppendIndent(builder, 3, namespaceName);
-            builder.AppendLine("var runtimeResult = await ValidateRuntimeAsync(instance, cancellationToken).ConfigureAwait(false);");
-            AppendIndent(builder, 3, namespaceName);
-            builder.AppendLine("return runtimeResult.IsValid;");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("}");
-            builder.AppendLine();
+            AppendDebuggableDispatch(builder, namespaceName, "await ConfigureValidation(instance).ToResultAsync(cancellationToken).ConfigureAwait(false)");
         }
 
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("cancellationToken.ThrowIfCancellationRequested();");
-
-        if (!validator.IsModelValueType)
+        if (hasReuse)
         {
-            builder.AppendLine();
+            AppendGeneratedChecks(builder, namespaceName, validator, totalChecks, cacheFixedFailures, emitAsync: true, checkCancellation: hasChildReuse);
+            AppendIndent(builder, 1, namespaceName);
+            builder.AppendLine("}");
+            if (hasPropertyReuse)
+            {
+                AppendCombinePropertyPathMethod(builder, namespaceName);
+            }
+        }
+        else
+        {
             AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("if (instance is null)");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("{");
-            AppendIndent(builder, 3, namespaceName);
-            builder.AppendLine("throw new global::System.ArgumentNullException(nameof(instance));");
-            AppendIndent(builder, 2, namespaceName);
+            builder.AppendLine(validator.HasConfigureMethod
+                ? "return ValidateWithCancellation(instance, cancellationToken);"
+                : "return new global::System.Threading.Tasks.ValueTask<global::StaticNorth.Valiant.Validation.ValidationResult>(Validate(instance));");
+            AppendIndent(builder, 1, namespaceName);
             builder.AppendLine("}");
         }
 
-        builder.AppendLine();
+        if (validator.HasConfigureMethod && !hasReuse)
+        {
+            // A synchronous getter can cancel the token. Preserve the async runtime's checks
+            // between rules even for validators that declare only synchronous predicates.
+            builder.AppendLine();
+            AppendIndent(builder, 1, namespaceName);
+            builder.Append("private global::StaticNorth.Valiant.Validation.ValidationResult ValidateWithCancellation(")
+                .Append(modelType).AppendLine(" instance, global::System.Threading.CancellationToken cancellationToken)");
+            AppendIndent(builder, 1, namespaceName);
+            builder.AppendLine("{");
+            AppendGeneratedChecks(builder, namespaceName, validator, totalChecks, cacheFixedFailures, emitAsync: false, checkCancellation: true);
+            AppendIndent(builder, 1, namespaceName);
+            builder.AppendLine("}");
+        }
+    }
+
+    private static void AppendDebuggableDispatch(StringBuilder builder, string? namespaceName, string resultExpression)
+    {
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("var hasErrors = false;");
+        builder.AppendLine("if (_valiantValidationOptions?.Mode == global::StaticNorth.Valiant.Validation.ValiantValidationMode.Debuggable)");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 3, namespaceName);
+        builder.Append("return ").Append(resultExpression).AppendLine(";");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+    }
+
+    private static void AppendGeneratedChecks(
+        StringBuilder builder,
+        string? namespaceName,
+        ValidatorModel validator,
+        int totalChecks,
+        bool cacheFixedFailures,
+        bool emitAsync,
+        bool checkCancellation = false)
+    {
+        AppendRuntimeNullCheck(builder, namespaceName, validator);
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("var validationFailureBehavior = GetEffectiveFailureBehavior();");
+        AppendIndent(builder, 2, namespaceName);
+        if (cacheFixedFailures)
+        {
+            builder.AppendLine("var failures = 0;");
+        }
+        else
+        {
+            builder.Append("var failures = new global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultAccumulator(validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast ? 1 : ")
+                .Append(totalChecks.ToString(CultureInfo.InvariantCulture))
+                .AppendLine(");");
+        }
 
-        var statusRuleIndex = 0;
-        AppendValidationNodes(
-            builder,
-            namespaceName,
-            2,
-            validator.Nodes,
-            ref statusRuleIndex,
-            totalChecks,
-            emitAsync: true,
-            emitStatusOnly: true);
+        var failureIndex = cacheFixedFailures ? (int?)0 : null;
+        for (var ruleIndex = 0; ruleIndex < validator.Nodes.Length; ruleIndex++)
+        {
+            if (validator.Nodes[ruleIndex] is RuleNode rule)
+            {
+                AppendGeneratedRule(builder, namespaceName, rule.Rule, ruleIndex, emitAsync, checkCancellation, failureIndex);
+                failureIndex += rule.Rule.Checks.Length;
+            }
+            else if (validator.Nodes[ruleIndex] is ChildPropertyValidationNode child)
+            {
+                AppendGeneratedChildReuse(builder, namespaceName, child, ruleIndex, emitAsync);
+            }
+        }
 
         builder.AppendLine();
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return !hasErrors;");
+        builder.AppendLine(cacheFixedFailures
+            ? "return failures == 0 ? global::StaticNorth.Valiant.Validation.ValidationResult.Valid : __valiantFixedFailureCache.Get(failures);"
+            : "return failures.Count == 0 ? global::StaticNorth.Valiant.Validation.ValidationResult.Valid : failures.Build();");
+    }
+
+    private static void AppendGeneratedChildReuse(
+        StringBuilder builder, string? namespaceName, ChildPropertyValidationNode child, int ruleIndex, bool emitAsync)
+    {
+        var reuse = (ValidatorReuseNode)child.Nodes[0];
+        var suffix = ruleIndex.ToString(CultureInfo.InvariantCulture);
+        var value = "child" + suffix;
+        var dependency = "childValidator" + suffix;
+        var result = "childResult" + suffix;
+        var prefix = reuse.PropertyPathPrefixExpression;
+
+        builder.AppendLine();
+        if (emitAsync)
+        {
+            AppendIndent(builder, 2, namespaceName);
+            builder.AppendLine("cancellationToken.ThrowIfCancellationRequested();");
+        }
+
+        AppendIndent(builder, 2, namespaceName);
+        builder.Append("if (").Append(child.ChildExpression).Append(" is { } ").Append(value).AppendLine(")");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 3, namespaceName);
+        builder.Append("var ").Append(dependency).Append(" = this.").Append(reuse.ValidatorExpression)
+            .AppendLine(" ?? throw new global::System.ArgumentNullException(\"validator\");");
+        if (emitAsync)
+        {
+            AppendIndent(builder, 3, namespaceName);
+            builder.AppendLine("cancellationToken.ThrowIfCancellationRequested();");
+        }
+
+        AppendIndent(builder, 3, namespaceName);
+        builder.Append("var ").Append(result).Append(" = ").Append(emitAsync ? "await " : "").Append(dependency)
+            .Append(emitAsync ? ".ValidateAsync(" : ".Validate(").Append(value)
+            .AppendLine(emitAsync ? ", cancellationToken).ConfigureAwait(false);" : ");");
+        AppendIndent(builder, 3, namespaceName);
+        builder.Append("foreach (var failure in ").Append(result).AppendLine(".Failures)");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 4, namespaceName);
+        builder.Append("var path = global::System.String.IsNullOrEmpty(failure.PropertyName) ? ").Append(prefix)
+            .Append(".TrimEnd('.') : failure.PropertyName.StartsWith(").Append(prefix)
+            .Append(", global::System.StringComparison.Ordinal) ? failure.PropertyName : ").Append(prefix)
+            .AppendLine(" + failure.PropertyName;");
+        AppendIndent(builder, 4, namespaceName);
+        builder.AppendLine("failures.Add(new global::StaticNorth.Valiant.Validation.ValidationFailure(path, failure.ErrorCode, failure.ErrorMessage, failure.Severity));");
+        AppendIndent(builder, 4, namespaceName);
+        builder.AppendLine("if (validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast && failure.Severity == global::StaticNorth.Valiant.Validation.ValiantSeverity.Error)");
+        AppendIndent(builder, 4, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 5, namespaceName);
+        builder.AppendLine("return failures.Build();");
+        AppendIndent(builder, 4, namespaceName);
+        builder.AppendLine("}");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("}");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("}");
+    }
+
+    private static void AppendCombinePropertyPathMethod(StringBuilder builder, string? namespaceName)
+    {
+        builder.AppendLine();
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("private static string CombinePropertyPath(string propertyName, string childPropertyName)");
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("if (global::System.String.IsNullOrEmpty(childPropertyName))");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("return propertyName;");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("return childPropertyName.StartsWith(\"[\", global::System.StringComparison.Ordinal)");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("? propertyName + childPropertyName");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine(": propertyName + \".\" + childPropertyName;");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
     }
@@ -1224,162 +1080,48 @@ public sealed partial class ValiantGenerator
         return false;
     }
 
-    private static bool HasValidatorReuse(ImmutableArray<ValidationNode> nodes)
-    {
-        foreach (var node in nodes)
-        {
-            switch (node)
-            {
-                case RuleNode ruleNode:
-                    if (ruleNode.Rule.Checks.Any(static check => check.Kind == "UseValidator"))
-                    {
-                        return true;
-                    }
-
-                    break;
-                case ValidatorReuseNode:
-                    return true;
-                case IfNode ifNode:
-                    if (HasValidatorReuse(ifNode.ThenNodes) || HasValidatorReuse(ifNode.ElseNodes))
-                    {
-                        return true;
-                    }
-
-                    break;
-                case SwitchNode switchNode:
-                    foreach (var section in switchNode.Sections)
-                    {
-                        if (HasValidatorReuse(section.Nodes))
-                        {
-                            return true;
-                        }
-                    }
-
-                    break;
-                case LoopNode loopNode:
-                    if (HasValidatorReuse(loopNode.Nodes))
-                    {
-                        return true;
-                    }
-
-                    break;
-                case CollectionIterationNode iterationNode:
-                    if (HasValidatorReuse(iterationNode.Nodes))
-                    {
-                        return true;
-                    }
-
-                    break;
-                case ChildPropertyValidationNode childNode:
-                    if (HasValidatorReuse(childNode.Nodes))
-                    {
-                        return true;
-                    }
-
-                    break;
-                case FailureBehaviorNode:
-                    break;
-                case RawStatementNode:
-                    break;
-            }
-        }
-
-        return false;
-    }
-
-    private static int CountChecks(ImmutableArray<ValidationNode> nodes)
-    {
-        var count = 0;
-        foreach (var node in nodes)
-        {
-            switch (node)
-            {
-                case RuleNode ruleNode:
-                    count += ruleNode.Rule.Checks.Length;
-                    break;
-                case ValidatorReuseNode:
-                    break;
-                case IfNode ifNode:
-                    count += CountChecks(ifNode.ThenNodes);
-                    count += CountChecks(ifNode.ElseNodes);
-                    break;
-                case SwitchNode switchNode:
-                    foreach (var section in switchNode.Sections)
-                    {
-                        count += CountChecks(section.Nodes);
-                    }
-
-                    break;
-                case LoopNode loopNode:
-                    count += CountChecks(loopNode.Nodes);
-                    break;
-                case CollectionIterationNode iterationNode:
-                    count += CountChecks(iterationNode.Nodes);
-                    break;
-                case ChildPropertyValidationNode childNode:
-                    count += CountChecks(childNode.Nodes);
-                    break;
-                case FailureBehaviorNode:
-                    break;
-                case RawStatementNode:
-                    break;
-            }
-        }
-
-        return count;
-    }
-
-    private static bool CanCacheFixedFailures(ImmutableArray<ValidationNode> nodes, int totalChecks)
+    private static bool CanCacheFixedFailures(ImmutableArray<RuleModel> rules, int totalChecks)
     {
         // Bound retained results to 63 combinations. Composition and dynamic failure content
         // keep the owned accumulator path; no validation decisions or model values are cached.
-        if (nodes.IsDefaultOrEmpty || totalChecks > 6)
+        if (rules.IsDefaultOrEmpty || totalChecks > 6)
         {
             return false;
         }
 
-        var cachedCheckCount = 0;
-        foreach (var node in nodes)
+        foreach (var rule in rules)
         {
-            if (node is not RuleNode ruleNode)
+            foreach (var check in rule.Checks)
             {
-                return false;
-            }
-
-            foreach (var check in ruleNode.Rule.Checks)
-            {
-                cachedCheckCount++;
-                if (check.IsAsync || check.Kind == "UseValidator" ||
-                    check.Code is not null || check.Message is not null || check.Severity is not null ||
-                    !TryGetStringLiteralValue(ruleNode.Rule.PropertyNameExpression, out _) ||
-                    !TryGetStringLiteralValue(GetDefaultMessageExpression(ruleNode.Rule, check), out _))
+                if (check.Kind == "UseValidator" || check.Code is not null || check.Message is not null || check.Severity is not null ||
+                    !TryGetStringLiteralValue(GetDefaultMessageExpression(rule, check), out _))
                 {
                     return false;
                 }
             }
         }
 
-        return cachedCheckCount > 0;
+        return true;
     }
 
     private static void AppendFixedFailureCache(
         StringBuilder builder,
         string? namespaceName,
-        ImmutableArray<ValidationNode> nodes)
+        ImmutableArray<RuleModel> rules)
     {
         builder.AppendLine();
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("private static readonly global::StaticNorth.Valiant.Validation.Infrastructure.ValidationResultCache __valiantFixedFailureCache = new(new global::StaticNorth.Valiant.Validation.ValidationFailure[]");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
-        foreach (RuleNode node in nodes)
+        foreach (var rule in rules)
         {
-            foreach (var check in node.Rule.Checks)
+            foreach (var check in rule.Checks)
             {
                 AppendIndent(builder, 2, namespaceName);
-                builder.Append("new global::StaticNorth.Valiant.Validation.ValidationFailure(").Append(node.Rule.PropertyNameExpression).Append(", ")
+                builder.Append("new global::StaticNorth.Valiant.Validation.ValidationFailure(").Append(rule.PropertyNameExpression).Append(", ")
                     .Append(GetFailureCodeExpression(check)).Append(", ")
-                    .Append(GetFailureMessageExpression(node.Rule, check)).AppendLine("),");
+                    .Append(GetFailureMessageExpression(rule, check)).AppendLine("),");
             }
         }
 
@@ -1387,152 +1129,54 @@ public sealed partial class ValiantGenerator
         builder.AppendLine("});");
     }
 
-    private static void AppendValidationNodes(
+    private static void AppendGeneratedRule(
         StringBuilder builder,
         string? namespaceName,
-        int indentLevel,
-        ImmutableArray<ValidationNode> nodes,
-        ref int ruleIndex,
-        int totalChecks,
-        bool emitAsync,
-        bool emitStatusOnly = false)
-    {
-        foreach (var node in nodes)
-        {
-            switch (node)
-            {
-                case RuleNode ruleNode:
-                    AppendRule(builder, namespaceName, indentLevel, ruleNode.Rule, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-                    break;
-                case ValidatorReuseNode reuseNode:
-                    AppendValidatorReuse(builder, namespaceName, indentLevel, reuseNode, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-                    break;
-                case IfNode ifNode:
-                    AppendIfNode(builder, namespaceName, indentLevel, ifNode, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-                    break;
-                case SwitchNode switchNode:
-                    AppendSwitchNode(builder, namespaceName, indentLevel, switchNode, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-                    break;
-                case LoopNode loopNode:
-                    AppendLoopNode(builder, namespaceName, indentLevel, loopNode, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-                    break;
-                case FlowControlNode flowControlNode:
-                    AppendFlowControlNode(builder, namespaceName, indentLevel, flowControlNode);
-                    break;
-                case CollectionIterationNode iterationNode:
-                    AppendCollectionIteration(builder, namespaceName, indentLevel, iterationNode, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-                    break;
-                case ChildPropertyValidationNode childNode:
-                    AppendChildPropertyValidation(builder, namespaceName, indentLevel, childNode, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-                    break;
-                case FailureBehaviorNode failureBehaviorNode:
-                    AppendFailureBehaviorNode(builder, namespaceName, indentLevel, failureBehaviorNode);
-                    break;
-                case RawStatementNode rawStatementNode:
-                    AppendRawStatement(builder, namespaceName, indentLevel, rawStatementNode);
-                    break;
-            }
-        }
-    }
-
-    private static void AppendRule(
-        StringBuilder builder,
-        string? namespaceName,
-        int indentLevel,
         RuleModel rule,
-        ref int ruleIndex,
-        int totalChecks,
+        int ruleIndex,
         bool emitAsync,
-        bool emitStatusOnly,
-        int? cachedFailureIndex = null)
+        bool checkCancellation,
+        int? failureIndex)
     {
         var localName = "value" + ruleIndex.ToString(CultureInfo.InvariantCulture);
-        var ruleFailedName = rule.FailureBehaviorExpression == "global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast"
-            ? "ruleFailed" + ruleIndex.ToString(CultureInfo.InvariantCulture)
-            : null;
-        ruleIndex++;
+        var indentLevel = 2;
 
         builder.AppendLine();
-        var ruleCondition = GetRuleCondition(rule);
-        if (ruleCondition is not null)
+        if (emitAsync || checkCancellation)
         {
             AppendIndent(builder, indentLevel, namespaceName);
-            builder.Append("if (").Append(ruleCondition).AppendLine(")");
+            builder.AppendLine("cancellationToken.ThrowIfCancellationRequested();");
+        }
+
+        if (rule.ConditionExpression is not null)
+        {
+            AppendIndent(builder, indentLevel, namespaceName);
+            builder.Append("if (").Append(GetRuleConditionInvocation(rule)).AppendLine(")");
             AppendIndent(builder, indentLevel, namespaceName);
             builder.AppendLine("{");
             indentLevel++;
         }
 
-        if (ruleFailedName is not null)
-        {
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.Append("var ").Append(ruleFailedName).AppendLine(" = false;");
-        }
-
         AppendIndent(builder, indentLevel, namespaceName);
         builder.Append("var ").Append(localName).Append(" = ").Append(rule.InstanceExpression).Append('.').Append(rule.PropertyAccess).AppendLine(";");
 
-        foreach (var check in rule.Checks)
+        for (var index = 0; index < rule.Checks.Length; index++)
         {
-            AppendCheck(
-                builder,
-                namespaceName,
-                indentLevel,
-                localName,
-                "instance",
-                rule,
-                check,
-                ruleFailedName,
-                totalChecks,
-                emitAsync,
-                emitStatusOnly,
-                cachedFailureIndex);
-            if (cachedFailureIndex is not null)
+            if (checkCancellation && index > 0)
             {
-                cachedFailureIndex++;
+                AppendIndent(builder, indentLevel, namespaceName);
+                builder.AppendLine("cancellationToken.ThrowIfCancellationRequested();");
             }
+
+            AppendGeneratedCheck(
+                builder, namespaceName, indentLevel, localName, rule, rule.Checks[index], emitAsync, failureIndex + index);
         }
 
-        if (ruleCondition is not null)
-        {
-            indentLevel--;
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.AppendLine("}");
-        }
-    }
-
-    private static string? GetRuleCondition(RuleModel rule)
-    {
-        var conditions = ImmutableArray.CreateBuilder<string>();
         if (rule.ConditionExpression is not null)
         {
-            conditions.Add(GetRuleConditionInvocation(rule));
+            AppendIndent(builder, indentLevel - 1, namespaceName);
+            builder.AppendLine("}");
         }
-
-        foreach (var parentAccess in rule.ParentPropertyAccesses)
-        {
-            conditions.Add(rule.InstanceExpression + "." + parentAccess + " is not null");
-        }
-
-        return conditions.Count == 0
-            ? null
-            : string.Join(" && ", conditions);
-    }
-
-    private static string? GetParentAccessCondition(string instanceExpression, ImmutableArray<string> parentPropertyAccesses)
-    {
-        if (parentPropertyAccesses.IsDefaultOrEmpty)
-        {
-            return null;
-        }
-
-        var conditions = ImmutableArray.CreateBuilder<string>(parentPropertyAccesses.Length);
-        foreach (var parentAccess in parentPropertyAccesses)
-        {
-            conditions.Add(instanceExpression + "." + parentAccess + " is not null");
-        }
-
-        return string.Join(" && ", conditions);
     }
 
     private static string GetRuleConditionInvocation(RuleModel rule)
@@ -1545,419 +1189,26 @@ public sealed partial class ValiantGenerator
         return "((" + rule.ConditionDelegateType + ")(" + rule.ConditionExpression + "))(" + rule.InstanceExpression + ")";
     }
 
-    private static void AppendValidatorReuse(
-        StringBuilder builder,
-        string? namespaceName,
-        int indentLevel,
-        ValidatorReuseNode node,
-        ref int ruleIndex,
-        int totalChecks,
-        bool emitAsync,
-        bool emitStatusOnly)
-    {
-        var resultName = "reusedResult" + ruleIndex.ToString(CultureInfo.InvariantCulture);
-        ruleIndex++;
-
-        builder.AppendLine();
-        if (emitStatusOnly)
-        {
-            AppendIndent(builder, indentLevel, namespaceName);
-            if (emitAsync)
-            {
-                builder.Append("var ").Append(resultName).Append(" = await ").Append(node.ValidatorExpression)
-                    .Append(".IsValidAsync(").Append(node.InstanceExpression).AppendLine(", cancellationToken).ConfigureAwait(false);");
-            }
-            else
-            {
-                builder.Append("var ").Append(resultName).Append(" = ").Append(node.ValidatorExpression)
-                    .Append(".IsValid(").Append(node.InstanceExpression).AppendLine(");");
-            }
-
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.Append("if (!").Append(resultName).AppendLine(")");
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.AppendLine("{");
-            AppendIndent(builder, indentLevel + 1, namespaceName);
-            builder.AppendLine("hasErrors = true;");
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.AppendLine("}");
-            return;
-        }
-
-        AppendIndent(builder, indentLevel, namespaceName);
-        if (emitAsync)
-        {
-            builder.Append("var ").Append(resultName).Append(" = await ").Append(node.ValidatorExpression)
-                .Append(".ValidateAsync(").Append(node.InstanceExpression).AppendLine(", cancellationToken).ConfigureAwait(false);");
-        }
-        else
-        {
-            builder.Append("var ").Append(resultName).Append(" = ").Append(node.ValidatorExpression)
-                .Append(".Validate(").Append(node.InstanceExpression).AppendLine(");");
-        }
-
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append("if (").Append(resultName).AppendLine(".Failures.Count > 0)");
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.AppendLine("{");
-        if (node.PropertyPathPrefixExpression is null)
-        {
-            AppendIndent(builder, indentLevel + 1, namespaceName);
-            builder.Append("failures.AddRange(")
-                .Append(resultName)
-                .AppendLine(".Failures);");
-        }
-        else
-        {
-            var failureName = "reusedFailure" + ruleIndex.ToString(CultureInfo.InvariantCulture);
-            var propertyName = "reusedProperty" + ruleIndex.ToString(CultureInfo.InvariantCulture);
-            AppendIndent(builder, indentLevel + 1, namespaceName);
-            builder.Append("foreach (var ").Append(failureName).Append(" in ").Append(resultName).AppendLine(".Failures)");
-            AppendIndent(builder, indentLevel + 1, namespaceName);
-            builder.AppendLine("{");
-            AppendIndent(builder, indentLevel + 2, namespaceName);
-            builder.Append("var ").Append(propertyName).Append(" = ").Append(failureName).AppendLine(".PropertyName;");
-            AppendIndent(builder, indentLevel + 2, namespaceName);
-            builder.Append("failures.Add(new global::StaticNorth.Valiant.Validation.ValidationFailure(global::System.String.IsNullOrEmpty(")
-                .Append(propertyName)
-                .Append(") ? (")
-                .Append(node.PropertyPathPrefixExpression)
-                .Append(").TrimEnd('.') : ")
-                .Append(node.PropertyPathPrefixExpression)
-                .Append(" + ")
-                .Append(propertyName)
-                .Append(", ")
-                .Append(failureName)
-                .Append(".ErrorCode, ")
-                .Append(failureName)
-                .Append(".ErrorMessage, ")
-                .Append(failureName)
-                .AppendLine(".Severity));");
-            AppendIndent(builder, indentLevel + 1, namespaceName);
-            builder.AppendLine("}");
-        }
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.AppendLine("}");
-    }
-
-    private static void AppendIfNode(
-        StringBuilder builder,
-        string? namespaceName,
-        int indentLevel,
-        IfNode node,
-        ref int ruleIndex,
-        int totalChecks,
-        bool emitAsync,
-        bool emitStatusOnly)
-    {
-        builder.AppendLine();
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append("if (").Append(node.Condition).AppendLine(")");
-        AppendValidationBlock(builder, namespaceName, indentLevel, node.ThenNodes, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-
-        if (!node.ElseNodes.IsDefaultOrEmpty)
-        {
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.AppendLine("else");
-            AppendValidationBlock(builder, namespaceName, indentLevel, node.ElseNodes, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-        }
-    }
-
-    private static void AppendSwitchNode(
-        StringBuilder builder,
-        string? namespaceName,
-        int indentLevel,
-        SwitchNode node,
-        ref int ruleIndex,
-        int totalChecks,
-        bool emitAsync,
-        bool emitStatusOnly)
-    {
-        builder.AppendLine();
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append("switch (").Append(node.Expression).AppendLine(")");
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.AppendLine("{");
-
-        foreach (var section in node.Sections)
-        {
-            foreach (var label in section.Labels)
-            {
-                AppendIndent(builder, indentLevel + 1, namespaceName);
-                builder.AppendLine(label);
-            }
-
-            AppendValidationNodes(builder, namespaceName, indentLevel + 2, section.Nodes, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-        }
-
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.AppendLine("}");
-    }
-
-    private static void AppendLoopNode(
-        StringBuilder builder,
-        string? namespaceName,
-        int indentLevel,
-        LoopNode node,
-        ref int ruleIndex,
-        int totalChecks,
-        bool emitAsync,
-        bool emitStatusOnly)
-    {
-        builder.AppendLine();
-        AppendIndent(builder, indentLevel, namespaceName);
-        switch (node.Kind)
-        {
-            case "foreach":
-                builder.Append("foreach (").Append(node.Header).AppendLine(")");
-                AppendValidationBlock(builder, namespaceName, indentLevel, node.Nodes, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-                return;
-            case "for":
-                builder.Append("for (").Append(node.Header).AppendLine(")");
-                AppendValidationBlock(builder, namespaceName, indentLevel, node.Nodes, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-                return;
-            case "while":
-                builder.Append("while (").Append(node.Header).AppendLine(")");
-                AppendValidationBlock(builder, namespaceName, indentLevel, node.Nodes, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-                return;
-            case "do":
-                builder.AppendLine("do");
-                AppendValidationBlock(builder, namespaceName, indentLevel, node.Nodes, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-                AppendIndent(builder, indentLevel, namespaceName);
-                builder.Append("while (").Append(node.Condition).AppendLine(");");
-                return;
-            default:
-                throw new InvalidOperationException("Unsupported loop kind '" + node.Kind + "'.");
-        }
-    }
-
-    private static void AppendFlowControlNode(
-        StringBuilder builder,
-        string? namespaceName,
-        int indentLevel,
-        FlowControlNode node)
-    {
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append(node.Kind).AppendLine(";");
-    }
-
-    private static void AppendFailureBehaviorNode(
-        StringBuilder builder,
-        string? namespaceName,
-        int indentLevel,
-        FailureBehaviorNode node)
-    {
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append("validationFailureBehavior = ").Append(node.BehaviorExpression).AppendLine(";");
-    }
-
-    private static void AppendRawStatement(
-        StringBuilder builder,
-        string? namespaceName,
-        int indentLevel,
-        RawStatementNode node)
-    {
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.AppendLine(node.Statement);
-    }
-
-    private static void AppendCollectionIteration(
-        StringBuilder builder,
-        string? namespaceName,
-        int indentLevel,
-        CollectionIterationNode node,
-        ref int ruleIndex,
-        int totalChecks,
-        bool emitAsync,
-        bool emitStatusOnly)
-    {
-        builder.AppendLine();
-        var parentCondition = GetParentAccessCondition(node.InstanceExpression, node.ParentPropertyAccesses);
-        if (parentCondition is not null)
-        {
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.Append("if (").Append(parentCondition).AppendLine(")");
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.AppendLine("{");
-            indentLevel++;
-        }
-
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append("var ").Append(node.CollectionLocalName).Append(" = ").Append(node.CollectionExpression).AppendLine(";");
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append("if (").Append(node.CollectionLocalName).AppendLine(" is not null)");
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.AppendLine("{");
-        AppendIndent(builder, indentLevel + 1, namespaceName);
-        builder.Append("var ").Append(node.IndexLocalName).AppendLine(" = 0;");
-        AppendIndent(builder, indentLevel + 1, namespaceName);
-        builder.Append("foreach (var ").Append(node.ItemLocalName).Append(" in ").Append(node.CollectionLocalName).AppendLine(")");
-        AppendIndent(builder, indentLevel + 1, namespaceName);
-        builder.AppendLine("{");
-        AppendValidationNodes(builder, namespaceName, indentLevel + 2, node.Nodes, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-        AppendIndent(builder, indentLevel + 2, namespaceName);
-        builder.Append(node.IndexLocalName).AppendLine("++;");
-        AppendIndent(builder, indentLevel + 1, namespaceName);
-        builder.AppendLine("}");
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.AppendLine("}");
-        if (parentCondition is not null)
-        {
-            indentLevel--;
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.AppendLine("}");
-        }
-    }
-
-    private static void AppendChildPropertyValidation(
-        StringBuilder builder,
-        string? namespaceName,
-        int indentLevel,
-        ChildPropertyValidationNode node,
-        ref int ruleIndex,
-        int totalChecks,
-        bool emitAsync,
-        bool emitStatusOnly)
-    {
-        builder.AppendLine();
-        var parentCondition = GetParentAccessCondition(node.InstanceExpression, node.ParentPropertyAccesses);
-        if (parentCondition is not null)
-        {
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.Append("if (").Append(parentCondition).AppendLine(")");
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.AppendLine("{");
-            indentLevel++;
-        }
-
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append("var ").Append(node.ChildLocalName).Append(" = ").Append(node.ChildExpression).AppendLine(";");
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append("if (").Append(node.ChildLocalName).AppendLine(" is not null)");
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.AppendLine("{");
-        AppendValidationNodes(builder, namespaceName, indentLevel + 1, node.Nodes, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.AppendLine("}");
-
-        if (parentCondition is not null)
-        {
-            indentLevel--;
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.AppendLine("}");
-        }
-    }
-
-    private static void AppendValidationBlock(
-        StringBuilder builder,
-        string? namespaceName,
-        int indentLevel,
-        ImmutableArray<ValidationNode> nodes,
-        ref int ruleIndex,
-        int totalChecks,
-        bool emitAsync,
-        bool emitStatusOnly)
-    {
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.AppendLine("{");
-        AppendValidationNodes(builder, namespaceName, indentLevel + 1, nodes, ref ruleIndex, totalChecks, emitAsync, emitStatusOnly);
-        AppendIndent(builder, indentLevel, namespaceName);
-        builder.AppendLine("}");
-    }
-
-    private static void AppendCheck(
+    private static void AppendGeneratedCheck(
         StringBuilder builder,
         string? namespaceName,
         int indentLevel,
         string localName,
-        string instanceName,
         RuleModel rule,
         RuleCheck check,
-        string? ruleFailedName,
-        int totalChecks,
         bool emitAsync,
-        bool emitStatusOnly,
-        int? cachedFailureIndex = null)
+        int? cachedFailureIndex)
     {
-        if (check.IsAsync && !emitAsync)
-        {
-            return;
-        }
-
         if (check.Kind == "UseValidator")
         {
-            AppendPropertyValidatorReuseCheck(
-                builder,
-                namespaceName,
-                indentLevel,
-                localName,
-                rule,
-                check,
-                ruleFailedName,
-                totalChecks,
-                emitAsync,
-                emitStatusOnly);
+            AppendAttributePropertyValidatorReuse(builder, namespaceName, indentLevel, localName, rule, check, emitAsync);
             return;
         }
 
         AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append("if (");
-        if (ruleFailedName is not null)
-        {
-            builder.Append('!').Append(ruleFailedName).Append(" && ");
-        }
-
-        builder.Append(GetFailureCondition(localName, instanceName, rule, check, emitAsync)).AppendLine(")");
+        builder.Append("if (").Append(GetFailureCondition(localName, rule, check)).AppendLine(")");
         AppendIndent(builder, indentLevel, namespaceName);
         builder.AppendLine("{");
-        if (ruleFailedName is not null)
-        {
-            AppendIndent(builder, indentLevel + 1, namespaceName);
-            builder.Append(ruleFailedName).AppendLine(" = true;");
-        }
-
-        if (emitStatusOnly)
-        {
-            if (check.Severity is null)
-            {
-                AppendIndent(builder, indentLevel + 1, namespaceName);
-                builder.AppendLine("hasErrors = true;");
-                AppendIndent(builder, indentLevel + 1, namespaceName);
-                builder.AppendLine("if (validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast)");
-                AppendIndent(builder, indentLevel + 1, namespaceName);
-                builder.AppendLine("{");
-                AppendIndent(builder, indentLevel + 2, namespaceName);
-                builder.AppendLine("return false;");
-                AppendIndent(builder, indentLevel + 1, namespaceName);
-                builder.AppendLine("}");
-            }
-            else
-            {
-                AppendIndent(builder, indentLevel + 1, namespaceName);
-                builder.Append("var failureSeverity = ").Append(GetFailureSeverityExpression(check)).AppendLine(";");
-                AppendIndent(builder, indentLevel + 1, namespaceName);
-                builder.AppendLine("if (failureSeverity != global::StaticNorth.Valiant.Validation.ValiantSeverity.Warning && failureSeverity != global::StaticNorth.Valiant.Validation.ValiantSeverity.Info)");
-                AppendIndent(builder, indentLevel + 1, namespaceName);
-                builder.AppendLine("{");
-                AppendIndent(builder, indentLevel + 2, namespaceName);
-                builder.AppendLine("hasErrors = true;");
-                AppendIndent(builder, indentLevel + 2, namespaceName);
-                builder.AppendLine("if (validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast)");
-                AppendIndent(builder, indentLevel + 2, namespaceName);
-                builder.AppendLine("{");
-                AppendIndent(builder, indentLevel + 3, namespaceName);
-                builder.AppendLine("return false;");
-                AppendIndent(builder, indentLevel + 2, namespaceName);
-                builder.AppendLine("}");
-                AppendIndent(builder, indentLevel + 1, namespaceName);
-                builder.AppendLine("}");
-            }
-
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.AppendLine("}");
-            return;
-        }
-
         AppendIndent(builder, indentLevel + 1, namespaceName);
         if (cachedFailureIndex is not null)
         {
@@ -1998,29 +1249,20 @@ public sealed partial class ValiantGenerator
         builder.AppendLine("}");
     }
 
-    private static void AppendPropertyValidatorReuseCheck(
+    private static void AppendAttributePropertyValidatorReuse(
         StringBuilder builder,
         string? namespaceName,
         int indentLevel,
         string localName,
         RuleModel rule,
         RuleCheck check,
-        string? ruleFailedName,
-        int totalChecks,
-        bool emitAsync,
-        bool emitStatusOnly)
+        bool emitAsync)
     {
         var resultName = "propertyValidatorResult" + localName.Substring("value".Length);
         var failureName = "propertyValidatorFailure" + localName.Substring("value".Length);
 
         AppendIndent(builder, indentLevel, namespaceName);
-        builder.Append("if (");
-        if (ruleFailedName is not null)
-        {
-            builder.Append('!').Append(ruleFailedName).Append(" && ");
-        }
-
-        builder.Append(localName).AppendLine(" is not null)");
+        builder.Append("if (").Append(localName).AppendLine(" is not null)");
         AppendIndent(builder, indentLevel, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, indentLevel + 1, namespaceName);
@@ -2039,37 +1281,6 @@ public sealed partial class ValiantGenerator
         builder.Append("if (").Append(resultName).AppendLine(".Failures.Count > 0)");
         AppendIndent(builder, indentLevel + 1, namespaceName);
         builder.AppendLine("{");
-        if (ruleFailedName is not null)
-        {
-            AppendIndent(builder, indentLevel + 2, namespaceName);
-            builder.Append(ruleFailedName).AppendLine(" = true;");
-        }
-
-        if (emitStatusOnly)
-        {
-            AppendIndent(builder, indentLevel + 2, namespaceName);
-            builder.Append("if (!").Append(resultName).AppendLine(".IsValid)");
-            AppendIndent(builder, indentLevel + 2, namespaceName);
-            builder.AppendLine("{");
-            AppendIndent(builder, indentLevel + 3, namespaceName);
-            builder.AppendLine("hasErrors = true;");
-            AppendIndent(builder, indentLevel + 3, namespaceName);
-            builder.AppendLine("if (validationFailureBehavior == global::StaticNorth.Valiant.Validation.ValiantFailureBehavior.FailFast)");
-            AppendIndent(builder, indentLevel + 3, namespaceName);
-            builder.AppendLine("{");
-            AppendIndent(builder, indentLevel + 4, namespaceName);
-            builder.AppendLine("return false;");
-            AppendIndent(builder, indentLevel + 3, namespaceName);
-            builder.AppendLine("}");
-            AppendIndent(builder, indentLevel + 2, namespaceName);
-            builder.AppendLine("}");
-            AppendIndent(builder, indentLevel + 1, namespaceName);
-            builder.AppendLine("}");
-            AppendIndent(builder, indentLevel, namespaceName);
-            builder.AppendLine("}");
-            return;
-        }
-
         AppendIndent(builder, indentLevel + 2, namespaceName);
         builder.Append("foreach (var ").Append(failureName).Append(" in ").Append(resultName).AppendLine(".Failures)");
         AppendIndent(builder, indentLevel + 2, namespaceName);
@@ -2122,7 +1333,7 @@ public sealed partial class ValiantGenerator
         return check.Severity ?? "global::StaticNorth.Valiant.Validation.ValiantSeverity.Error";
     }
 
-    private static string GetFailureCondition(string localName, string instanceName, RuleModel rule, RuleCheck check, bool emitAsync)
+    private static string GetFailureCondition(string localName, RuleModel rule, RuleCheck check)
     {
         switch (check.Kind)
         {
@@ -2136,7 +1347,7 @@ public sealed partial class ValiantGenerator
                     return "global::System.String.IsNullOrWhiteSpace(" + localName + ")";
                 }
 
-                return "global::System.Collections.Generic.EqualityComparer<" + rule.PropertyType + ">.Default.Equals(" + localName + ", default!)";
+                return "global::StaticNorth.Valiant.Validation.ValidationChecks.IsRequiredValueMissing(" + localName + ")";
             case "NotEmpty":
                 return "global::StaticNorth.Valiant.Validation.ValidationChecks.IsEmpty(" + localName + ")";
             case "Empty":
@@ -2163,12 +1374,6 @@ public sealed partial class ValiantGenerator
                 return "!global::StaticNorth.Valiant.Validation.ValidationChecks.HasKey(" + localName + ", " + check.Arguments[0] + ")";
             case "HasValue":
                 return "!global::StaticNorth.Valiant.Validation.ValidationChecks.HasValue(" + localName + ", " + check.Arguments[0] + ")";
-            case "All":
-                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.All(" + localName + ", (" + check.DelegateType + ")(" + GetCustomPredicateExpression(check) + "))";
-            case "Any":
-                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.Any(" + localName + ", (" + check.DelegateType + ")(" + GetCustomPredicateExpression(check) + "))";
-            case "None":
-                return "!global::StaticNorth.Valiant.Validation.ValidationChecks.None(" + localName + ", (" + check.DelegateType + ")(" + GetCustomPredicateExpression(check) + "))";
             case "LengthBetween":
                 return "!global::StaticNorth.Valiant.Validation.ValidationChecks.HasLengthBetween(" + localName + ", " + check.Arguments[0] + ", " + check.Arguments[1] + ")";
             case "MinLength":
@@ -2191,15 +1396,6 @@ public sealed partial class ValiantGenerator
                 return GetBetweenFailureCondition(rule, localName, check.Arguments[0], "< 0", check.Arguments[1], "> 0");
             case "ExclusiveBetween":
                 return GetBetweenFailureCondition(rule, localName, check.Arguments[0], "<= 0", check.Arguments[1], ">= 0");
-            case "Satisfies":
-                return "!" + GetCustomPredicateInvocation(localName, instanceName, check, false);
-            case "SatisfiesAsync":
-                if (!emitAsync)
-                {
-                    throw new InvalidOperationException("Cannot emit async custom validation in a synchronous method.");
-                }
-
-                return "!" + GetCustomPredicateInvocation(localName, instanceName, check, true);
             default:
                 throw new InvalidOperationException("Unsupported check kind '" + check.Kind + "'.");
         }
@@ -2227,41 +1423,6 @@ public sealed partial class ValiantGenerator
         return rule.IsNullableValueType
             ? localName + ".HasValue && (" + condition + ")"
             : condition;
-    }
-
-    private static string GetCustomPredicateInvocation(string localName, string instanceName, RuleCheck check, bool emitAsync)
-    {
-        if (check.DelegateType is null || check.PredicateParameterCount == 0)
-        {
-            throw new InvalidOperationException("Custom validation check is missing delegate metadata.");
-        }
-
-        var invocation = "((" + check.DelegateType + ")(" + GetCustomPredicateExpression(check) + "))(" + GetCustomPredicateArguments(localName, instanceName, check) + ")";
-        return emitAsync
-            ? "(await " + invocation + ".ConfigureAwait(false))"
-            : invocation;
-    }
-
-    private static string GetCustomPredicateExpression(RuleCheck check)
-    {
-        return check.Arguments[0];
-    }
-
-    private static string GetCustomPredicateArguments(string localName, string instanceName, RuleCheck check)
-    {
-        switch (check.PredicateParameterCount)
-        {
-            case 1:
-                return localName;
-            case 2 when check.IsAsync:
-                return localName + ", cancellationToken";
-            case 2:
-                return instanceName + ", " + localName;
-            case 3:
-                return instanceName + ", " + localName + ", cancellationToken";
-            default:
-                throw new InvalidOperationException("Unsupported custom validation delegate arity '" + check.PredicateParameterCount.ToString(CultureInfo.InvariantCulture) + "'.");
-        }
     }
 
     private static string GetDefaultMessageExpression(RuleModel rule, RuleCheck check)

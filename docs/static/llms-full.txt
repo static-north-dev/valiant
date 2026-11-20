@@ -296,7 +296,9 @@ public void Configure(ValidationContext<CreateOrder> context)
 }
 ```
 
-In `Debuggable` mode this method executes at runtime, so ordinary breakpoints and step-through debugging work.
+Validators with control flow execute `Configure` at runtime in every mode, so ordinary breakpoints and step-through debugging work.
+
+With C# 15, label an enclosing loop to target it from a nested loop. For a loop labeled `outer`, `break outer;` exits it and `continue outer;` advances it to the next iteration. A labeled `break` can also exit an enclosing `switch`.
 
 #### Nested objects
 
@@ -363,7 +365,9 @@ services.AddValiantValidators(options =>
     options.FailureBehavior = ValiantFailureBehavior.ValidateAll);
 ```
 
-Use `FailFast` to stop within the configured scope after the first failure; use `ValidateAll` to collect all applicable failures. Narrower configuration overrides the global option.
+Use `FailFast` to stop a validator after the first error; use `ValidateAll` to collect all applicable failures. At property-chain scope, `FailFast` stops that chain after its first failed check, including warnings and informational failures.
+
+A `Children()` or `ForEach()` callback has its own failure policy and defaults to `ValidateAll`. Its policy does not change the parent's policy. A parent using `FailFast` adds the child or item failures through the first error, then stops.
 ### ASP.NET Core and OpenAPI
 
 Install the integrations you use:
@@ -409,6 +413,8 @@ failures do not block the handler.
 
 #### MVC
 
+MVC model validation is synchronous. For validators with async rules, invoke `ValidateAsync` explicitly from an async action in place of the automatic Valiant MVC integration for that model.
+
 Register the global model-validation filter directly or through MVC builders:
 
 ```csharp
@@ -435,6 +441,10 @@ Helpers are available for Minimal API `HttpValidationProblemDetails`, MVC `Valid
 
 #### OpenAPI
 
+The OpenAPI integration uses OpenAPI.NET 2.x on .NET 10 and OpenAPI.NET 3.x on .NET 11.
+
+On .NET 11, ASP.NET Core describes C# 15 union JSON bodies with `anyOf`. The Valiant schema transformer includes validation rules on case models with generated validation metadata. To validate the request at runtime, register a validator for the union parameter type and delegate to the relevant case validator as needed.
+
 ```csharp
 builder.Services.AddOpenApi();
 builder.Services.AddValiantOpenApi();
@@ -447,7 +457,7 @@ builder.Services.AddOpenApi(options =>
     options.AddValiantValidationRules());
 ```
 
-Valiant projects generated metadata into native constraints where possible—such as required, length, count, and comparison bounds—and preserves richer details in `x-valiant-rules` extensions.
+Valiant projects unconditional rules with a known blocking severity into native constraints such as required, length, count, and comparison bounds. Rules with advisory, dynamic, or conditional severity remain available in the `x-valiant-rules` extension.
 
 :::info Package references
 Each integration package forwards the core Valiant runtime and generator assets. Add both ASP.NET Core packages when you need request validation and OpenAPI; do not add a redundant direct `StaticNorth.Valiant.Validation` reference.
@@ -575,6 +585,20 @@ ValueTask<bool> IsValidAsync(T instance, CancellationToken cancellationToken = d
 
 Use async APIs whenever a validator graph can contain async predicates or async property validators.
 
+#### Opt in to Runtime Async on .NET 11
+
+With the existing Valiant NuGet package reference, add this to the `.csproj` that declares your `[ValiantValidator]` classes. If your validators live in a class library, configure that library. The condition enables the compiler feature for `net11.0` builds, including in a multi-targeted project.
+
+```xml title="YourProject.csproj"
+<PropertyGroup Condition="'$(TargetFramework)' == 'net11.0'">
+  <Features>$(Features);runtime-async=on</Features>
+</PropertyGroup>
+```
+
+Rebuild the project to apply the setting. The NuGet package delivers the Valiant source generator, which emits validator code during your build. The compiler flag applies to eligible async methods in that project, including generated `ValidateAsync` and `IsValidAsync` methods and your own async code. Precompiled Valiant assemblies, including the ASP.NET Core endpoint filter and the validation runtime, use the settings from their own builds.
+
+See [Microsoft’s Runtime Async documentation](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-11/runtime#runtime-async) for the compiler feature details.
+
 #### Options
 
 | Option | Values | Default |
@@ -583,20 +607,20 @@ Use async APIs whenever a validator graph can contain async predicates or async 
 | `FailureBehavior` | `ValidateAll`, `FailFast` | `ValidateAll` |
 | `Lifetime` | `Scoped`, `Transient`, `Singleton` | `Scoped` |
 
-`Auto` uses the runtime, debuggable backend in Debug builds and generated fast code otherwise. `Debuggable` lets you step through `Configure`; `Fast` always uses direct generated checks.
+All modes execute the same rules in the same order and propagate the same exceptions. `Auto` and `Fast` use generated checks for eligible straight-line fluent validators in Debug and Release builds. Set `Mode` to `Debuggable` to step through the original `Configure` method. Attribute validators always use generated checks, and fluent validators outside the generated subset always run `Configure`.
 
 Choose validator lifetime based on constructor dependencies. A singleton validator must not capture scoped services.
 
 #### Result model
 
-`ValidationResult` exposes all failures as well as `Errors`, `Warnings`, and `Infos`. Only error severity makes `IsValid` false. Each `ValidationFailure` includes `PropertyName`, `ErrorCode`, `ErrorMessage`, and `Severity`.
+`ValidationResult` exposes all failures as well as `Errors`, `Warnings`, and `Infos`. Each `ValidationFailure` includes `PropertyName`, `ErrorCode`, `ErrorMessage`, and `Severity`. Errors and unknown severity values make the result invalid.
 
-Results are immutable and do not need disposal. In `Fast` mode, simple validators
-with at most six checks and fixed default failure content reuse results after
-each failure combination is first seen. All checks still run on every call.
-Reuse is bounded to 63 nonempty combinations per validator type. Custom diagnostic
-expressions, culture-dependent messages, composition, async checks, and larger
-validators keep the owned-result path.
+`IsValid()` and `IsValidAsync()` execute the same rules, diagnostic expressions, and reused validators as the full result APIs. The fluent runtime returns the validity of the collected failures directly.
+
+Results are immutable and do not need disposal. Generated validators with at
+most six checks and fixed default failure content can reuse a result for each
+failure combination. Each call evaluates the applicable rules again. Reuse is
+bounded to 63 nonempty combinations per validator type.
 
 #### Generator scope
 
@@ -623,7 +647,7 @@ Install the most specific package for each integration you use. Integration pack
 | --- | --- | --- |
 | `StaticNorth.Valiant.Validation` | Core validators without a host integration | .NET 8 and .NET Standard 2.0 |
 | `StaticNorth.Valiant.Validation.AspNetCore` | Minimal APIs, MVC, and problem details | .NET 8 |
-| `StaticNorth.Valiant.Validation.AspNetCore.OpenApi` | Native ASP.NET Core OpenAPI schema rules | .NET 10 |
+| `StaticNorth.Valiant.Validation.AspNetCore.OpenApi` | Native ASP.NET Core OpenAPI schema rules | .NET 10 and .NET 11 |
 | `StaticNorth.Valiant.Validation.MediatR` | MediatR 12.5 pipeline validation | .NET 8 |
 | `StaticNorth.Valiant.Validation.Mediator` | Source-generated Mediator pipeline validation | .NET 8 |
 
@@ -1070,7 +1094,15 @@ Changing the literal between `true` and `false` adds or removes generated query 
 
 :::
 
-When enabled, Valiant connects its configurable query parser to generated endpoints in three binding shapes.
+When enabled, Valiant connects its configurable query parser to generated endpoints in three binding shapes. You can use an inline handler or pass a named handler directly as a method group, such as `builder.MapGet("/cars", Handle)`.
+
+Use **whole-request binding** for complex queries that need consistent format handling and structured errors.
+
+| Binding shape | Query policy | HTTP 400 response |
+| --- | --- | --- |
+| Whole request | Global or per-endpoint policy for arrays, objects, and JSON | Structured query errors |
+| `[AsParameters]` | Global or per-endpoint policy after native binding succeeds | Structured query errors for the Valiant pass. ASP.NET Core handles native binding failures. |
+| Direct complex `[FromQuery]` | Compile-time JSON policy for the generated parser | ASP.NET Core binding response |
 
 #### Whole request binding
 
@@ -1086,7 +1118,11 @@ public sealed partial record ListCarsRequest
     public CarFilter? Filter { get; init; }
 }
 
-public sealed record CarFilter(int? Year, string? Brand);
+public sealed record CarFilter
+{
+    public int? Year { get; init; }
+    public string? Brand { get; init; }
+}
 ```
 
 Valiant emits `BindAsync(HttpContext, ParameterInfo)` on `ListCarsRequest` and parses the full query through the configured policy.
@@ -1106,13 +1142,17 @@ public sealed record ListCarsRequest
     public CarFilter? Filter { get; init; }
 }
 
-public sealed partial record CarFilter(int? Year, string? Brand);
+public sealed partial record CarFilter
+{
+    public int? Year { get; init; }
+    public string? Brand { get; init; }
+}
 ```
 
 The complex `[FromQuery]` type must be `partial` in this shape. Valiant generates a `TryParse(string, out T)` shim because ASP.NET Core checks property bindability before endpoint filters run.
 The same containing-type rule applies when that complex type is nested.
 
-The Valiant filter runs after native property binding, so it cannot recover from a format that makes ASP.NET Core fail the initial property conversion. For example, comma-separated `?ids=1,2,3` fails before the filter for an `int[] Ids` property. Use generated whole-request binding when every configured format must work without native `[AsParameters]` constraints.
+The Valiant filter reparses the query only after native parameter binding succeeds. For example, ASP.NET Core rejects comma-separated `?ids=1,2,3` for an `int[] Ids` property and controls the resulting HTTP response. Use generated whole-request binding when every configured format must work without native `[AsParameters]` constraints.
 
 #### Direct complex `[FromQuery]`
 
@@ -1141,7 +1181,7 @@ The policy is compiled into the generated method, so direct binding does not use
 
 #### Failure response
 
-Generated binders and the Valiant query-binding filter return HTTP 400 with structured `QueryError` entries when values cannot be converted or a client uses a disabled format. Each entry identifies a `Path`, stable `Code`, human-readable `Message`, and `Kind` (`Validation` or `Configuration`).
+Whole-request binders on mapped Valiant endpoints and the Valiant `[AsParameters]` filter return HTTP 400 with structured `QueryError` entries when values cannot be converted or a client uses a disabled format. Each entry identifies a `Path`, stable `Code`, human-readable `Message`, and `Kind` (`Validation` or `Configuration`).
 
 #### Configure accepted formats
 
@@ -1589,8 +1629,8 @@ and the `Sample` class owns the explanation of the behavior it invokes.
 The basic and convention samples show what the generator can infer. Samples
 with a `Configure` override demonstrate behavior supported by both the
 debuggable runtime backend and the fast generated backend. The dependency
-injection sample leaves `ValiantMappingMode.Auto` selected, so Debug builds use
-the debuggable backend and Release builds use generated fast mapping.
+injection sample uses the default `ValiantMappingMode.Auto` setting, which runs
+generated mapping in Debug and Release builds.
 
 Continue with [Convention mapping](https://valiant.staticnorth.dev/mapping/guides/conventions/),
 [Explicit mapping](https://valiant.staticnorth.dev/mapping/guides/explicit-mapping/), or
@@ -1798,6 +1838,8 @@ builder.Services.AddValiantMappers();
 
 Valiant registers each mapper as its concrete type and as `IMapper<TSource, TTarget>`. It also registers `IMapper` and `IMapperFactory`. Mapper registrations are transient; the facade, factory, and options are singleton services.
 
+Call the generated registration from each project that declares mappers. The facade and factory then see all registered pairs, in either registration order.
+
 #### Choose an API
 
 ##### Typed mapper
@@ -1855,7 +1897,7 @@ services.AddValiantMappers(options =>
 | `Mode` | `Auto`, `Debuggable`, `Fast` | `Auto` |
 | `NullHandling` | `MapNulls`, `IgnoreSourceNulls` | `MapNulls` |
 
-`Auto` uses the debuggable runtime backend in Debug builds and direct generated mapping in other builds. `Debuggable` executes your `Configure` method at runtime, so breakpoints work; this path uses expression compilation and reflection. `Fast` always uses generated direct mapping code and is the preferred deployment path for trimming and Native AOT.
+`Auto` and `Fast` use direct generated mapping in Debug and Release builds. Both modes support trimming and Native AOT. Select `Debuggable` to execute your `Configure` method at runtime and use breakpoints. This path uses expression compilation and reflection.
 
 #### Generator scope
 
@@ -2094,8 +2136,8 @@ The model schema contains its CLR type, display name, section path, and ordered 
 
 - CLR name and configuration key;
 - type display name and normalized kind;
-- required and nullable flags;
-- secret flag and known default value;
+- C# required-member and nullability flags;
+- secret flag and declared compile-time constant initializer, when available for a non-sensitive property;
 - nested object properties or collection item schema.
 
 Public instance properties with public getters are included, including inherited properties. The most derived declaration wins when a property is overridden or hidden. Overrides retain an inherited `[ValiantSecret]` marker.
@@ -2158,6 +2200,8 @@ builder.Services.AddValiantSettings(builder.Configuration);
 
 Valiant emits the equivalent section-aware `services.Configure<S3Settings>(configuration.GetSection("Storage:S3"))` registration.
 
+Use `[ConfigurationKeyName("bucket-name")]` from `Microsoft.Extensions.Configuration` to give a property a different configuration key. The generated schema and runtime values use that key, and the schema retains the CLR property name. On .NET 11, properties marked `[ConfigurationIgnore]` are excluded from binding and from the generated schema and runtime values.
+
 Schema providers register by default. Disable them when the application only needs binding and validation:
 
 ```csharp
@@ -2195,6 +2239,18 @@ builder.Services.AddValiantSettings(builder.Configuration, options =>
 ```
 
 Generated settings registration adds `IValidateOptions<S3Settings>` for configured settings models. It resolves a matching `IValidator<S3Settings>` from DI and translates Valiant errors to normal Options validation failures.
+
+#### Await validation at startup on .NET 11
+
+Alongside the Valiant registration above, opt each settings model into startup validation:
+
+```csharp
+builder.Services.AddOptions<S3Settings>().ValidateOnStart();
+```
+
+The .NET 11 adapter implements `IAsyncValidateOptions<S3Settings>`. The host awaits the Valiant validator's `ValidateAsync` method during startup, passes the startup cancellation token, and reports validation errors in an `OptionsValidationException`.
+
+Read async-only settings from `IOptions<S3Settings>.Value` after startup completes. Configuration reloads and new `IOptionsSnapshot<S3Settings>` scopes create options synchronously and require validators that support synchronous validation.
 
 #### Require matching validators
 
@@ -2248,7 +2304,9 @@ app.MapValiantSettingsUi(options =>
 });
 ```
 
-Runtime values are resolved dynamically from `IOptions<TSettings>` for registered schemas only. If schema-provider registration is disabled, the UI has no generated catalog to display.
+Runtime values come from the host's default `IOptions<TSettings>` instance for each registered schema. The explorer reports values as unavailable when the host has neither Options configuration for that model nor an explicitly supplied options instance. Runtime values can include defaults and values assigned by configuration or post-configuration. Declared defaults in the property list describe constant initializers.
+
+The explorer loads the schema catalog first and requests values for the selected section when you open its Runtime view. Changing sections clears revealed values. A request to `/schemas` without a section selector still returns the full document.
 
 #### Protect secrets
 

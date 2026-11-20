@@ -91,6 +91,17 @@ public sealed class QueryStringParserTests
     }
 
     [Test]
+    public async Task Mixed_Array_Formats_Keep_Their_Group_Order_And_Stable_Indices()
+    {
+        var result = QueryStringParser.Parse<ArrayQuery>(
+            "?ids[2]=5&ids[]=3&ids=1,2&ids[0]=4&ids[2]=6",
+            AllParsingFormats());
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(result.Value!.Ids!.SequenceEqual([1, 2, 3, 4, 5, 6])).IsTrue();
+    }
+
+    [Test]
     public async Task Parser_Accepts_Flat_Object_Params_By_Default()
     {
         var result = QueryStringParser.Parse<FlatFilterQuery>("?brand=tesla&year=2025");
@@ -297,6 +308,23 @@ public sealed class QueryStringParserTests
     }
 
     [Test]
+    [Arguments(QueryArrayFormat.RepeatedKeys)]
+    [Arguments(QueryArrayFormat.CommaSeparated)]
+    [Arguments(QueryArrayFormat.Brackets)]
+    [Arguments(QueryArrayFormat.IndexedBrackets)]
+    public async Task String_Array_Round_Trips_Escaped_Separators(QueryArrayFormat format)
+    {
+        string[] tags = ["New York, NY", "Boston + Cambridge", "%2C"];
+        var serialized = QueryStringSerializer.Serialize(new { tags }, SerializationOptions(format, QueryObjectFormat.Flat));
+        var parsed = QueryStringParser.Parse<StringArrayQuery>(
+            serialized.QueryString, new QueryParsingOptions { SupportedArrayFormats = [format] });
+
+        await Assert.That(serialized.IsSuccess).IsTrue();
+        await Assert.That(parsed.IsSuccess).IsTrue();
+        await Assert.That(parsed.Value!.Tags.SequenceEqual(tags)).IsTrue();
+    }
+
+    [Test]
     public async Task Serializer_Emits_Bracket_Array_Params()
     {
         var result = QueryStringSerializer.Serialize(
@@ -423,6 +451,11 @@ public sealed class QueryStringParserTests
     private sealed class ArrayQuery
     {
         public int[]? Ids { get; set; }
+    }
+
+    private sealed class StringArrayQuery
+    {
+        public string[] Tags { get; set; } = [];
     }
 
     private sealed class FlatFilterQuery

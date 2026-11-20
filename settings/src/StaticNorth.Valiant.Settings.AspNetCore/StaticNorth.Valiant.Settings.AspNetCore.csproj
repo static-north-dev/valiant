@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../SensitiveSettingsNames.cs" Link="SensitiveSettingsNames.cs" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../StaticNorth.Valiant.Settings/StaticNorth.Valiant.Settings.csproj" PrivateAssets="contentfiles" />
   </ItemGroup>

@@ -17,7 +17,8 @@ internal enum DynamicallyAccessedMemberTypes
 {
     None = 0,
     PublicParameterlessConstructor = 0x0001,
-    PublicConstructors = 0x0003
+    PublicConstructors = 0x0003,
+    PublicProperties = 0x0200
 }
 
 [AttributeUsage(AttributeTargets.All, Inherited = false, AllowMultiple = true)]

@@ -200,6 +200,22 @@ public sealed class QueryBindingWebApplicationFactoryTests(
     QueryBindingTestApplicationFactory factory)
 {
     [Test]
+    public async Task Query_Filter_Preserves_AspNetCore_Binding_Failure()
+    {
+        using var client = factory.CreateClient();
+        const string path = "/integration/as-parameters/binding-failure/";
+        const string invalidQuery = "?filter%5Bid%5D=1";
+
+        using var invalidRoute = await client.GetAsync(path + "invalid" + invalidQuery);
+        await Assert.That(invalidRoute.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(await invalidRoute.Content.ReadAsStringAsync()).IsEqualTo(string.Empty);
+
+        using var validRoute = await client.GetAsync(path + "1" + invalidQuery);
+        await Assert.That(validRoute.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(await validRoute.Content.ReadAsStringAsync()).Contains("DisabledQueryObjectFormat");
+    }
+
+    [Test]
     public async Task Test_Application_Starts_And_Maps_Generated_Endpoints()
     {
         using var client = factory.CreateClient();
@@ -307,6 +323,26 @@ public sealed class QueryBindingWebApplicationFactoryTests(
         using var document = await ReadJson(response);
         await Assert.That(document.RootElement.GetProperty("id").GetInt32())
             .IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments("/integration/generated/array/global")]
+    [Arguments("/integration/as-parameters/array/global")]
+    public async Task Hosted_Valiant_Binding_Reports_All_Query_Errors(string route)
+    {
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(route + "?ids[]=1&ids[]=2");
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        using var document = await ReadJson(response);
+        var errors = document.RootElement.EnumerateArray().ToArray();
+        await Assert.That(errors.Length).IsEqualTo(2);
+        foreach (var error in errors)
+        {
+            await Assert.That(error.GetProperty("path").GetString()).IsEqualTo("ids[]");
+            await Assert.That(error.GetProperty("code").GetString()).IsEqualTo("DisabledQueryArrayFormat");
+        }
     }
 
     [Test]

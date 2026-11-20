@@ -1631,8 +1631,16 @@ public sealed class SourceGenerationTests
         const string source = """
             using Microsoft.AspNetCore.Builder;
             using Microsoft.AspNetCore.Routing;
+            using Microsoft.Extensions.DependencyInjection;
             using StaticNorth.Valiant.Endpoints;
             using StaticNorth.Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
+
+            public static class Configuration
+            {
+                public static void Configure(IServiceCollection services)
+                    => services.AddValiantEndpoints(options => options.QueryParameters.EnableBinding = true);
+            }
 
             [ValiantEndpoint]
             [ValiantQueryParsing(SupportedArrayFormats = [ARRAY_FORMAT])]
@@ -1648,6 +1656,78 @@ public sealed class SourceGenerationTests
             "Endpoints.Endpoint");
 
         await Assert.That(reasons).Contains(IncrementalStepRunReason.Modified);
+    }
+
+    [Test]
+    public async Task Query_Binding_Toggle_Reanalyzes_Named_Handlers_Using_The_Same_Driver()
+    {
+        const string source = """
+            using Microsoft.AspNetCore.Builder;
+            using Microsoft.AspNetCore.Mvc;
+            using Microsoft.AspNetCore.Routing;
+            using Microsoft.Extensions.DependencyInjection;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
+
+            public static class EndpointConfiguration
+            {
+                public static void Configure(IServiceCollection services)
+                    => services.AddValiantEndpoints(options => options.QueryParameters.EnableBinding = false);
+            }
+
+            [ValiantEndpoint]
+            public sealed class Search : IEndpoint
+            {
+                public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder)
+                {
+                    builder.MapGet("/search/whole", NamedHandlers.HandleWhole);
+                    builder.MapGet("/search/parameters", NamedHandlers.HandleParameters);
+                    return builder.MapGet("/search", NamedHandlers.Handle);
+                }
+            }
+
+            public sealed partial class Filter
+            {
+                public int Id { get; set; }
+            }
+            """;
+        const string handler = """
+            using Microsoft.AspNetCore.Http;
+            using Microsoft.AspNetCore.Mvc;
+            public static class NamedHandlers
+            {
+                public static int Handle([FromQuery] Filter filter) => filter.Id;
+                public static int HandleWhole(WholeRequest request) => request.Id;
+                public static int HandleParameters([AsParameters] QueryParameters request) => request.Value?.Id ?? 0;
+            }
+            public sealed partial class WholeRequest { [FromQuery] public int Id { get; set; } }
+            public sealed class QueryParameters { [FromQuery] public ParameterFilter? Value { get; set; } }
+            public sealed partial class ParameterFilter { public int Id { get; set; } }
+            """;
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var references = GetTrustedPlatformReferences()
+            .Add(MetadataReference.CreateFromFile(typeof(ValiantEndpointAttribute).Assembly.Location))
+            .Add(MetadataReference.CreateFromFile(typeof(IEndpoint).Assembly.Location));
+        var disabled = CSharpSyntaxTree.ParseText(source, parseOptions, "Endpoints.cs");
+        var enabled = CSharpSyntaxTree.ParseText(source.Replace("EnableBinding = false", "EnableBinding = true", StringComparison.Ordinal), parseOptions, "Endpoints.cs");
+        var handlerTree = CSharpSyntaxTree.ParseText(handler, parseOptions, "NamedHandlers.cs");
+        var compilation = CSharpCompilation.Create("QueryBindingToggle", [disabled, handlerTree], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new ValiantEndpointGenerator().AsSourceGenerator()], parseOptions: parseOptions);
+
+        foreach (var enabledForBuild in new[] { false, true, false, true })
+        {
+            compilation = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.First(), enabledForBuild ? enabled : disabled);
+            driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+            await Assert.That(diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+            await Assert.That(output.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+            var generated = driver.GetRunResult().Results.Single().GeneratedSources;
+            await Assert.That(generated.Any(static file => file.HintName == "Filter.QueryObject.g.cs")).IsEqualTo(enabledForBuild);
+            await Assert.That(generated.Any(static file => file.HintName == "WholeRequest.QueryRequest.g.cs")).IsEqualTo(enabledForBuild);
+            await Assert.That(generated.Any(static file => file.HintName == "ParameterFilter.QueryObject.g.cs")).IsEqualTo(enabledForBuild);
+            await Assert.That(generated.Any(static file => file.HintName.StartsWith("StaticNorth.Valiant.Endpoints.AspNetCore.", StringComparison.Ordinal))).IsTrue();
+        }
     }
 
     [Test]

@@ -527,25 +527,23 @@ public sealed partial class ValiantGenerator
     {
         if (constant.Type?.ToDisplayString() == ValiantSeverityMetadataName &&
             constant.Value is int value &&
-            value is >= 0 and <= 2)
+            GetKnownSeverityExpression(value) is { } known)
         {
-            switch (value)
-            {
-                case 0:
-                    expression = "global::StaticNorth.Valiant.Validation.ValiantSeverity.Error";
-                    return true;
-                case 1:
-                    expression = "global::StaticNorth.Valiant.Validation.ValiantSeverity.Warning";
-                    return true;
-                case 2:
-                    expression = "global::StaticNorth.Valiant.Validation.ValiantSeverity.Info";
-                    return true;
-            }
+            expression = known;
+            return true;
         }
 
         expression = string.Empty;
         return false;
     }
+
+    private static string? GetKnownSeverityExpression(int value) => value switch
+    {
+        0 => "global::StaticNorth.Valiant.Validation.ValiantSeverity.Error",
+        1 => "global::StaticNorth.Valiant.Validation.ValiantSeverity.Warning",
+        2 => "global::StaticNorth.Valiant.Validation.ValiantSeverity.Info",
+        _ => null
+    };
 
     private static string GetAttributeConditionExpression(AttributeData attribute, ITypeSymbol modelType, string conditionMethodExpression)
     {

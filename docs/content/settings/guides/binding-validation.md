@@ -22,6 +22,8 @@ builder.Services.AddValiantSettings(builder.Configuration);
 
 Valiant emits the equivalent section-aware `services.Configure<S3Settings>(configuration.GetSection("Storage:S3"))` registration.
 
+Use `[ConfigurationKeyName("bucket-name")]` from `Microsoft.Extensions.Configuration` to give a property a different configuration key. The generated schema and runtime values use that key, and the schema retains the CLR property name. On .NET 11, properties marked `[ConfigurationIgnore]` are excluded from binding and from the generated schema and runtime values.
+
 Schema providers register by default. Disable them when the application only needs binding and validation:
 
 ```csharp
@@ -59,6 +61,18 @@ builder.Services.AddValiantSettings(builder.Configuration, options =>
 ```
 
 Generated settings registration adds `IValidateOptions<S3Settings>` for configured settings models. It resolves a matching `IValidator<S3Settings>` from DI and translates Valiant errors to normal Options validation failures.
+
+## Await validation at startup on .NET 11
+
+Alongside the Valiant registration above, opt each settings model into startup validation:
+
+```csharp
+builder.Services.AddOptions<S3Settings>().ValidateOnStart();
+```
+
+The .NET 11 adapter implements `IAsyncValidateOptions<S3Settings>`. The host awaits the Valiant validator's `ValidateAsync` method during startup, passes the startup cancellation token, and reports validation errors in an `OptionsValidationException`.
+
+Read async-only settings from `IOptions<S3Settings>.Value` after startup completes. Configuration reloads and new `IOptionsSnapshot<S3Settings>` scopes create options synchronously and require validators that support synchronous validation.
 
 ## Require matching validators
 

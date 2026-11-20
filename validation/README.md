@@ -32,7 +32,7 @@ public sealed partial class CreateUserValidator : ValidatorDefinition<CreateUser
 }
 ```
 
-The generator emits an `IValidator<CreateUser>` implementation with direct property reads and native branch checks. When `Microsoft.Extensions.DependencyInjection` is available, it also emits `AddValiantValidators(...)`:
+The generator emits an `IValidator<CreateUser>` implementation that runs either generated checks or the fluent runtime. When `Microsoft.Extensions.DependencyInjection` is available, it also emits `AddValiantValidators(...)`:
 
 ```csharp
 services.AddValiantValidators(options =>
@@ -45,27 +45,29 @@ services.AddValiantValidators(options =>
 
 ## Validation Status
 
-Use `Validate(...)` or `ValidateAsync(...)` when callers need failure codes,
-messages, property names, and severity partitions. In `Fast` mode, generated
-validators build that diagnostic result lazily and avoid allocating a result
-builder for valid inputs.
+Use `Validate(...)` or `ValidateAsync(...)` to get the complete diagnostic
+result. `IsValid(...)` and `IsValidAsync(...)` run the same rules, evaluate the
+same diagnostic expressions, and call the same methods on reused validators.
+The fluent runtime can return the validity of the collected failures directly,
+without constructing the final diagnostic result.
+
+Attribute validators always use generated checks. Eligible fluent validators
+use generated checks in `Auto` and `Fast`, in Debug and Release builds. A fluent
+validator qualifies when it is sealed and directly
+overrides `Configure` with straight-line rules on direct members of a
+reference type. The generated subset covers built-in string, null, and
+`int` or `int?` comparison rules with default diagnostics and nonnegative
+integer literals for bounds. It also supports
+`context.Property(x => x.Child).Children(child => child.UseValidator(_child))`
+when `_child` is a readonly `IValidator<TChild>` field. Other fluent validators execute `Configure`
+through `ValidationContext<T>` in every mode. Explicit `Debuggable` mode
+runs the original `Configure` for eligible fluent validators too, preserving
+the same results and rule order.
 
 Small generated validators with at most six checks and fixed default failure
 content reuse immutable results after each failure combination is first seen.
-Every check still runs on each call. Reuse requires no disposal and retains at
-most 63 nonempty combinations per validator type. Custom diagnostic expressions,
-culture-dependent messages, composition, async checks, and larger validators keep
-the owned-result path.
-
-Use `IsValid(...)` or `IsValidAsync(...)` when callers only need the validity
-status. The generated `Fast` path evaluates rule conditions, predicates,
-severities, and reused validators directly without constructing failure
-objects. Because diagnostics are not requested, failure code, message, and
-property-name expressions are not evaluated. Warning-only results are valid;
-errors and unknown severity values are invalid.
-
-`Debuggable` mode keeps the materialized runtime path so user-authored
-configuration and diagnostic expressions remain available to the debugger.
+Each call evaluates the applicable rules again. Reuse requires no disposal
+and retains at most 63 nonempty combinations per validator type.
 
 ## Fluent Rules
 
@@ -85,7 +87,7 @@ public override void Configure(ValidationContext<CreateUser> context)
 }
 ```
 
-In `Debuggable` mode, the user-authored `Configure` method executes at runtime, so breakpoints in native `if`, `else`, and `switch` statements work normally.
+Set `Mode = ValiantValidationMode.Debuggable` to step into the original `Configure` method of a simple fluent validator. Validators with control flow execute `Configure` at runtime in every mode.
 
 ## Attribute Rules
 
@@ -178,38 +180,12 @@ services.AddMediator(options =>
 
 Use one Mediator registration path for the Valiant behavior. Do not also call `AddValiantMediatorValidation()` when `ValiantValidationBehavior<,>` is listed in `PipelineBehaviors`.
 
-## Performance
-
-`StaticNorth.Valiant.Validation` benchmarks its generated `Fast` path against
-the pinned Validly 1.3.0 control. The workload applies five equivalent property
-rules to valid, one-failure, and all-failure inputs. It measures both a
-materialized diagnostic result and the separate status-only API.
-
-This local reference snapshot was captured on 2026-09-26 with BenchmarkDotNet
-0.15.8 and .NET 10.0.11 Arm64, using five warmups and ten measured iterations
-in the in-process runner. Lower ratios are faster.
-
-| Covered operation | Valiant | Validly | Valiant / Validly | Allocation, both implementations |
-| --- | ---: | ---: | ---: | ---: |
-| Full result, valid input | 2.530 ns | 56.698 ns | 0.04 | 0 B |
-| Full result, one failure | 3.457 ns | 58.104 ns | 0.06 | 0 B |
-| Full result, all failures | 4.927 ns | 69.369 ns | 0.07 | 0 B |
-
-These measurements include the full result API after warmup: this small validator
-reuses immutable failure content, while Validly reuses pooled storage and requires
-disposal. First-use allocation is excluded. Results are workload- and
-machine-dependent, not a performance guarantee. See the
-[allocation report](../docs/audits/2026-09-26-validation-allocation-optimization.md)
-for changing-input benchmarks, cold-allocation bounds, and eligibility limits.
-Refresh or remove this snapshot when the benchmark workload, pinned control,
-target runtime, or performance-sensitive implementation changes.
-
 ## Benchmarks
 
 The standalone
 [`StaticNorth.Valiant.Validation.Benchmarks`](benchmarks/StaticNorth.Valiant.Validation.Benchmarks)
-project measures the generated `Fast` path for valid, one-failure, and
-all-failure inputs, with Validly as a pinned relative control. Its README
+project measures validation for valid, one-failure, and all-failure inputs,
+with Validly as a pinned relative control. Its README
 documents correctness checks, the complete benchmark matrix, and the repeatable
 before/after workflow:
 

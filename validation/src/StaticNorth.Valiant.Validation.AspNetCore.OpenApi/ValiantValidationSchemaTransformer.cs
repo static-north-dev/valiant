@@ -38,14 +38,36 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
         _ = context ?? throw new ArgumentNullException(nameof(context));
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!_propertiesByModelType.TryGetValue(context.JsonTypeInfo.Type, out var properties) ||
+        ApplyModelMetadata(schema, context.JsonTypeInfo);
+        return Task.CompletedTask;
+    }
+
+    private void ApplyModelMetadata(OpenApiSchema schema, JsonTypeInfo jsonTypeInfo)
+    {
+#if NET11_0_OR_GREATER
+        // ASP.NET Core exports union branches in case order and invokes transformers on the union itself.
+        if (jsonTypeInfo.Kind == JsonTypeInfoKind.Union && schema.AnyOf is { Count: > 0 } cases &&
+            cases.Count == jsonTypeInfo.UnionCases.Count)
+        {
+            for (var index = 0; index < cases.Count; index++)
+            {
+                if (cases[index] is OpenApiSchema caseSchema)
+                {
+                    var caseType = jsonTypeInfo.UnionCases[index].CaseType;
+                    ApplyModelMetadata(caseSchema, jsonTypeInfo.Options.GetTypeInfo(caseType));
+                }
+            }
+        }
+#endif
+
+        if (!_propertiesByModelType.TryGetValue(jsonTypeInfo.Type, out var properties) ||
             schema.Properties is null ||
             schema.Properties.Count == 0)
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        var jsonProperties = CreateJsonPropertyMap(context.JsonTypeInfo);
+        var jsonProperties = CreateJsonPropertyMap(jsonTypeInfo);
         foreach (var property in properties)
         {
             if (property.PropertyName.IndexOfAny(['.', '[']) >= 0 ||
@@ -58,8 +80,6 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
 
             ApplyMetadata(schema, jsonPropertyName, openApiPropertySchema, property);
         }
-
-        return Task.CompletedTask;
     }
 
     private static Dictionary<string, string> CreateJsonPropertyMap(JsonTypeInfo jsonTypeInfo)
@@ -89,7 +109,8 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
         {
             rules.Add(CreateRuleExtension(check));
 
-            if (!property.IsConditional && !check.IsConditional)
+            if (!property.IsConditional && !check.IsConditional &&
+                check.Severity is null or nameof(ValiantSeverity.Error))
             {
                 ApplySchemaConstraint(parentSchema, jsonPropertyName, propertySchema, check);
             }

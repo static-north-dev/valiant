@@ -539,6 +539,7 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
         }
 
         var nodes = ImmutableArray.CreateBuilder<ValidationNode>();
+        var generateSimpleFluent = false;
         if (methodSyntax.ParameterList.Parameters.Count == 1)
         {
             var semanticModel = context.SemanticModel.Compilation.GetSemanticModel(methodSyntax.SyntaxTree);
@@ -548,6 +549,7 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
             {
                 ParseStatements(methodSyntax.Body.Statements, ParseScope.Root(parameterName), semanticModel, cancellationToken, nodes, diagnostics);
                 AnalyzeValidationSuggestions(nodes, diagnostics);
+                generateSimpleFluent = CanGenerateSimpleFluentValidator(validatorSymbol, modelType, methodSyntax, semanticModel, nodes, cancellationToken);
             }
             else if (methodSyntax.ExpressionBody?.Expression is IdentifierNameSyntax identifier &&
                 identifier.Identifier.ValueText == parameterName)
@@ -581,7 +583,8 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
             finalUsings,
             finalNodes,
             finalDiagnostics,
-            CreateValidatorFingerprint(declaration, finalModelTypeName, finalMetadataModelTypeName, modelType.IsValueType, inheritsValidatorBase, implementsValidatorDefinition, true, registerAsDefault, configureMethodName, finalUsings, finalNodes, finalDiagnostics));
+            CreateValidatorFingerprint(declaration, finalModelTypeName, finalMetadataModelTypeName, modelType.IsValueType, inheritsValidatorBase, implementsValidatorDefinition, true, registerAsDefault, configureMethodName, finalUsings, finalNodes, finalDiagnostics, generateSimpleFluent),
+            generateSimpleFluent);
     }
 
     private static ValidatorDeclarationModel CreateValidatorDeclarationModel(INamedTypeSymbol validatorSymbol, Location? location)

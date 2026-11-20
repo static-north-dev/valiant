@@ -1,7 +1,9 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
+using StaticNorth.Valiant.SourceGeneration;
 using static StaticNorth.Valiant.SourceGeneration.ValiantSourceBuilder;
 
 namespace StaticNorth.Valiant.Mapping.SourceGeneration;
@@ -11,7 +13,6 @@ namespace StaticNorth.Valiant.Mapping.SourceGeneration;
 /// </summary>
 public sealed partial class ValiantMappingGenerator
 {
-    private const int DynamicLookupDictionaryThreshold = 8;
 
     private static void ExecuteMapperDiagnostics(SourceProductionContext context, MapperModel mapper)
     {
@@ -199,8 +200,8 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("            var valiantMappingOptions = new global::StaticNorth.Valiant.Mapping.ValiantMappingOptions();");
         builder.AppendLine("            configure?.Invoke(valiantMappingOptions);");
         builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Mapping.ValiantMappingOptions), valiantMappingOptions));");
-        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Mapping.IMapper), typeof(global::StaticNorth.Valiant.Mapping.ValiantGeneratedMapper)));");
-        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Mapping.IMapperFactory), typeof(global::StaticNorth.Valiant.Mapping.ValiantGeneratedMapperFactory)));");
+        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Mapping.IMapper), typeof(global::StaticNorth.Valiant.Mapping.Infrastructure.ValiantMapperLookup)));");
+        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Mapping.IMapperFactory), typeof(global::StaticNorth.Valiant.Mapping.Infrastructure.ValiantMapperLookup)));");
         builder.AppendLine();
 
         foreach (var mapper in mappers)
@@ -217,364 +218,19 @@ public sealed partial class ValiantMappingGenerator
                 .Append(">), typeof(")
                 .Append(mapper.MapperType)
                 .AppendLine(")));");
+            builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Mapping.Infrastructure.ValiantMapperRegistration), typeof(global::StaticNorth.Valiant.Mapping.Infrastructure.ValiantMapperRegistration<")
+                .Append(mapper.SourceType)
+                .Append(", ")
+                .Append(mapper.TargetType)
+                .AppendLine(">)));");
         }
 
         builder.AppendLine();
         builder.AppendLine("            return services;");
         builder.AppendLine("        }");
         builder.AppendLine("    }");
-        builder.AppendLine();
-        AppendGeneratedMapper(builder, mappers);
-        builder.AppendLine();
-        AppendGeneratedMapperFactory(builder, mappers);
-        if (mappers.Length > DynamicLookupDictionaryThreshold)
-        {
-            builder.AppendLine();
-            AppendGeneratedMapperLookup(builder, mappers);
-        }
-
         builder.AppendLine("}");
         return builder.ToString();
-    }
-
-    private static void AppendGeneratedMapper(StringBuilder builder, ImmutableArray<DependencyInjectionMapperModel> mappers)
-    {
-        builder.AppendLine("    file sealed class ValiantGeneratedMapper : global::StaticNorth.Valiant.Mapping.IMapper");
-        builder.AppendLine("    {");
-        builder.AppendLine("        private readonly global::System.IServiceProvider _services;");
-        builder.AppendLine();
-        builder.AppendLine("        public ValiantGeneratedMapper(global::System.IServiceProvider services)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            _services = services ?? throw new global::System.ArgumentNullException(nameof(services));");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        public TDestination Map<TDestination>(object source)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            if (TryMap<TDestination>(source, out var destination))");
-        builder.AppendLine("            {");
-        builder.AppendLine("                return destination!;");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            var sourceType = source?.GetType() ?? throw new global::System.ArgumentNullException(nameof(source));");
-        builder.AppendLine("            throw CreateMissingMapperException(sourceType, typeof(TDestination));");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        public object Map(object source, global::System.Type destinationType)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            if (TryMap(source, destinationType, out var destination))");
-        builder.AppendLine("            {");
-        builder.AppendLine("                return destination!;");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            var sourceType = source?.GetType() ?? throw new global::System.ArgumentNullException(nameof(source));");
-        builder.AppendLine("            throw CreateMissingMapperException(sourceType, destinationType);");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        public bool TryMap<TDestination>(object source, out TDestination? destination)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            if (source is null)");
-        builder.AppendLine("            {");
-        builder.AppendLine("                throw new global::System.ArgumentNullException(nameof(source));");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            var sourceType = source.GetType();");
-        foreach (var mapper in mappers)
-        {
-            builder.Append("            if (sourceType == typeof(")
-                .Append(mapper.SourceType)
-                .Append(") && typeof(TDestination) == typeof(")
-                .Append(mapper.TargetType)
-                .AppendLine("))");
-            builder.AppendLine("            {");
-            builder.Append("                if (_services.GetService(typeof(global::StaticNorth.Valiant.Mapping.IMapper<")
-                .Append(mapper.SourceType)
-                .Append(", ")
-                .Append(mapper.TargetType)
-                .Append(">)) is global::StaticNorth.Valiant.Mapping.IMapper<")
-                .Append(mapper.SourceType)
-                .Append(", ")
-                .Append(mapper.TargetType)
-                .AppendLine("> resolvedMapper)");
-            builder.AppendLine("                {");
-            builder.Append("                    destination = (TDestination)(object)resolvedMapper.Map((")
-                .Append(mapper.SourceType)
-                .AppendLine(")source);");
-            builder.AppendLine("                    return true;");
-            builder.AppendLine("                }");
-            builder.AppendLine();
-            builder.AppendLine("                destination = default;");
-            builder.AppendLine("                return false;");
-            builder.AppendLine("            }");
-        }
-
-        builder.AppendLine();
-        builder.AppendLine("            destination = default;");
-        builder.AppendLine("            return false;");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        public bool TryMap(object source, global::System.Type destinationType, out object? destination)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            if (source is null)");
-        builder.AppendLine("            {");
-        builder.AppendLine("                throw new global::System.ArgumentNullException(nameof(source));");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            if (destinationType is null)");
-        builder.AppendLine("            {");
-        builder.AppendLine("                throw new global::System.ArgumentNullException(nameof(destinationType));");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            var sourceType = source.GetType();");
-        if (mappers.Length > DynamicLookupDictionaryThreshold)
-        {
-            builder.AppendLine("            return ValiantGeneratedMapperLookup.TryMap(_services, source, sourceType, destinationType, out destination);");
-        }
-        else
-        {
-            foreach (var mapper in mappers)
-            {
-                builder.Append("            if (sourceType == typeof(")
-                    .Append(mapper.SourceType)
-                    .Append(") && destinationType == typeof(")
-                    .Append(mapper.TargetType)
-                    .AppendLine("))");
-                builder.AppendLine("            {");
-                builder.Append("                if (_services.GetService(typeof(global::StaticNorth.Valiant.Mapping.IMapper<")
-                    .Append(mapper.SourceType)
-                    .Append(", ")
-                    .Append(mapper.TargetType)
-                    .Append(">)) is global::StaticNorth.Valiant.Mapping.IMapper<")
-                    .Append(mapper.SourceType)
-                    .Append(", ")
-                    .Append(mapper.TargetType)
-                    .AppendLine("> resolvedMapper)");
-                builder.AppendLine("                {");
-                builder.Append("                    destination = resolvedMapper.Map((")
-                    .Append(mapper.SourceType)
-                    .AppendLine(")source);");
-                builder.AppendLine("                    return true;");
-                builder.AppendLine("                }");
-                builder.AppendLine();
-                builder.AppendLine("                destination = null;");
-                builder.AppendLine("                return false;");
-                builder.AppendLine("            }");
-            }
-
-            builder.AppendLine();
-            builder.AppendLine("            destination = null;");
-            builder.AppendLine("            return false;");
-        }
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        private static global::System.InvalidOperationException CreateMissingMapperException(global::System.Type sourceType, global::System.Type destinationType)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            return new global::System.InvalidOperationException(\"No Valiant mapper is registered for source type '\" + sourceType.FullName + \"' and target type '\" + destinationType.FullName + \"'. Register mappers with AddValiantMappers.\");");
-        builder.AppendLine("        }");
-        builder.AppendLine("    }");
-    }
-
-    private static void AppendGeneratedMapperFactory(StringBuilder builder, ImmutableArray<DependencyInjectionMapperModel> mappers)
-    {
-        builder.AppendLine("    file sealed class ValiantGeneratedMapperFactory : global::StaticNorth.Valiant.Mapping.IMapperFactory");
-        builder.AppendLine("    {");
-        builder.AppendLine("        private readonly global::System.IServiceProvider _services;");
-        builder.AppendLine();
-        builder.AppendLine("        public ValiantGeneratedMapperFactory(global::System.IServiceProvider services)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            _services = services ?? throw new global::System.ArgumentNullException(nameof(services));");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        public global::StaticNorth.Valiant.Mapping.IMapper<TSource, TTarget> CreateMapper<TSource, TTarget>()");
-        builder.AppendLine("        {");
-        builder.AppendLine("            if (TryCreateMapper<TSource, TTarget>(out var mapper))");
-        builder.AppendLine("            {");
-        builder.AppendLine("                return mapper!;");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            throw CreateMissingMapperException(typeof(TSource), typeof(TTarget));");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        public object CreateMapper(global::System.Type sourceType, global::System.Type targetType)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            if (TryCreateMapper(sourceType, targetType, out var mapper))");
-        builder.AppendLine("            {");
-        builder.AppendLine("                return mapper!;");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            throw CreateMissingMapperException(sourceType, targetType);");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        public bool TryCreateMapper<TSource, TTarget>(out global::StaticNorth.Valiant.Mapping.IMapper<TSource, TTarget>? mapper)");
-        builder.AppendLine("        {");
-        foreach (var mapper in mappers)
-        {
-            builder.Append("            if (typeof(TSource) == typeof(")
-                .Append(mapper.SourceType)
-                .Append(") && typeof(TTarget) == typeof(")
-                .Append(mapper.TargetType)
-                .AppendLine("))");
-            builder.AppendLine("            {");
-            builder.Append("                if (_services.GetService(typeof(global::StaticNorth.Valiant.Mapping.IMapper<")
-                .Append(mapper.SourceType)
-                .Append(", ")
-                .Append(mapper.TargetType)
-                .Append(">)) is global::StaticNorth.Valiant.Mapping.IMapper<")
-                .Append(mapper.SourceType)
-                .Append(", ")
-                .Append(mapper.TargetType)
-                .AppendLine("> resolvedMapper)");
-            builder.AppendLine("                {");
-            builder.AppendLine("                    mapper = (global::StaticNorth.Valiant.Mapping.IMapper<TSource, TTarget>)(object)resolvedMapper;");
-            builder.AppendLine("                    return true;");
-            builder.AppendLine("                }");
-            builder.AppendLine();
-            builder.AppendLine("                mapper = null;");
-            builder.AppendLine("                return false;");
-            builder.AppendLine("            }");
-        }
-
-        builder.AppendLine();
-        builder.AppendLine("            mapper = null;");
-        builder.AppendLine("            return false;");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        public bool TryCreateMapper(global::System.Type sourceType, global::System.Type targetType, out object? mapper)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            if (sourceType is null)");
-        builder.AppendLine("            {");
-        builder.AppendLine("                throw new global::System.ArgumentNullException(nameof(sourceType));");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            if (targetType is null)");
-        builder.AppendLine("            {");
-        builder.AppendLine("                throw new global::System.ArgumentNullException(nameof(targetType));");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        if (mappers.Length > DynamicLookupDictionaryThreshold)
-        {
-            builder.AppendLine("            return ValiantGeneratedMapperLookup.TryResolve(_services, sourceType, targetType, out mapper);");
-        }
-        else
-        {
-            foreach (var mapper in mappers)
-            {
-                builder.Append("            if (sourceType == typeof(")
-                    .Append(mapper.SourceType)
-                    .Append(") && targetType == typeof(")
-                    .Append(mapper.TargetType)
-                    .AppendLine("))");
-                builder.AppendLine("            {");
-                builder.Append("                mapper = _services.GetService(typeof(global::StaticNorth.Valiant.Mapping.IMapper<")
-                    .Append(mapper.SourceType)
-                    .Append(", ")
-                    .Append(mapper.TargetType)
-                    .AppendLine(">));");
-                builder.AppendLine("                return mapper is not null;");
-                builder.AppendLine("            }");
-            }
-
-            builder.AppendLine();
-            builder.AppendLine("            mapper = null;");
-            builder.AppendLine("            return false;");
-        }
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        private static global::System.InvalidOperationException CreateMissingMapperException(global::System.Type sourceType, global::System.Type targetType)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            return new global::System.InvalidOperationException(\"No Valiant mapper is registered for source type '\" + sourceType.FullName + \"' and target type '\" + targetType.FullName + \"'. Register mappers with AddValiantMappers.\");");
-        builder.AppendLine("        }");
-        builder.AppendLine("    }");
-    }
-
-    private static void AppendGeneratedMapperLookup(
-        StringBuilder builder,
-        ImmutableArray<DependencyInjectionMapperModel> mappers)
-    {
-        builder.AppendLine("    file static class ValiantGeneratedMapperLookup");
-        builder.AppendLine("    {");
-        builder.AppendLine("        private delegate object? ResolveMapper(global::System.IServiceProvider services);");
-        builder.AppendLine("        private delegate MappingResult MapValue(global::System.IServiceProvider services, object source);");
-        builder.AppendLine();
-        builder.AppendLine("        private readonly struct MappingResult");
-        builder.AppendLine("        {");
-        builder.AppendLine("            public MappingResult(bool found, object? value)");
-        builder.AppendLine("            {");
-        builder.AppendLine("                Found = found;");
-        builder.AppendLine("                Value = value;");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            public bool Found { get; }");
-        builder.AppendLine("            public object? Value { get; }");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        private readonly struct Entry");
-        builder.AppendLine("        {");
-        builder.AppendLine("            public Entry(ResolveMapper resolve, MapValue map)");
-        builder.AppendLine("            {");
-        builder.AppendLine("                Resolve = resolve;");
-        builder.AppendLine("                Map = map;");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            public ResolveMapper Resolve { get; }");
-        builder.AppendLine("            public MapValue Map { get; }");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        private static readonly global::System.Collections.Generic.IReadOnlyDictionary<(global::System.Type Source, global::System.Type Target), Entry> Entries =");
-        builder.AppendLine("            new global::System.Collections.Generic.Dictionary<(global::System.Type Source, global::System.Type Target), Entry>");
-        builder.AppendLine("            {");
-        foreach (var mapper in mappers)
-        {
-            builder.Append("                [(typeof(")
-                .Append(mapper.SourceType)
-                .Append("), typeof(")
-                .Append(mapper.TargetType)
-                .Append("))] = new Entry(")
-                .AppendLine();
-            builder.Append("                    static services => services.GetService(typeof(global::StaticNorth.Valiant.Mapping.IMapper<")
-                .Append(mapper.SourceType)
-                .Append(", ")
-                .Append(mapper.TargetType)
-                .AppendLine(">)),");
-            builder.Append("                    static (services, source) => services.GetService(typeof(global::StaticNorth.Valiant.Mapping.IMapper<")
-                .Append(mapper.SourceType)
-                .Append(", ")
-                .Append(mapper.TargetType)
-                .Append(">)) is global::StaticNorth.Valiant.Mapping.IMapper<")
-                .Append(mapper.SourceType)
-                .Append(", ")
-                .Append(mapper.TargetType)
-                .Append("> mapper ? new MappingResult(true, mapper.Map((")
-                .Append(mapper.SourceType)
-                .AppendLine(")source)) : default),");
-        }
-
-        builder.AppendLine("            };");
-        builder.AppendLine();
-        builder.AppendLine("        public static bool TryResolve(global::System.IServiceProvider services, global::System.Type sourceType, global::System.Type targetType, out object? mapper)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            if (Entries.TryGetValue((sourceType, targetType), out var entry))");
-        builder.AppendLine("            {");
-        builder.AppendLine("                mapper = entry.Resolve(services);");
-        builder.AppendLine("                return mapper is not null;");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            mapper = null;");
-        builder.AppendLine("            return false;");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        public static bool TryMap(global::System.IServiceProvider services, object source, global::System.Type sourceType, global::System.Type targetType, out object? destination)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            if (Entries.TryGetValue((sourceType, targetType), out var entry))");
-        builder.AppendLine("            {");
-        builder.AppendLine("                var result = entry.Map(services, source);");
-        builder.AppendLine("                destination = result.Value;");
-        builder.AppendLine("                return result.Found;");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            destination = null;");
-        builder.AppendLine("            return false;");
-        builder.AppendLine("        }");
-        builder.AppendLine("    }");
     }
 
     private static void AppendMapMethod(StringBuilder builder, string? namespaceName, MappingModel mapping)
@@ -623,6 +279,12 @@ public sealed partial class ValiantMappingGenerator
             builder.AppendLine();
         }
 
+        foreach (var declaration in mapping.ConfigureLocals)
+        {
+            AppendIndent(builder, 2, namespaceName);
+            builder.AppendLine(declaration);
+        }
+
         AppendIndent(builder, 2, namespaceName);
         builder.Append("var target = new ").Append(mapping.TargetType).Append('(');
         for (var index = 0; index < mapping.Constructor.Arguments.Length; index++)
@@ -633,17 +295,18 @@ public sealed partial class ValiantMappingGenerator
             }
 
             var argument = mapping.Constructor.Arguments[index];
-            builder.Append(argument.ParameterName).Append(": ").Append(argument.SourceExpression);
+            builder.Append(argument.ParameterName).Append(": ")
+                .Append("ConvertConstructorArgument<").Append(argument.ParameterType).Append(">(")
+                .Append(argument.SourceExpression).Append(')');
         }
 
         builder.Append(')');
 
         var initializerAssignments = mapping.Assignments
-            .Where(static assignment => assignment.ConditionExpression is null)
+            .Where(static assignment => assignment.UseInitializer && assignment.ConditionExpression is null)
             .ToImmutableArray();
-        var conditionalAssignments = mapping.Assignments
-            .Where(static assignment => assignment.ConditionExpression is not null)
-            .ToImmutableArray();
+        var remainingAssignments = mapping.Assignments
+            .Where(static assignment => !assignment.UseInitializer || assignment.ConditionExpression is not null);
 
         if (initializerAssignments.Length == 0)
         {
@@ -668,27 +331,58 @@ public sealed partial class ValiantMappingGenerator
             builder.AppendLine("};");
         }
 
-        foreach (var assignment in conditionalAssignments)
+        foreach (var assignment in remainingAssignments)
         {
             builder.AppendLine();
-            AppendIndent(builder, 2, namespaceName);
-            builder.Append("if (").Append(assignment.ConditionExpression).AppendLine(")");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("{");
-            AppendIndent(builder, 3, namespaceName);
-            builder.Append("target.")
-                .Append(assignment.TargetMemberName)
-                .Append(" = ")
-                .Append(assignment.SourceExpression)
-                .AppendLine(";");
-            AppendIndent(builder, 2, namespaceName);
-            builder.AppendLine("}");
+            var indent = 2;
+            if (assignment.ConditionExpression is not null)
+            {
+                AppendIndent(builder, indent, namespaceName);
+                builder.Append("if (").Append(assignment.ConditionExpression).AppendLine(")");
+                AppendIndent(builder, indent, namespaceName);
+                builder.AppendLine("{");
+                indent++;
+            }
+
+            AppendIndent(builder, indent, namespaceName);
+            if (assignment.InitPropertyType is not null)
+            {
+                builder.Append("global::StaticNorth.Valiant.Mapping.Infrastructure.ValiantInitProperty.Set<")
+                    .Append(mapping.TargetType).Append(", ").Append(assignment.InitPropertyType)
+                    .Append(">(ref target, nameof(target.")
+                    .Append(assignment.TargetMemberName).Append("), ").Append(assignment.SourceExpression).AppendLine(");");
+            }
+            else
+            {
+                builder.Append("target.").Append(assignment.TargetMemberName).Append(" = ")
+                    .Append(assignment.SourceExpression).AppendLine(";");
+            }
+
+            if (assignment.ConditionExpression is not null)
+            {
+                AppendIndent(builder, indent - 1, namespaceName);
+                builder.AppendLine("}");
+            }
         }
 
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("return target;");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
+
+        if (!mapping.Constructor.Arguments.IsEmpty)
+        {
+            builder.AppendLine();
+            AppendIndent(builder, 1, namespaceName);
+            builder.AppendLine("private static T ConvertConstructorArgument<T>(T value) => value;");
+        }
+
+        if (mapping.ConfigureLocals.Any(static local => local.StartsWith("var __valiantMapper", StringComparison.Ordinal)))
+        {
+            builder.AppendLine();
+            AppendIndent(builder, 1, namespaceName);
+            builder.AppendLine("private static TDestination MapWithConfiguredMapper<TSourceMember, TDestination>(TSourceMember value, global::System.Func<TSourceMember, TDestination> map) => map(value);");
+        }
 
         foreach (var collectionMapping in mapping.CollectionMappings)
         {
@@ -735,7 +429,14 @@ public sealed partial class ValiantMappingGenerator
             .Append(collectionMapping.MethodName)
             .Append('(')
             .Append(collectionMapping.SourceType)
-            .AppendLine(" source)");
+            .Append(" source");
+        if (collectionMapping.RequiresElementMapper)
+        {
+            builder.Append(", global::System.Func<").Append(collectionMapping.SourceElementType).Append(", ")
+                .Append(collectionMapping.TargetElementType).Append("> mapItem");
+        }
+
+        builder.AppendLine(")");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 2, namespaceName);
@@ -743,7 +444,7 @@ public sealed partial class ValiantMappingGenerator
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 3, namespaceName);
-        builder.AppendLine("throw new global::System.ArgumentNullException(nameof(source));");
+        builder.AppendLine("return null!;");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("}");
         builder.AppendLine();
@@ -789,7 +490,7 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("{");
         AppendIndent(builder, 3, namespaceName);
         builder.Append("target.Add(")
-            .Append(collectionMapping.MappedElementExpression)
+            .Append(collectionMapping.ElementMapping)
             .AppendLine(");");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("}");
@@ -823,7 +524,7 @@ public sealed partial class ValiantMappingGenerator
             builder.AppendLine("{");
             AppendIndent(builder, 3, namespaceName);
             builder.Append("target.Add(")
-                .Append(collectionMapping.MappedElementExpression)
+                .Append(collectionMapping.ElementMapping)
                 .AppendLine(");");
             AppendIndent(builder, 2, namespaceName);
             builder.AppendLine("}");
@@ -835,10 +536,8 @@ public sealed partial class ValiantMappingGenerator
 
         AppendIndent(builder, 2, namespaceName);
         builder.Append("var target = new ")
-            .Append(collectionMapping.TargetElementType)
-            .Append('[')
-            .Append(collectionMapping.CapacityExpression)
-            .AppendLine("];");
+            .AppendFormat(CultureInfo.InvariantCulture, collectionMapping.ArrayAllocationFormat!, collectionMapping.CapacityExpression)
+            .AppendLine(";");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("var targetIndex = 0;");
         AppendIndent(builder, 2, namespaceName);
@@ -856,7 +555,7 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine();
         AppendIndent(builder, 3, namespaceName);
         builder.Append("target[targetIndex++] = ")
-            .Append(collectionMapping.MappedElementExpression)
+            .Append(collectionMapping.ElementMapping)
             .AppendLine(";");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("}");
@@ -881,8 +580,8 @@ public sealed partial class ValiantMappingGenerator
     {
         AppendIndent(builder, 2, namespaceName);
         builder.Append("var target = new ")
-            .Append(collectionMapping.TargetElementType)
-            .AppendLine("[source.Length];");
+            .AppendFormat(CultureInfo.InvariantCulture, collectionMapping.ArrayAllocationFormat!, "source.Length")
+            .AppendLine(";");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("for (var sourceIndex = 0; sourceIndex < source.Length; sourceIndex++)");
         AppendIndent(builder, 2, namespaceName);
@@ -891,7 +590,7 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("var item = source[sourceIndex];");
         AppendIndent(builder, 3, namespaceName);
         builder.Append("target[sourceIndex] = ")
-            .Append(collectionMapping.MappedElementExpression)
+            .Append(collectionMapping.ElementMapping)
             .AppendLine(";");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("}");
@@ -913,8 +612,8 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("{");
         AppendIndent(builder, 3, namespaceName);
         builder.Append("var arrayTarget = new ")
-            .Append(collectionMapping.TargetElementType)
-            .AppendLine("[sourceArray.Length];");
+            .AppendFormat(CultureInfo.InvariantCulture, collectionMapping.ArrayAllocationFormat!, "sourceArray.Length")
+            .AppendLine(";");
         AppendIndent(builder, 3, namespaceName);
         builder.AppendLine("for (var sourceIndex = 0; sourceIndex < sourceArray.Length; sourceIndex++)");
         AppendIndent(builder, 3, namespaceName);
@@ -923,7 +622,7 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("var item = sourceArray[sourceIndex];");
         AppendIndent(builder, 4, namespaceName);
         builder.Append("arrayTarget[sourceIndex] = ")
-            .Append(collectionMapping.MappedElementExpression)
+            .Append(collectionMapping.ElementMapping)
             .AppendLine(";");
         AppendIndent(builder, 3, namespaceName);
         builder.AppendLine("}");
@@ -964,8 +663,8 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("{");
         AppendIndent(builder, 3, namespaceName);
         builder.Append("var countedTarget = new ")
-            .Append(collectionMapping.TargetElementType)
-            .AppendLine("[sourceCount];");
+            .AppendFormat(CultureInfo.InvariantCulture, collectionMapping.ArrayAllocationFormat!, "sourceCount")
+            .AppendLine(";");
         AppendIndent(builder, 3, namespaceName);
         builder.AppendLine("var targetIndex = 0;");
         AppendIndent(builder, 3, namespaceName);
@@ -983,7 +682,7 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine();
         AppendIndent(builder, 4, namespaceName);
         builder.Append("countedTarget[targetIndex++] = ")
-            .Append(collectionMapping.MappedElementExpression)
+            .Append(collectionMapping.ElementMapping)
             .AppendLine(";");
         AppendIndent(builder, 3, namespaceName);
         builder.AppendLine("}");
@@ -1124,36 +823,7 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("}");
         builder.AppendLine();
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("var mapperType = typeof(global::StaticNorth.Valiant.Mapping.IMapper<TSourceMember, TTargetMember>);");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("global::StaticNorth.Valiant.Mapping.IMapper<TSourceMember, TTargetMember>? mapper = null;");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("lock (_valiantMapperCache)");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("{");
-        AppendIndent(builder, 3, namespaceName);
-        builder.AppendLine("if (_valiantMapperCache.TryGetValue(mapperType, out var cachedMapper))");
-        AppendIndent(builder, 3, namespaceName);
-        builder.AppendLine("{");
-        AppendIndent(builder, 4, namespaceName);
-        builder.AppendLine("mapper = (global::StaticNorth.Valiant.Mapping.IMapper<TSourceMember, TTargetMember>)cachedMapper;");
-        AppendIndent(builder, 3, namespaceName);
-        builder.AppendLine("}");
-        AppendIndent(builder, 3, namespaceName);
-        builder.AppendLine("else if (_valiantServiceProvider?.GetService(mapperType) is global::StaticNorth.Valiant.Mapping.IMapper<TSourceMember, TTargetMember> resolvedMapper)");
-        AppendIndent(builder, 3, namespaceName);
-        builder.AppendLine("{");
-        AppendIndent(builder, 4, namespaceName);
-        builder.AppendLine("_valiantMapperCache.Add(mapperType, resolvedMapper);");
-        AppendIndent(builder, 4, namespaceName);
-        builder.AppendLine("mapper = resolvedMapper;");
-        AppendIndent(builder, 3, namespaceName);
-        builder.AppendLine("}");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("}");
-        builder.AppendLine();
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("if (mapper is not null)");
+        builder.AppendLine("if (ResolveNestedMapper(typeof(global::StaticNorth.Valiant.Mapping.IMapper<TSourceMember, TTargetMember>)) is global::StaticNorth.Valiant.Mapping.IMapper<TSourceMember, TTargetMember> mapper)");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 3, namespaceName);
@@ -1163,6 +833,41 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine();
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("throw new global::System.InvalidOperationException(\"No Valiant mapper is registered for source type '\" + typeof(TSourceMember).FullName + \"' and target type '\" + typeof(TTargetMember).FullName + \"'. Register mappers with AddValiantMappers or configure this member with UseMapper.\");");
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("}");
+
+        builder.AppendLine();
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("private object? ResolveNestedMapper(global::System.Type mapperType)");
+        AppendIndent(builder, 1, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("lock (_valiantMapperCache)");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("if (_valiantMapperCache.TryGetValue(mapperType, out var cachedMapper))");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 4, namespaceName);
+        builder.AppendLine("return cachedMapper;");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("}");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("if (_valiantServiceProvider?.GetService(mapperType) is { } resolvedMapper && mapperType.IsInstanceOfType(resolvedMapper))");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("{");
+        AppendIndent(builder, 4, namespaceName);
+        builder.AppendLine("_valiantMapperCache.Add(mapperType, resolvedMapper);");
+        AppendIndent(builder, 4, namespaceName);
+        builder.AppendLine("return resolvedMapper;");
+        AppendIndent(builder, 3, namespaceName);
+        builder.AppendLine("}");
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("}");
+        builder.AppendLine();
+        AppendIndent(builder, 2, namespaceName);
+        builder.AppendLine("return null;");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
 
@@ -1396,13 +1101,8 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("return mode;");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("}");
-        builder.AppendLine("#if DEBUG");
-        AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Debuggable;");
-        builder.AppendLine("#else");
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("return global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Fast;");
-        builder.AppendLine("#endif");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
     }
@@ -1435,7 +1135,43 @@ public sealed partial class ValiantMappingGenerator
         AppendIndent(builder, 2, namespaceName);
         builder.AppendLine("Configure(context);");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("return context.MapRuntime();");
+        builder.Append("return context.MapRuntime(new global::System.Type[] { ");
+        for (var index = 0; index < mapping.Constructor.Arguments.Length; index++)
+        {
+            if (index > 0)
+            {
+                builder.Append(", ");
+            }
+
+            builder.Append("typeof(").Append(mapping.Constructor.Arguments[index].RuntimeParameterType).Append(')');
+        }
+
+        builder.Append(" }");
+        var initializerMembers = mapping.Assignments
+            .Where(static assignment => assignment.UseInitializer && assignment.ConditionExpression is null)
+            .ToImmutableArray();
+        if (!initializerMembers.IsEmpty || mapping.Assignments.Any(static assignment => assignment.InitPropertyType is not null))
+        {
+            builder.Append(mapping.UsesServiceProviderMapper ? ", ResolveNestedMapper" : ", null");
+            builder.Append(", new string[] { ");
+            for (var index = 0; index < initializerMembers.Length; index++)
+            {
+                if (index > 0)
+                {
+                    builder.Append(", ");
+                }
+
+                builder.Append(ValiantSourceLiterals.String(initializerMembers[index].TargetMemberName));
+            }
+
+            builder.Append(" }");
+        }
+        else if (mapping.UsesServiceProviderMapper)
+        {
+            builder.Append(", resolveMapper: ResolveNestedMapper");
+        }
+
+        builder.AppendLine(");");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
     }

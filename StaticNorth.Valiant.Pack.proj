@@ -55,6 +55,6 @@
 
   <Target Name="VerifyAotSmoke" DependsOnTargets="PreparePackageSmokeCache" Condition="'$(AotRuntimeIdentifier)' != ''">
     <Exec Command="dotnet publish &quot;smoke/StaticNorth.Valiant.AotSmoke/StaticNorth.Valiant.AotSmoke.csproj&quot; --configuration $(Configuration) --runtime $(AotRuntimeIdentifier) --self-contained true -p:StaticNorthValiantPackageVersion=$(PackageVersion) -p:RestoreConfigFile=$(MSBuildThisFileDirectory)smoke/NuGet.Config -p:RestorePackagesPath=$(MSBuildThisFileDirectory)artifacts/nuget-packages -p:RestoreForce=true" />
-    <Exec Command="smoke/StaticNorth.Valiant.AotSmoke/bin/$(Configuration)/net10.0/$(AotRuntimeIdentifier)/publish/StaticNorth.Valiant.AotSmoke$(AotExecutableExtension)" />
+    <Exec Command="smoke/StaticNorth.Valiant.AotSmoke/bin/$(Configuration)/net11.0/$(AotRuntimeIdentifier)/publish/StaticNorth.Valiant.AotSmoke$(AotExecutableExtension)" />
   </Target>
 </Project>

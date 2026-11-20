@@ -12,6 +12,13 @@ namespace StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure;
 public static class ValiantEndpointGeneratedCode
 {
     /// <summary>
+    /// Creates the binding failure handled by the mapped endpoint.
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static BadHttpRequestException CreateQueryBindingException(IReadOnlyList<QueryError> errors)
+        => new ValiantQueryBindingException(errors);
+
+    /// <summary>
     /// Creates generated endpoint group registration metadata.
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]

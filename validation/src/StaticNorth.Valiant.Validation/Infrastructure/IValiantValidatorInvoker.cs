@@ -17,7 +17,7 @@ public interface IValiantValidatorInvoker
     /// Resolves and snapshots validators for the current request.
     /// </summary>
     /// <param name="services">The request service provider.</param>
-    /// <returns>An opaque validator snapshot for <see cref="ValidateAsync" />.</returns>
+    /// <returns>An opaque, read-only validator snapshot for <see cref="ValidateAsync" />.</returns>
     object ResolveValidators(IServiceProvider services);
 
     /// <summary>

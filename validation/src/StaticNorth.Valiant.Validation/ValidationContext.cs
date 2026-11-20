@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace StaticNorth.Valiant.Validation;
 
 /// <summary>
@@ -10,6 +12,8 @@ public sealed class ValidationContext<T>
     private readonly List<ValidationContextDeferredValidation> _deferredValidations;
     private readonly string _propertyPathPrefix;
     private ValiantFailureBehavior _failureBehavior;
+    private ValiantFailureBehavior _executionFailureBehavior;
+    private int _failureCountAtBehaviorChange;
 
     /// <summary>
     /// Initializes a validation context for an instance.
@@ -37,6 +41,7 @@ public sealed class ValidationContext<T>
         _failures = failures ?? throw new ArgumentNullException(nameof(failures));
         _deferredValidations = deferredValidations ?? throw new ArgumentNullException(nameof(deferredValidations));
         _failureBehavior = failureBehavior;
+        _executionFailureBehavior = failureBehavior;
     }
 
     /// <summary>
@@ -46,8 +51,26 @@ public sealed class ValidationContext<T>
 
     internal ValiantFailureBehavior FailureBehavior => _failureBehavior;
 
-    internal bool ShouldStopValidation => _failureBehavior == ValiantFailureBehavior.FailFast &&
-        _failures.Any(static failure => failure.Severity == ValiantSeverity.Error);
+    internal bool ShouldStopValidation
+    {
+        get
+        {
+            if (_executionFailureBehavior != ValiantFailureBehavior.FailFast)
+            {
+                return false;
+            }
+
+            for (var index = _failureCountAtBehaviorChange; index < _failures.Count; index++)
+            {
+                if (_failures[index].Severity == ValiantSeverity.Error)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
 
     /// <summary>
     /// Starts validation for a model property.
@@ -60,30 +83,51 @@ public sealed class ValidationContext<T>
         [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(property))] string? propertyExpression = null)
     {
         _ = property ?? throw new ArgumentNullException(nameof(property));
+        var propertyName = GetPropertyName(propertyExpression);
         return new PropertyValidation<T, TProperty>(
             this,
             property,
-            ApplyPropertyPathPrefix(GetPropertyName(propertyExpression)));
+            ApplyPropertyPathPrefix(propertyName),
+            propertyName.IndexOf('.') >= 0);
     }
 
     /// <summary>
-    /// Stops this validator after the first validation failure.
+    /// Stops this validator on the first error from the rules declared after this call.
     /// </summary>
     /// <returns>The current validation context.</returns>
     public ValidationContext<T> FailFast()
     {
-        _failureBehavior = ValiantFailureBehavior.FailFast;
+        SetFailureBehavior(ValiantFailureBehavior.FailFast);
         return this;
     }
 
     /// <summary>
-    /// Collects all validation failures for this validator.
+    /// Collects all failures from the rules declared after this call.
     /// </summary>
     /// <returns>The current validation context.</returns>
     public ValidationContext<T> ValidateAll()
     {
-        _failureBehavior = ValiantFailureBehavior.ValidateAll;
+        SetFailureBehavior(ValiantFailureBehavior.ValidateAll);
         return this;
+    }
+
+    private void SetFailureBehavior(ValiantFailureBehavior behavior)
+    {
+        _failureBehavior = behavior;
+        if (_deferredValidations.Count == 0)
+        {
+            _executionFailureBehavior = behavior;
+            return;
+        }
+
+        // Apply changes between queued rules, leaving earlier checks under their original policy.
+        AddSyncValidation(ApplyBehavior);
+
+        void ApplyBehavior()
+        {
+            _executionFailureBehavior = behavior;
+            _failureCountAtBehaviorChange = _failures.Count;
+        }
     }
 
     /// <summary>
@@ -135,6 +179,22 @@ public sealed class ValidationContext<T>
         return _failures.Count - 1;
     }
 
+    private void AddSyncValidation(Action validation)
+    {
+        if (!ShouldStopValidation)
+        {
+            _deferredValidations.Add(new ValidationContextDeferredValidation(validation, null));
+        }
+    }
+
+    internal void AddSyncValidation(IDeferredValidationCheck validation)
+    {
+        if (!ShouldStopValidation)
+        {
+            _deferredValidations.Add(new ValidationContextDeferredValidation(validation, null));
+        }
+    }
+
     internal void AddAsyncValidation(Func<CancellationToken, ValueTask> validation)
     {
         if (ShouldStopValidation)
@@ -142,8 +202,8 @@ public sealed class ValidationContext<T>
             return;
         }
 
-        _deferredValidations.Add(ValidationContextDeferredValidation.Async(
-            validation ?? throw new ArgumentNullException(nameof(validation))));
+        _deferredValidations.Add(new ValidationContextDeferredValidation(
+            null, validation ?? throw new ArgumentNullException(nameof(validation))));
     }
 
     internal void AddDeferredValidation(Action validate, Func<CancellationToken, ValueTask> validateAsync)
@@ -153,7 +213,7 @@ public sealed class ValidationContext<T>
             return;
         }
 
-        _deferredValidations.Add(ValidationContextDeferredValidation.SyncAndAsync(
+        _deferredValidations.Add(new ValidationContextDeferredValidation(
             validate ?? throw new ArgumentNullException(nameof(validate)),
             validateAsync ?? throw new ArgumentNullException(nameof(validateAsync))));
     }
@@ -193,6 +253,22 @@ public sealed class ValidationContext<T>
     /// <exception cref="InvalidOperationException">Thrown when asynchronous validations were declared and <see cref="ToResultAsync" /> should be used instead.</exception>
     public ValidationResult ToResult()
     {
+        Execute();
+        return BuildResult();
+    }
+
+    /// <summary>
+    /// Executes synchronous validation and returns its validity.
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public bool ToStatus()
+    {
+        Execute();
+        return GetStatus();
+    }
+
+    private void Execute()
+    {
         foreach (var validation in _deferredValidations)
         {
             if (ShouldStopValidation)
@@ -205,10 +281,8 @@ public sealed class ValidationContext<T>
                 throw new InvalidOperationException("This validator contains asynchronous validations. Call ValidateAsync instead.");
             }
 
-            validation.Validate!();
+            validation.Execute();
         }
-
-        return _failures.Count == 0 ? ValidationResult.Valid : new ValidationResult(_failures);
     }
 
     /// <summary>
@@ -216,7 +290,24 @@ public sealed class ValidationContext<T>
     /// </summary>
     /// <param name="cancellationToken">A cancellation token for asynchronous validations.</param>
     /// <returns>The validation result.</returns>
-    public async ValueTask<ValidationResult> ToResultAsync(CancellationToken cancellationToken = default)
+    public ValueTask<ValidationResult> ToResultAsync(CancellationToken cancellationToken = default)
+    {
+        return ExecuteAsync(static context => context.BuildResult(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes validation, including asynchronous checks, and returns its validity.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token for asynchronous validations.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ValueTask<bool> ToStatusAsync(CancellationToken cancellationToken = default)
+    {
+        return ExecuteAsync(static context => context.GetStatus(), cancellationToken);
+    }
+
+    private async ValueTask<TResult> ExecuteAsync<TResult>(
+        Func<ValidationContext<T>, TResult> finish,
+        CancellationToken cancellationToken)
     {
         foreach (var validation in _deferredValidations)
         {
@@ -225,10 +316,36 @@ public sealed class ValidationContext<T>
                 break;
             }
 
-            await validation.ValidateAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (validation.ValidateAsync is { } validateAsync)
+            {
+                await validateAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                validation.Execute();
+            }
         }
 
+        return finish(this);
+    }
+
+    private ValidationResult BuildResult()
+    {
         return _failures.Count == 0 ? ValidationResult.Valid : new ValidationResult(_failures);
+    }
+
+    private bool GetStatus()
+    {
+        foreach (var failure in _failures)
+        {
+            if (ValidationResult.IsError(failure.Severity))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static string GetPropertyName(string? propertyExpression)
@@ -240,16 +357,35 @@ public sealed class ValidationContext<T>
 
         var expression = propertyExpression!;
         var arrow = expression.IndexOf("=>", StringComparison.Ordinal);
+        var start = 0;
+        var end = expression.Length;
         if (arrow >= 0)
         {
-            expression = expression.Substring(arrow + 2).Trim();
+            start = arrow + 2;
+            while (start < end && char.IsWhiteSpace(expression[start]))
+            {
+                start++;
+            }
+
+            while (end > start && char.IsWhiteSpace(expression[end - 1]))
+            {
+                end--;
+            }
         }
 
-        var firstDot = expression.IndexOf('.');
-        var name = firstDot >= 0 ? expression.Substring(firstDot + 1) : expression;
-        var end = name.IndexOfAny([' ', ')', '}']);
-        name = end >= 0 ? name.Substring(0, end) : name;
-        return name.Replace("!", string.Empty);
+        var firstDot = expression.IndexOf('.', start, end - start);
+        if (firstDot >= 0)
+        {
+            start = firstDot + 1;
+        }
+
+        var nameEnd = start;
+        while (nameEnd < end && expression[nameEnd] is not (' ' or ')' or '}'))
+        {
+            nameEnd++;
+        }
+
+        return expression.Substring(start, nameEnd - start).Replace("!", string.Empty);
     }
 
     private string ApplyPropertyPathPrefix(string propertyName)
@@ -272,36 +408,4 @@ public sealed class ValidationContext<T>
         return _propertyPathPrefix + propertyName;
     }
 
-}
-
-internal sealed class ValidationContextDeferredValidation
-{
-    private ValidationContextDeferredValidation(
-        Action? validate,
-        Func<CancellationToken, ValueTask> validateAsync,
-        bool requiresAsync)
-    {
-        Validate = validate;
-        ValidateAsync = validateAsync;
-        RequiresAsync = requiresAsync;
-    }
-
-    public Action? Validate { get; }
-
-    public Func<CancellationToken, ValueTask> ValidateAsync { get; }
-
-    public bool RequiresAsync { get; }
-
-    public static ValidationContextDeferredValidation SyncAndAsync(
-        Action validate,
-        Func<CancellationToken, ValueTask> validateAsync)
-    {
-        return new ValidationContextDeferredValidation(validate, validateAsync, false);
-    }
-
-    public static ValidationContextDeferredValidation Async(
-        Func<CancellationToken, ValueTask> validateAsync)
-    {
-        return new ValidationContextDeferredValidation(null, validateAsync, true);
-    }
 }

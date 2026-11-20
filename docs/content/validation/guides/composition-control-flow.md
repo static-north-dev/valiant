@@ -29,7 +29,9 @@ public void Configure(ValidationContext<CreateOrder> context)
 }
 ```
 
-In `Debuggable` mode this method executes at runtime, so ordinary breakpoints and step-through debugging work.
+Validators with control flow execute `Configure` at runtime in every mode, so ordinary breakpoints and step-through debugging work.
+
+With C# 15, label an enclosing loop to target it from a nested loop. For a loop labeled `outer`, `break outer;` exits it and `continue outer;` advances it to the next iteration. A labeled `break` can also exit an enclosing `switch`.
 
 ## Nested objects
 
@@ -96,4 +98,6 @@ services.AddValiantValidators(options =>
     options.FailureBehavior = ValiantFailureBehavior.ValidateAll);
 ```
 
-Use `FailFast` to stop within the configured scope after the first failure; use `ValidateAll` to collect all applicable failures. Narrower configuration overrides the global option.
+Use `FailFast` to stop a validator after the first error; use `ValidateAll` to collect all applicable failures. At property-chain scope, `FailFast` stops that chain after its first failed check, including warnings and informational failures.
+
+A `Children()` or `ForEach()` callback has its own failure policy and defaults to `ValidateAll`. Its policy does not change the parent's policy. A parent using `FailFast` adds the child or item failures through the first error, then stops.

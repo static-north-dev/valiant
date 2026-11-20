@@ -76,13 +76,14 @@ public static class ValiantSettingsSchemaDocumentFactory
             schema.Name,
             schema.SettingsType.FullName ?? schema.SettingsType.Name,
             schema.SectionPath,
-            [.. schema.Properties.Select(CreateProperty)],
+            [.. schema.Properties.Select(static property => CreateProperty(property, includeDefaults: true))],
             runtimeValues,
             runtimeValuesError);
     }
 
-    private static ValiantSettingsSchemaPropertyEntry CreateProperty(ValiantSettingsPropertySchema property)
+    private static ValiantSettingsSchemaPropertyEntry CreateProperty(ValiantSettingsPropertySchema property, bool includeDefaults)
     {
+        includeDefaults = includeDefaults && !ValiantSettingsRuntimeValueFactory.ShouldMask(property);
         return new ValiantSettingsSchemaPropertyEntry(
             property.Name,
             property.ConfigurationKey,
@@ -91,28 +92,15 @@ public static class ValiantSettingsSchemaDocumentFactory
             property.IsRequired,
             property.IsNullable,
             property.IsSecret,
-            property.DefaultValue,
-            property.Item is null ? null : CreateProperty(property.Item),
-            [.. property.Properties.Select(CreateProperty)]);
+            includeDefaults ? property.DefaultValue : null,
+            property.Item is null ? null : CreateProperty(property.Item, includeDefaults),
+            [.. property.Properties.Select(child => CreateProperty(child, includeDefaults))]);
     }
 }
 
 internal static class ValiantSettingsRuntimeValueFactory
 {
     private const string Mask = "********";
-
-    private static readonly string[] SensitiveNameParts =
-    [
-        "password",
-        "secret",
-        "token",
-        "apikey",
-        "api_key",
-        "connectionstring",
-        "connection_string",
-        "clientsecret",
-        "client_secret"
-    ];
 
     public static object? TryCreate(
         ValiantSettingsSchema schema,
@@ -132,6 +120,16 @@ internal static class ValiantSettingsRuntimeValueFactory
                 return null;
             }
 
+            var settingsType = schema.SettingsType;
+            if (options.GetType().Assembly == typeof(IOptions<>).Assembly &&
+                !typeof(OptionsWrapper<>).MakeGenericType(settingsType).IsInstanceOfType(options) &&
+                !HasOptionsConfiguration(serviceProvider, typeof(IConfigureOptions<>), settingsType) &&
+                !HasOptionsConfiguration(serviceProvider, typeof(IPostConfigureOptions<>), settingsType))
+            {
+                error = "The host has no Options configuration registered for this settings model.";
+                return null;
+            }
+
             var value = optionsType.GetProperty(nameof(IOptions<object>.Value))?.GetValue(options);
             if (value is null)
             {
@@ -146,6 +144,13 @@ internal static class ValiantSettingsRuntimeValueFactory
             error = "Runtime values could not be loaded. Check the application's options configuration and validation.";
             return null;
         }
+    }
+
+    private static bool HasOptionsConfiguration(IServiceProvider services, Type registrationType, Type settingsType)
+    {
+        var enumerableType = typeof(IEnumerable<>).MakeGenericType(registrationType.MakeGenericType(settingsType));
+        return services.GetService(enumerableType) is IEnumerable registrations &&
+            registrations.Cast<object>().Any();
     }
 
     private static IReadOnlyDictionary<string, object?> CreateObject(
@@ -212,27 +217,6 @@ internal static class ValiantSettingsRuntimeValueFactory
             : null;
     }
 
-    private static bool ShouldMask(ValiantSettingsPropertySchema property)
-    {
-        if (property.IsSecret)
-        {
-            return true;
-        }
-
-        var name = property.Name.Replace("-", string.Empty, StringComparison.Ordinal)
-            .Replace(".", string.Empty, StringComparison.Ordinal);
-        var key = property.ConfigurationKey.Replace("-", string.Empty, StringComparison.Ordinal)
-            .Replace(".", string.Empty, StringComparison.Ordinal);
-
-        foreach (var part in SensitiveNameParts)
-        {
-            if (name.Contains(part, StringComparison.OrdinalIgnoreCase) ||
-                key.Contains(part, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    internal static bool ShouldMask(ValiantSettingsPropertySchema property) =>
+        property.IsSecret || SensitiveSettingsNames.IsSensitive(property.Name, property.ConfigurationKey);
 }

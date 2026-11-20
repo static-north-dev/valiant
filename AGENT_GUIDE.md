@@ -11,7 +11,7 @@ Design goals:
 - Source-generated validation without reflection scanning.
 - Trim and Native AOT friendliness.
 - DI registration generated at compile time.
-- Debuggable fallback mode that executes user-authored `Configure` methods.
+- Shared validation behavior across modes, with generated checks for eligible declarations.
 
 ## Repository Layout
 
@@ -162,7 +162,7 @@ The generator supports:
 - Public `Configure` with exactly one `ValidationContext<T>` parameter.
 - Static and instance `Configure` methods.
 - Constructor chaining for validators with public constructors plus generated `ValiantValidationOptions` constructor overloads.
-- Debuggable runtime fallback when validators declare `Configure`.
+- Generated checks for attributes and eligible straight-line fluent validators in Auto and Fast. Explicit Debuggable executes Configure. Other fluent validators always use the shared runtime.
 - Generated DI extension `AddValiantValidators` when DI symbols exist in the compilation.
 
 Generated DI registers:
@@ -189,7 +189,7 @@ Core concepts:
 - Typed extension files add type-constrained checks.
 - `ValidationResult` separates `Failures`, `Errors`, `Warnings`, and `Infos`.
 - `ValiantFailureBehavior` controls fail-fast versus validate-all behavior.
-- `ValiantValidationMode` controls generated fast mode versus debuggable runtime mode.
+- `ValiantValidationMode.Auto` and `Fast` use the same dispatch in Debug and Release. Explicit `Debuggable` must preserve the behavior of generated fluent checks.
 
 Supported checks are documented in `README.md`; keep the README in sync when adding new public checks.
 
@@ -213,7 +213,7 @@ When changing fluent runtime behavior:
 - Add or update `ValidationModeParityTests.cs` for every rule family or composition path whose generated and runtime implementations can diverge.
 - Create separate validators and model instances for fast and debuggable executions, assert the intended semantics independently, and compare the complete ordered `Failures` sequence (property, code, message, and severity) plus the `Errors`, `Warnings`, and `Infos` partitions.
 - Cover synchronous and asynchronous APIs, failure behavior, cancellation, and `ValiantValidationMode.Auto` when the changed path affects them.
-- Run the validation tests in both Debug and Release. `Auto` selects Debuggable in Debug builds and Fast in Release builds:
+- Run the validation tests in both Debug and Release to verify identical behavior for all mode settings:
 
 ```bash
 dotnet test --project validation/tests/StaticNorth.Valiant.Validation.Tests/StaticNorth.Valiant.Validation.Tests.csproj --configuration Debug
@@ -225,7 +225,7 @@ When changing Mapping samples or mapper behavior:
 - Mirror every demonstrated behavior in `MappingSampleTests.cs`.
 - Add or update `MappingModeParityTests.cs` for every `Configure`-based path, create independent mapper/source instances, assert the expected target independently in each mode, and then compare complete target snapshots.
 - Add focused generated-source assertions when dispatch shape changes.
-- Run the Mapping tests in both Debug and Release. `Auto` selects Debuggable in Debug builds and Fast in Release builds:
+- Run the Mapping tests in both Debug and Release. `Auto` and `Fast` use generated mapping in both builds. Select `Debuggable` to run the original `Configure` method:
 
 ```bash
 dotnet test --project mapping/tests/StaticNorth.Valiant.Mapping.Tests/StaticNorth.Valiant.Mapping.Tests.csproj --configuration Debug

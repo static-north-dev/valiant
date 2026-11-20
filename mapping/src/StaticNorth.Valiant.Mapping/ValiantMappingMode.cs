@@ -6,7 +6,7 @@ namespace StaticNorth.Valiant.Mapping;
 public enum ValiantMappingMode
 {
     /// <summary>
-    /// Uses the debuggable runtime backend in Debug builds and the generated backend otherwise.
+    /// Uses the source-generated direct mapping implementation in Debug and Release builds.
     /// </summary>
     Auto,
 
