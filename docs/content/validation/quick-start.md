@@ -5,17 +5,21 @@ description: Install StaticNorth.Valiant.Validation, generate a validator, and c
 
 # Quick start
 
-## 1. Install
+## 1. Create a project and install Valiant
+
+Use the **.NET 10.0.400 SDK or newer** to build this example with Valiant 1.2.1. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
 
 ```bash
-dotnet add package StaticNorth.Valiant.Validation
+dotnet new console -n ValidationDemo -f net8.0
+cd ValidationDemo
+dotnet add package StaticNorth.Valiant.Validation --version 1.2.1
 ```
 
 For an application integration, install the most specific package instead. For example, `StaticNorth.Valiant.Validation.AspNetCore` carries the core runtime, build, and analyzer assets needed to generate validators.
 
 ## 2. Declare a validator
 
-```csharp
+```csharp title="RegisterUserValidator.cs"
 using StaticNorth.Valiant.Validation;
 
 public sealed record RegisterUser(string? Name, int Age);
@@ -40,7 +44,11 @@ The declaration must be `partial` and marked with `[ValiantValidator]`. The gene
 
 ## 3. Validate
 
-```csharp
+Replace the contents of `Program.cs`:
+
+```csharp title="Program.cs"
+using StaticNorth.Valiant.Validation;
+
 IValidator<RegisterUser> validator = new RegisterUserValidator();
 ValidationResult result = validator.Validate(new RegisterUser(null, 16));
 
@@ -53,11 +61,16 @@ if (!result.IsValid)
 }
 ```
 
-Use `ValidateAsync` for validators that contain async rules. Convenience APIs include `IsValid`, `IsValidAsync`, and `ThrowIfFailed` on the result.
+Run `dotnet run`. The example prints an error for `Name` and an error for `Age`.
 
-## 4. Register generated validators
+Use `ValidateAsync` for validators that contain async rules. Validators also expose `IsValid` and `IsValidAsync`. Call `ThrowIfFailed()` on a result to raise a validation exception.
+
+## 4. Register generated validators in an application
+
+With Microsoft dependency injection available, register validators from the project that declares them.
 
 ```csharp
+using StaticNorth.Valiant.Validation;
 using StaticNorth.Valiant.Validation.DependencyInjection;
 
 builder.Services.AddValiantValidators(options =>

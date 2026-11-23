@@ -11,6 +11,10 @@ Valiant query binding is disabled by default, leaving request parameters to nati
 builder.Services.AddValiantEndpoints(options =>
 {
     options.QueryParameters.EnableBinding = true;
+    options.QueryParameters.Parsing = new QueryParsingOptions
+    {
+        SupportedObjectFormats = [QueryObjectFormat.Flat, QueryObjectFormat.DotNotation]
+    };
 });
 ```
 
@@ -22,15 +26,15 @@ Changing the literal between `true` and `false` adds or removes generated query 
 
 :::
 
-When enabled, Valiant connects its configurable query parser to generated endpoints in three binding shapes. You can use an inline handler or pass a named handler directly as a method group, such as `builder.MapGet("/cars", Handle)`.
+Choose a binding shape based on what the client sends. Use whole-request binding for complex queries that need consistent format handling and structured errors. The setup above enables dot notation for nested values in addition to the default flat format. Handlers can be inline or passed as named method groups.
 
-Use **whole-request binding** for complex queries that need consistent format handling and structured errors.
-
-| Binding shape | Query policy | HTTP 400 response |
+| Handler parameter | Example request | Failure response |
 | --- | --- | --- |
-| Whole request | Global or per-endpoint policy for arrays, objects, and JSON | Structured query errors |
-| `[AsParameters]` | Global or per-endpoint policy after native binding succeeds | Structured query errors for the Valiant pass. ASP.NET Core handles native binding failures. |
-| Direct complex `[FromQuery]` | Compile-time JSON policy for the generated parser | ASP.NET Core binding response |
+| Whole request with generated `BindAsync` | `/cars?filter.year=2025&filter.brand=Volvo` | Mapped Valiant endpoints return structured query errors using the global or per-endpoint parsing policy. |
+| `[AsParameters]` with complex query properties | `/cars?filter.year=2025&filter.brand=Volvo` | ASP.NET Core handles native binding failures. After native binding succeeds, Valiant can return HTTP 400 with structured `QueryError` entries. |
+| Direct complex `[FromQuery] CarFilter filter` | `/cars?filter=%7B%22year%22%3A2025%7D` | ASP.NET Core handles HTTP 400 when generated `TryParse` rejects the JSON. |
+
+The first two examples produce a filter with `Year = 2025` and `Brand = "Volvo"`. In the direct example, the URL-encoded value is `{"year":2025}`.
 
 ## Whole request binding
 
@@ -109,7 +113,7 @@ The policy is compiled into the generated method, so direct binding does not use
 
 ## Failure response
 
-Whole-request binders on mapped Valiant endpoints and the Valiant `[AsParameters]` filter return HTTP 400 with structured `QueryError` entries when values cannot be converted or a client uses a disabled format. Each entry identifies a `Path`, stable `Code`, human-readable `Message`, and `Kind` (`Validation` or `Configuration`).
+For example, `/cars?filter.year=abc` produces HTTP 400 in both full-query examples. On mapped Valiant endpoints, both the whole-request binder and the Valiant `[AsParameters]` filter return a JSON array with an `InvalidQueryValue` error for `Filter.Year` when Valiant handles the binding failure. Each entry identifies a `Path`, stable `Code`, human-readable `Message`, and `Kind` (`Validation` or `Configuration`).
 
 ## Configure accepted formats
 

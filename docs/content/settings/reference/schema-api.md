@@ -32,6 +32,22 @@ foreach (var provider in services.GetServices<IValiantSettingsSchemaProvider>())
 }
 ```
 
+## Schema lookup without dependency injection
+
+`ValiantSettingsSchemas` exposes schemas generated in the current compilation. Use `Get<T>()` when the type is known to be marked, `TryGet<T>()` when it may be absent, or `All` to enumerate providers.
+
+```csharp
+using StaticNorth.Valiant.Settings;
+
+var schema = ValiantSettingsSchemas.Get<SearchSettings>().Schema;
+Console.WriteLine(schema.SectionPath); // Search
+
+[ValiantSettings("Search")]
+public sealed record SearchSettings(string? Endpoint);
+```
+
+The model contributes a schema. Options registration is opt-in through `configure: true`.
+
 ## Model schema
 
 `ValiantSettingsSchema` exposes `SettingsType`, `Name`, `SectionPath`, and `Properties`.
@@ -54,7 +70,7 @@ The UI JSON endpoint returns `ValiantSettingsSchemaDocument`. It contains ordere
 | --- | --- | --- |
 | `StaticNorth.Valiant.Settings` | Schema generation and optional Options binding | .NET 8 and .NET Standard 2.0 |
 | `StaticNorth.Valiant.Settings.AspNetCore` | Built-in explorer and JSON schema endpoint | .NET 8 |
-| `StaticNorth.Valiant.Settings.Validation` | Options validation through Valiant validators | .NET 8 |
+| `StaticNorth.Valiant.Settings.Validation` | Options validation through Valiant validators | .NET 8 and .NET 11 |
 
 Integration packages forward their parent runtime and generator assets. `StaticNorth.Valiant.Settings.Validation` also carries the core Valiant Validation assets it integrates with.
 

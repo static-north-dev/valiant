@@ -29,7 +29,7 @@ The instance method also works naturally with constructor-injected dependencies 
 
 ## Attribute definitions
 
-Derive from `ValidatorDefinition<T>` to read Valiant validation attributes from the model:
+Derive from `ValidatorDefinition<T>` and omit the `Configure` override to use model attributes. Choose one rule style per model and validator. Combining Valiant attributes with a fluent override produces `VLT105`.
 
 ```csharp
 [ValiantValidator]
@@ -42,11 +42,11 @@ public sealed class Product
     public string? Name { get; init; }
 
     [GreaterThan(0)]
-    public decimal Price { get; init; }
+    public int Quantity { get; init; }
 }
 ```
 
-These are attributes from `StaticNorth.Valiant.Validation`, not Data Annotations. Fluent and attribute rules use the same generated checks and metadata.
+These are attributes from `StaticNorth.Valiant.Validation`, not Data Annotations. Comparison attributes such as `[GreaterThan(0)]` accept integer properties. For a decimal property, use a fluent rule such as `.GreaterThan(0m)`.
 
 ## Custom predicates
 
@@ -60,7 +60,22 @@ context.Property(order => order.Reference)
         message: "Reference must start with ORD-.");
 ```
 
-Async predicate overloads are available for work that accepts a cancellation token.
+Use `SatisfiesAsync` when a rule calls an asynchronous dependency. This example assumes an injected `accountDirectory` whose `IsAvailableAsync` method returns `ValueTask<bool>`:
+
+```csharp
+context.Property(request => request.Email)
+    .Required()
+    .SatisfiesAsync(
+        (email, cancellationToken) => accountDirectory.IsAvailableAsync(email, cancellationToken),
+        code: "EmailUnavailable",
+        message: "Enter an available email address.");
+```
+
+Pass the caller's cancellation token to the validator:
+
+```csharp
+var result = await validator.ValidateAsync(request, cancellationToken);
+```
 
 ## Conditions
 

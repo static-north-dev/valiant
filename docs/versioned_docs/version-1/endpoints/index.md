@@ -40,6 +40,7 @@ app.MapValiantEndpoints();
 
 ## Documentation map
 
+- [A validated Minimal API](./guides/validated-api.md) — combine all four modules in one route.
 - [Quick start](./quick-start.md)
 - [Runnable samples](./samples.md)
 - [Groups and conventions](./guides/groups-conventions.md)

@@ -58,7 +58,7 @@ public sealed record FeatureCatalog; // schema only
 public sealed record BoundFeatureCatalog; // schema + Options binding
 ```
 
-This lets libraries publish metadata without changing the host's service graph.
+This lets libraries publish metadata without changing the host's service graph. See [schema lookup without dependency injection](../reference/schema-api.md#schema-lookup-without-dependency-injection). A required flag in the schema describes the model. Use the [Options validation integration](./binding-validation.md#validate-options-with-valiant) to enforce settings at runtime.
 
 ## Secret metadata
 
