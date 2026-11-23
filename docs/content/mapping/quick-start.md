@@ -7,15 +7,19 @@ description: Install StaticNorth.Valiant.Mapping and generate your first object 
 
 ## 1. Create a project and install Valiant
 
-Use the **.NET 10.0.400 SDK or newer** to build this example with Valiant 1.2.1. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+Use the **.NET 10.0.400 SDK or newer** with this guide. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+
+Generated code requires **C# 8.0 or later**. Set `<LangVersion>8.0</LangVersion>` explicitly in projects that default to an older language version, including .NET Standard 2.0 projects.
 
 ```bash
 dotnet new console -n MappingDemo -f net8.0
 cd MappingDemo
-dotnet add package StaticNorth.Valiant.Mapping --version 1.2.1
+dotnet add package StaticNorth.Valiant.Mapping
 ```
 
 `StaticNorth.Valiant.Mapping` contains the runtime API and delivers its source generator as an analyzer. No separate generator package is needed.
+
+The install command selects the latest stable package. Add `--version` to select a specific release or prerelease that matches the guide you are following.
 
 ## 2. Declare the models and mapper
 

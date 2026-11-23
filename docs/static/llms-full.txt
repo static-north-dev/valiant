@@ -59,15 +59,19 @@ including `WebApplicationFactory` tests for every web sample.
 
 #### 1. Create a project and install Valiant
 
-Use the **.NET 10.0.400 SDK or newer** to build this example with Valiant 1.2.1. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+Use the **.NET 10.0.400 SDK or newer** with this guide. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+
+Generated code requires **C# 9.0 or later**. Set `<LangVersion>9.0</LangVersion>` explicitly in projects that default to an older language version, including .NET Standard 2.0 projects.
 
 ```bash
 dotnet new console -n ValidationDemo -f net8.0
 cd ValidationDemo
-dotnet add package StaticNorth.Valiant.Validation --version 1.2.1
+dotnet add package StaticNorth.Valiant.Validation
 ```
 
 For an application integration, install the most specific package instead. For example, `StaticNorth.Valiant.Validation.AspNetCore` carries the core runtime, build, and analyzer assets needed to generate validators.
+
+The install command selects the latest stable package. Add `--version` to select a specific release or prerelease that matches the guide you are following.
 
 #### 2. Declare a validator
 
@@ -120,6 +124,10 @@ Use `ValidateAsync` for validators that contain async rules. Validators also exp
 #### 4. Register generated validators in an application
 
 With Microsoft dependency injection available, register validators from the project that declares them.
+
+From a separate host, call each library's generated registration explicitly. For a library named `Orders`, the entry point is `StaticNorth.Valiant.Generated.Assembly_Orders.Validators.AddValiantValidators(services)`. See [generated registration namespaces](https://valiant.staticnorth.dev/mapping/guides/composition-dependency-injection/) for assembly names with punctuation.
+
+If a validator has no public constructor with all parameters passed by value, register its factory as an `IValidator<T>` in DI.
 
 ```csharp
 using StaticNorth.Valiant.Validation;
@@ -499,6 +507,8 @@ builder.Services.AddOpenApi(options =>
 
 Valiant projects unconditional rules with a known blocking severity into native constraints such as required, length, count, and comparison bounds. Rules with advisory, dynamic, or conditional severity remain available in the `x-valiant-rules` extension.
 
+String length rules count UTF-16 code units at runtime. OpenAPI length keywords count Unicode code points, so strings containing supplementary characters can have different lengths in an OpenAPI client and the server.
+
 :::info Package references
 Each integration package forwards the core Valiant runtime and generator assets. Add both ASP.NET Core packages when you need request validation and OpenAPI; do not add a redundant direct `StaticNorth.Valiant.Validation` reference.
 :::
@@ -595,6 +605,8 @@ context.Property(product => product.Price)
 | `CountBetween(min, max)` | Inclusive item-count range |
 | `MinCount(min)` / `MaxCount(max)` | Count bounds |
 | `Contains(item)` / `Excludes(item)` | Membership |
+
+Count checks accept enumerable collections, including sets. For a sequence without a non-generic collection count, validation reads only enough items to decide the bound.
 | `All(predicate)` / `Any(predicate)` / `None(predicate)` | Element predicates |
 | `ForEach(configure)` | Validate every item with a nested context |
 
@@ -696,17 +708,15 @@ Install the most specific package for each integration you use. Integration pack
 
 #### Build SDK and target frameworks
 
-**The Next Valiant packages require the .NET 11.0.100 SDK or newer to run their source generators.** You can use that SDK to build applications targeting `net8.0` with the packages that list a .NET 8 asset. Valiant 1.2.1 supports building with the .NET 10.0.400 SDK or newer.
+The Valiant source generators support the **.NET 10.0.400 SDK or newer**. You can build applications targeting `net8.0` with packages that list a .NET 8 asset. Use a .NET 11 SDK to target `net11.0` and access target-specific integrations such as asynchronous Options validation.
 
 Run `dotnet --version` in the project directory. If you see `CS9057` or generated methods are missing, check whether a `global.json` is selecting an older SDK.
-
-When upgrading from 1.2.1, update the SDK selection in local builds and CI before updating the package references.
 
 #### Endpoints, Mapping, and Settings
 
 | Package | Use it for | Included framework assets |
 | --- | --- | --- |
-| `StaticNorth.Valiant.Endpoints.AspNetCore` | Endpoint classes, groups, and query binding | .NET 8 |
+| `StaticNorth.Valiant.Endpoints.AspNetCore` | Endpoint classes, groups, and query binding | .NET 8 and .NET 11 |
 | `StaticNorth.Valiant.Mapping` | Generated object mapping | .NET 8 and .NET Standard 2.0 |
 | `StaticNorth.Valiant.Settings` | Generated settings schemas and optional Options registration | .NET 8 and .NET Standard 2.0 |
 | `StaticNorth.Valiant.Settings.AspNetCore` | Settings explorer and JSON endpoint | .NET 8 |
@@ -748,7 +758,7 @@ Reference more than one integration package when the application uses more than 
 
 ### Minimal APIs, organized by feature
 
-Valiant Endpoints gives every ASP.NET Core Minimal API endpoint a small class and generates deterministic route registration. Group vertical slices, apply conventions once, exclude features at startup, and bind query shapes that ASP.NET Core does not handle by default.
+Valiant Endpoints gives every ASP.NET Core Minimal API endpoint a small class or record and generates deterministic route registration. Group vertical slices, apply conventions once, exclude features at startup, and bind query shapes that ASP.NET Core does not handle by default.
 
 ```csharp
 using StaticNorth.Valiant.Endpoints;
@@ -777,7 +787,7 @@ app.MapValiantEndpoints();
 | Route organization | `IEndpoint`, `IEndpointGroup`, standalone and grouped routes |
 | Shared policy | Group and endpoint configuration hooks over the returned route builders |
 | Feature switches | Separate startup predicates for generated groups and endpoints |
-| Multiple assemblies | Explicit registration and mapping overloads |
+| Multiple assemblies | Explicit assembly registration with `AddValiantEndpoints` |
 | Query compatibility | Arrays, nested objects, JSON opt-in, parser, serializer, and structured errors |
 | Request binding | Opt-in generated `BindAsync`, `[AsParameters]` repair, and complex `[FromQuery]` shims; native ASP.NET Core binding by default |
 
@@ -799,15 +809,19 @@ conditional exclusions.
 
 #### 1. Create a project and install Valiant
 
-Use the **.NET 10.0.400 SDK or newer** to build this example with Valiant 1.2.1. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+Use the **.NET 10.0.400 SDK or newer** with this guide. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+
+Generated code requires **C# 11.0 or later**.
 
 ```bash
 dotnet new web -n EndpointsDemo -f net8.0
 cd EndpointsDemo
-dotnet add package StaticNorth.Valiant.Endpoints.AspNetCore --version 1.2.1
+dotnet add package StaticNorth.Valiant.Endpoints.AspNetCore
 ```
 
 This is the consumer package. It includes the shared endpoint contracts and bundles the source generator; do not add separate `StaticNorth.Valiant.Endpoints` or generator references.
+
+The install command selects the latest stable package. Add `--version` to select a specific release or prerelease that matches the guide you are following.
 
 #### 2. Create an endpoint
 
@@ -980,7 +994,6 @@ builder.Services.AddValiantEndpoints(options =>
     options.ConfigureEndpointGroup = (group, registration) =>
     {
         group.AddEndpointFilter<ExceptionHandlingFilter>();
-        group.WithOpenApi();
     };
 
     options.ConfigureEndpoint = (endpoint, registration) =>
@@ -1013,7 +1026,9 @@ Set `Order` on endpoint and group marker attributes when one generated mapping m
 internal sealed class SearchOrdersEndpoint : IEndpoint { /* ... */ }
 ```
 
-Types with the same order are sorted by type name, keeping generated output deterministic.
+Within each registered assembly, Valiant creates the groups first. On .NET 11 and later targets, it then sorts grouped and standalone endpoints together by `Order` and type name. On earlier targets, it keeps the 1.2.1 order and maps the grouped endpoints before the standalone endpoints.
+
+Set `options.OrderEndpointsAcrossGroups` in `AddValiantEndpoints` to override the target's default. This setting controls the order of startup callbacks. Use ASP.NET Core's `.WithOrder()` to set route matching priority.
 
 #### Standalone endpoints
 
@@ -1148,7 +1163,7 @@ Valiant query binding is disabled by default, leaving request parameters to nati
 ```csharp
 using StaticNorth.Valiant.Endpoints.AspNetCore;
 
-[assembly: ValiantGenerateQueryBinding]
+[assembly: ValiantGenerateQueryBinding(UseStrictBinding = true)]
 ```
 
 Register the endpoint assembly with `AddValiantEndpoints`. The host can configure the parsing formats for whole-request and `[AsParameters]` binding.
@@ -1158,12 +1173,15 @@ builder.Services.AddValiantEndpoints(options =>
 {
     options.QueryParameters.Parsing = new QueryParsingOptions
     {
+        UseStrictBinding = true,
         SupportedObjectFormats = [QueryObjectFormat.Flat, QueryObjectFormat.DotNotation]
     };
 });
 ```
 
 Existing projects can still opt into generation with a direct literal `true` assignment in the `AddValiantEndpoints` setup lambda in the endpoint assembly. The assembly attribute also works when registration lives in a helper or a different assembly.
+
+These examples select strict binding on every target. With both settings omitted, .NET 11 and later targets default to strict binding, and earlier targets use 1.2.1 behavior. The runtime setting controls full-query parsing, alias binding, required members, and structured whole-request errors. The assembly setting selects strict generated `TryParse` methods.
 
 :::caution Compile-time boundary
 
@@ -1203,11 +1221,13 @@ public sealed record CarFilter
 ```
 
 Valiant emits `BindAsync(HttpContext, ParameterInfo)` on `ListCarsRequest`. Only root properties marked `[FromQuery]` with public setters participate, including public `init` accessors. Set `[FromQuery(Name = "filter")]` to use a query key different from the CLR property name. Nested filter members use their public property names.
+
+Omitting a `required` query property on the request or on a supplied nested query object returns a `MissingQueryValue` error with its full path. A constructor marked with `[SetsRequiredMembers]` can supply defaults.
 If the request is nested inside an endpoint or another type, every containing declaration must also be `partial` so generated code can reopen the complete declaration chain.
 
 #### `[AsParameters]`
 
-ASP.NET Core first constructs the request. A Valiant endpoint filter then applies the supplied `[FromQuery]` values using the configured formats and aliases. Properties with no matching query key keep their existing values.
+ASP.NET Core first constructs the request. The Valiant binder applies supplied `[FromQuery]` values using the configured formats and aliases before other endpoint filters run. Properties using their own native parser keep the value ASP.NET Core bound. Properties with no matching query key keep their existing values.
 
 ```csharp
 return builder.MapGet("/cars", static ([AsParameters] ListCarsRequest request) =>
@@ -1226,7 +1246,7 @@ public sealed partial record CarFilter
 }
 ```
 
-The complex `[FromQuery]` type must be `partial` in this shape. Valiant generates a `TryParse(string, out T)` shim because ASP.NET Core checks property bindability before endpoint filters run.
+The complex `[FromQuery]` type must be `partial` in this shape. Valiant generates a `TryParse(string, out T)` method that reads JSON for native ASP.NET Core property binding. Valiant applies the endpoint's configured parsing policy when it binds the full query.
 The same containing-type rule applies when that complex type is nested.
 
 The Valiant filter reparses the query only after native parameter binding succeeds. For example, ASP.NET Core rejects comma-separated `?ids=1,2,3` for an `int[] Ids` property and controls the resulting HTTP response. Use generated whole-request binding when every configured format must work without native `[AsParameters]` constraints.
@@ -1254,11 +1274,11 @@ public sealed class CarsEndpoint : IEndpoint
 }
 ```
 
-The policy is compiled into the generated method. JSON is enabled when the policy attribute is absent or parameterless. Explicit `Disabled` returns HTTP 400. The array and object formats apply to full-query binding only. User-authored `TryParse` methods keep their own behavior. Conflicting policies for the same generated parser type report `VLE011`.
+The policy is compiled into the generated method. JSON is enabled when the policy attribute is absent or parameterless. In strict mode, generated `TryParse` returns `false` for malformed or disabled JSON. In 1.2.1 compatibility mode, it throws `BadHttpRequestException`. ASP.NET Core returns HTTP 400 in both modes. The array and object formats apply to full-query binding only. User-authored `TryParse` methods keep their own behavior. Conflicting policies for the same generated parser type report `VLE011`.
 
 #### Failure response
 
-For example, `/cars?filter.year=abc` produces HTTP 400 in both full-query examples. On mapped Valiant endpoints, both the whole-request binder and the Valiant `[AsParameters]` filter return a JSON array with an `InvalidQueryValue` error for `Filter.Year` when Valiant handles the binding failure. Each entry identifies a `Path`, stable `Code`, human-readable `Message`, and `Kind` (`Validation` or `Configuration`).
+For example, `/cars?filter.year=abc` produces HTTP 400 in both full-query examples. With strict parsing, both the whole-request binder and the Valiant `[AsParameters]` filter return a JSON array with an `InvalidQueryValue` error for `Filter.Year` when Valiant handles the binding failure. In 1.2.1 compatibility mode, ASP.NET Core handles whole-request binding errors. Each structured entry identifies a `Path`, stable `Code`, human-readable `Message`, and `Kind` (`Validation` or `Configuration`).
 
 #### Configure accepted formats
 
@@ -1292,7 +1312,7 @@ return builder.MapGet("/search", Handle)
     });
 ```
 
-This is a full replacement, not a merge. Other endpoints continue using the global parsing options.
+This replaces the base parsing options with a snapshot taken when the convention is added. Explicit source-generated overrides still take precedence.
 
 When only selected settings differ, use a partial attribute override:
 
@@ -1316,7 +1336,7 @@ public sealed partial class SearchEndpoint : IEndpoint
 }
 ```
 
-Explicit attribute properties win over `.WithQueryParsingOptions(...)`, which wins over global parsing options and then defaults. Omitted or `null` array properties inherit; `[]` disables every format in that category. The array and object properties affect full-query binding only. Explicit `JsonValues` affects full-query binding and generated direct complex `[FromQuery]`; when omitted, full-query binding inherits while direct JSON remains enabled.
+Explicit attribute properties win over `.WithQueryParsingOptions(...)`, conditional registration, global parsing options, and then defaults, in that order. Omitted or `null` array properties inherit. An empty array disables every format in that category. The array and object formats affect full-query binding only. Explicit `JsonValues` affects full-query binding and generated direct complex `[FromQuery]`. When omitted, full-query binding inherits and direct JSON remains enabled.
 
 See the [query parameter reference](https://valiant.staticnorth.dev/endpoints/reference/query-parameters/) for all formats and direct parser/serializer APIs.
 ### A validated Minimal API
@@ -1328,11 +1348,13 @@ Use the [.NET SDK listed in the package guide](https://valiant.staticnorth.dev/v
 ```bash
 dotnet new web -n OrdersApi -f net8.0
 cd OrdersApi
-dotnet add package StaticNorth.Valiant.Endpoints.AspNetCore --version 1.2.1
-dotnet add package StaticNorth.Valiant.Validation.AspNetCore --version 1.2.1
-dotnet add package StaticNorth.Valiant.Mapping --version 1.2.1
-dotnet add package StaticNorth.Valiant.Settings --version 1.2.1
+dotnet add package StaticNorth.Valiant.Endpoints.AspNetCore
+dotnet add package StaticNorth.Valiant.Validation.AspNetCore
+dotnet add package StaticNorth.Valiant.Mapping
+dotnet add package StaticNorth.Valiant.Settings
 ```
+
+These commands select the latest stable packages. Use `--version` on each command to try a specific release or prerelease.
 
 Add the order limit to `appsettings.json`:
 
@@ -1462,7 +1484,9 @@ using StaticNorth.Valiant.Endpoints.AspNetCore;
 [assembly: ValiantGenerateQueryBinding]
 ```
 
-The assembly opt-in enables whole-request, `[AsParameters]`, and direct query binding. A direct literal `EnableBinding = true` assignment in the endpoint assembly remains a compatibility opt-in. Standalone calls to `QueryStringParser` and `QueryStringSerializer` are available by default. See [request binding setup](https://valiant.staticnorth.dev/endpoints/guides/request-binding/).
+The assembly opt-in enables whole-request, `[AsParameters]`, and direct query binding. A direct literal `EnableBinding = true` assignment in the endpoint assembly remains supported. Standalone calls to `QueryStringParser` and `QueryStringSerializer` are available by default. See [request binding setup](https://valiant.staticnorth.dev/endpoints/guides/request-binding/).
+
+Apps targeting .NET 11 or later default to strict parsing. Earlier targets keep 1.2.1 behavior, even when built with the .NET 11 SDK. Override `QueryParsingOptions.UseStrictBinding` when calling `QueryStringParser`, in `AddValiantEndpoints` via `options.QueryParameters.Parsing`, or in `WithQueryParsingOptions` on a route. Strict parsing rejects conflicting shapes and missing required members, supports combined object and array path formats, and uses `[FromQuery]` aliases for generated request objects.
 
 #### Defaults
 
@@ -1505,7 +1529,7 @@ new QueryParsingOptions
 };
 ```
 
-Repeated and bracket values preserve query order; indexed brackets sort by numeric index. Empty items and disabled formats return structured errors.
+Repeated and bracket values preserve query order. Indexed brackets sort by numeric index. Empty string items are valid in string collections. Empty items for other element types and disabled formats return structured errors.
 
 #### Object formats
 
@@ -1515,7 +1539,9 @@ Repeated and bracket values preserve query order; indexed brackets sort by numer
 | `DotNotation` | `?filter.brand=tesla&filter.year=2025` |
 | `DeepObject` | `?filter[brand]=tesla&filter[year]=2025` |
 
-Duplicate scalar values use the last value. Flat output cannot preserve nested paths; choose dot notation, deep object, or explicitly enabled JSON for nested serialization.
+Duplicate scalar values use the last value. With `UseStrictBinding` enabled, a single property path cannot combine a direct value with nested keys. Strict parsing also supports combining dot notation and deep object with bracket arrays. For example, `filter.ids[0]=1` requires `DotNotation` and `IndexedBrackets`, while `filter[ids][]=1` requires `DeepObject` and `Brackets`.
+
+Choose dot notation, deep object, or explicitly enabled JSON to preserve nested paths.
 
 #### JSON query values
 
@@ -1560,7 +1586,7 @@ public sealed partial class SearchEndpoint : IEndpoint
 }
 ```
 
-Precedence is explicit attribute properties, then the last `.WithQueryParsingOptions(...)` call, then global `QueryParameters.Parsing`, then defaults. Omitted or `null` array properties inherit; `[]` accepts no formats in that category. `SupportedArrayFormats` and `SupportedObjectFormats` affect full-query binding only. `JsonValues` affects full-query binding when explicitly named and always controls generated direct complex `[FromQuery]` parsers.
+Precedence is explicit attribute properties, the last `.WithQueryParsingOptions(...)` call, conditional registration, global `QueryParameters.Parsing`, and defaults, in that order. Omitted or `null` array properties inherit. An empty array disables every format in that category. `SupportedArrayFormats` and `SupportedObjectFormats` affect full-query binding only. `JsonValues` affects full-query binding when explicitly named and always controls generated direct complex `[FromQuery]` parsers.
 
 For example, direct complex `[FromQuery]` parameters can disable their generated JSON parser with the same attribute:
 
@@ -1575,6 +1601,8 @@ public sealed class SearchEndpoint : IEndpoint
 ```
 
 Generated direct parsers keep their compiled JSON policy regardless of the host's runtime setting. JSON is enabled when the policy attribute is absent or parameterless. Explicit `Disabled` returns HTTP 400 through ASP.NET Core. The array and object formats apply to full-query binding only. User-authored `TryParse` methods retain their own behavior. Conflicting policies for the same generated parser type report `VLE011`.
+
+On .NET 11 and later targets, generated direct `TryParse` methods return `false` for malformed or disabled JSON. Earlier targets retain the 1.2.1 `BadHttpRequestException` behavior for direct CLR callers. Set `UseStrictBinding` on the `ValiantGenerateQueryBinding` assembly attribute to override the default in the assembly that declares the binding. HTTP requests receive 400 in both modes.
 
 ```http
 ?filter=%7B%22brand%22%3A%22tesla%22%2C%22year%22%3A2025%7D
@@ -1608,11 +1636,11 @@ if (!result.IsSuccess)
 }
 ```
 
-Primitive arrays and `List<T>` support `string`, `int`, `long`, `Guid`, `bool`, `decimal`, and `DateTime`; nullable primitive scalars are supported. Nested object binding supports at least one level.
+Use an object with named properties as the root value. Arrays and `List<T>` properties support `string`, `int`, `long`, `Guid`, `bool`, `decimal`, `DateTime`, and enum values. Nullable primitive scalars are supported. Nested object binding reports an error when it reaches the 64-level depth limit.
 
-Valiant's field-by-field object binding writes only to properties with public setters, including public `init` accessors. On endpoint requests, root properties also need `[FromQuery]`, and any `Name` alias supplies the query key. Standalone parsing uses CLR property names.
+Valiant's field-by-field object binding uses properties with public setters, including public `init` accessors. Standalone parsing and 1.2.1-compatible whole-request binding use CLR property names. Strict whole-request binding uses root properties marked with `[FromQuery]` and honors any `Name` alias. Strict parsing reports missing `required` properties using their full paths unless a constructor marked with `[SetsRequiredMembers]` supplies defaults.
 
-Repeated and delimited values require a one-dimensional array or a type assignable from `List<T>`. An incompatible collection type returns `UnsupportedQueryType`. With JSON query values enabled, collections can also use any shape supported by the JSON serializer.
+Repeated and delimited values require a one-dimensional array or a type assignable from `List<T>`. An incompatible collection type returns `UnsupportedQueryType`. With JSON query values enabled, the parser can also bind collection types that System.Text.Json can deserialize. Unsupported JSON target types return `UnsupportedQueryType`.
 
 #### Direct serialization
 
@@ -1632,7 +1660,7 @@ var result = QueryStringSerializer.Serialize(
 // ?ids=1,2,3&filter.brand=tesla&filter.year=2025
 ```
 
-The serializer URL-encodes keys and values, preserves array order, and skips null values. It omits empty collections in every array format. When a key is absent, parsing keeps the target property's initialized or default value. To round-trip an empty collection as empty, initialize that property to an empty collection. Serialization uses one explicitly selected array format and one object format.
+The serializer reads public getters, URL-encodes keys and values, and preserves array order. Delimited formats skip null items and omit empty collections. When an optional key is absent, parsing keeps the target property's initialized or default value. To round-trip an omitted empty collection as empty, initialize that property to an empty collection. Complex collection shapes require JSON query values. Strict parsing with JSON disabled treats a scalar value for a collection of strings as literal text. Dot-notation and deep-object serialization return a structured error after 64 nested levels.
 
 #### Structured errors
 
@@ -1685,7 +1713,7 @@ The incremental generator starts from marker attributes—not an assembly-wide i
 
 The companion analyzer checks only direct `IEndpoint` and `IEndpointGroup` declarations for missing markers. It intentionally avoids indirect and aliased implementation scans to keep IDE analysis bounded.
 
-`IEndpointGroup.CreateGroup` is a static abstract interface member. The C# compiler requires every endpoint group type to provide a public static implementation.
+Endpoint and group declarations can be classes or record classes. They must be closed types accessible from generated code. Both a public static implementation and an explicit static implementation satisfy the interface members.
 
 #### Diagnostics
 
@@ -1701,8 +1729,10 @@ The companion analyzer checks only direct `IEndpoint` and `IEndpointGroup` decla
 | `VLE008` | Group marker was applied to an endpoint |
 | `VLE009` | An endpoint uses more than one endpoint marker form |
 | `VLE010` | A query type cannot receive the generated binder |
+| `VLE011` | Direct query parameters share a generated parser and specify conflicting JSON policies |
+| `VLE012` | An endpoint or group is an open generic, file-local, or inaccessible from generated code |
 
-`VLE010` covers shapes such as non-partial source types, static types, open generics, or containing types that cannot receive generated members.
+`VLE010` covers shapes such as non-partial source types, static and file-local types, open generics, or containing types that cannot receive generated members.
 
 ## Mapping
 
@@ -1751,15 +1781,19 @@ links each one to its self-contained source folder.
 
 #### 1. Create a project and install Valiant
 
-Use the **.NET 10.0.400 SDK or newer** to build this example with Valiant 1.2.1. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+Use the **.NET 10.0.400 SDK or newer** with this guide. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+
+Generated code requires **C# 8.0 or later**. Set `<LangVersion>8.0</LangVersion>` explicitly in projects that default to an older language version, including .NET Standard 2.0 projects.
 
 ```bash
 dotnet new console -n MappingDemo -f net8.0
 cd MappingDemo
-dotnet add package StaticNorth.Valiant.Mapping --version 1.2.1
+dotnet add package StaticNorth.Valiant.Mapping
 ```
 
 `StaticNorth.Valiant.Mapping` contains the runtime API and delivers its source generator as an analyzer. No separate generator package is needed.
+
+The install command selects the latest stable package. Add `--version` to select a specific release or prerelease that matches the guide you are following.
 
 #### 2. Declare the models and mapper
 
@@ -1954,6 +1988,8 @@ public sealed partial class UserMapper : MapperDefinition<User, UserDto>
 }
 ```
 
+Target selectors select a direct field or property, such as `target => target.Email`. Map a nested member with its own mapper and assign that result to the parent member.
+
 #### Conditional chains
 
 `When` applies to every declaration in the same fluent chain:
@@ -1967,6 +2003,8 @@ context
 
 Start a new statement when rules need different conditions.
 
+For an init-only member, use one mapping rule with `When` and a fallback so the object initializer has a value on both paths.
+
 #### Defaults and fallbacks
 
 `Default` and `Fallback` are aliases. The value is used when a rule is skipped by its condition or ignores a null source value:
@@ -1976,6 +2014,8 @@ context.Map(source => source.DisplayName, target => target.DisplayName)
     .When(source => source.IsVisible)
     .Fallback("Hidden user");
 ```
+
+If a target constructor parameter has a declared default, Valiant uses it when no mapping supplies a value for that parameter.
 
 #### Null handling
 
@@ -2061,6 +2101,10 @@ With scoped lookup enabled, resolve the facade and factory from the current requ
 
 Call the generated registration from each project that declares mappers. Supply shared options on the first call. The facade and factory can resolve mapper pairs from every registered assembly.
 
+From a separate host, call each assembly's public registration explicitly. For a library named `Orders`, call `StaticNorth.Valiant.Generated.Assembly_Orders.Mappers.AddValiantMappers(services)`.
+
+Mapping, Validation, and Settings use the same namespace convention. Each period in the assembly name starts a new `Assembly_` segment. Characters outside ASCII letters and digits are encoded as an underscore followed by the four-digit uppercase hexadecimal UTF-16 code unit. For example, `Acme.Orders-Api` becomes `Assembly_Acme.Assembly_Orders_002DApi`.
+
 #### Choose an API
 
 ##### Typed mapper
@@ -2123,7 +2167,7 @@ services.AddValiantMappers(options =>
 
 #### Constructor arguments and nulls
 
-A skipped constructor mapping uses the configured fallback or the parameter type's default value. For a reference type, that default is `null`. Use a nullable parameter when absence is valid. For a required value, use an explicit mapping with a non-null fallback or `MapNull()` when the source already guarantees a non-null value and you want to bypass the null-skip rule.
+A skipped constructor mapping uses the configured fallback, the parameter's declared default, or the parameter type's default, in that order. Use a nullable parameter when absence is valid. For a required value, use an explicit mapping with a non-null fallback or `MapNull()` when the source already guarantees a non-null value and you want to bypass the null-skip rule.
 
 #### Generator scope
 
@@ -2156,7 +2200,8 @@ A separate narrowly scoped analyzer checks statically knowable `IMapper` and `IM
 
 - Mapper and containing declarations that receive generated members must be `partial`.
 - Each source/target pair has one default generated mapper.
-- Targets need a usable public construction path.
+- Targets need a usable public constructor. Constructor parameters may be passed by value or declared with `in`. Structs can also use default construction.
+- Collection element conversion supports one-dimensional arrays. Compatible array types can be assigned directly.
 - `Configure` is intentionally generator-readable; unsupported expression shapes produce `VLM004` instead of silently changing behavior.
 - Use `TryMap` or `TryCreateMapper` for pairs that are optional at runtime.
 
@@ -2205,15 +2250,19 @@ UI.
 
 #### 1. Create a project and install Valiant
 
-Use the **.NET 10.0.400 SDK or newer** to build this example with Valiant 1.2.1. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+Use the **.NET 10.0.400 SDK or newer** with this guide. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+
+Generated code requires **C# 8.0 or later**. Set `<LangVersion>8.0</LangVersion>` explicitly in projects that default to an older language version, including .NET Standard 2.0 projects.
 
 ```bash
 dotnet new web -n SettingsDemo -f net8.0
 cd SettingsDemo
-dotnet add package StaticNorth.Valiant.Settings --version 1.2.1
+dotnet add package StaticNorth.Valiant.Settings
 ```
 
 For the [settings explorer](https://valiant.staticnorth.dev/settings/guides/aspnetcore-ui/), choose `StaticNorth.Valiant.Settings.AspNetCore`. For [Options validation](https://valiant.staticnorth.dev/settings/guides/binding-validation/), choose `StaticNorth.Valiant.Settings.Validation`. Both integrations bring in the core package and its generator.
+
+The install command selects the latest stable package. Add `--version` to select a specific release or prerelease that matches the guide you are following.
 
 #### 2. Mark a settings model
 
@@ -2431,6 +2480,8 @@ builder.Services.AddValiantSettings(builder.Configuration);
 
 Valiant emits the equivalent section-aware `services.Configure<S3Settings>(configuration.GetSection("Storage:S3"))` registration.
 
+From a separate host, call each library's generated registration explicitly. For a library named `Storage`, the entry point is `StaticNorth.Valiant.Generated.Assembly_Storage.Settings.AddValiantSettings(services, configuration)`. See [generated registration namespaces](https://valiant.staticnorth.dev/mapping/guides/composition-dependency-injection/) for assembly names with punctuation.
+
 Use `[ConfigurationKeyName("bucket-name")]` from `Microsoft.Extensions.Configuration` to give a property a different configuration key. The generated schema and runtime values use that key, and the schema retains the CLR property name. On .NET 11, properties marked `[ConfigurationIgnore]` are excluded from binding and from the generated schema and runtime values.
 
 Schema providers register by default. Disable them when the application only needs binding and validation:
@@ -2469,7 +2520,7 @@ builder.Services.AddValiantSettings(builder.Configuration, options =>
 });
 ```
 
-Generated settings registration adds `IValidateOptions<S3Settings>` for configured settings models. It resolves a matching `IValidator<S3Settings>` from DI and translates Valiant errors to normal Options validation failures.
+Generated settings registration adds `IValidateOptions<S3Settings>` for configured settings models. It runs all registered `IValidator<S3Settings>` implementations and combines their errors into Options validation failures.
 
 #### Await validation at startup on .NET 11
 
@@ -2549,7 +2600,7 @@ app.MapValiantSettingsUi(options =>
 }).RequireAuthorization("SettingsAdministrators");
 ```
 
-Runtime values come from the host's default `IOptions<TSettings>` instance for each registered schema. The explorer reports values as unavailable when the host has neither Options configuration for that model nor an explicitly supplied options instance. Runtime values can include defaults and values assigned by configuration or post-configuration. Declared defaults in the property list describe constant initializers.
+Runtime values come from the host's default `IOptions<TSettings>` instance for each registered schema. With the default Options registration, this instance is cached on first use and does not track configuration reloads. The explorer reports values as unavailable when the host has neither Options configuration for that model nor an explicitly supplied options instance. Runtime values can include defaults and values assigned by configuration or post-configuration. Declared defaults in the property list describe constant initializers.
 
 The explorer loads the schema catalog first and requests values for the selected section when you open its Runtime view. Changing sections clears revealed values. A request to `/schemas` without a section selector still returns the full document.
 
@@ -2571,7 +2622,7 @@ settings.RequireAuthorization("SettingsAdministrators");
 
 Secret values remain masked until a user selects reveal. The JSON endpoint accepts `?revealSecrets=true` only when `AllowSecretReveal` is enabled.
 
-Masked secret getters are not evaluated. Runtime values are projected through the generated schema: recursive objects beyond the schema boundary become empty objects, and unsupported opaque values become `null`. Options or getter failures return a generic message so exception text cannot expose credentials. Schema responses use `Cache-Control: no-store`, including when secrets are revealed.
+Masked secret getters are not evaluated. The generated schema controls runtime projection. Recursive objects beyond the schema boundary become empty objects. Unsupported opaque values and non-finite floating-point values become `null`. Options or getter failures return a generic message so exception text cannot expose credentials. Schema responses use `Cache-Control: no-store`, including when secrets are revealed.
 
 Direct callers of `ValiantSettingsSchemaDocumentFactory.Create` must also enable both `revealSecrets` and `canRevealSecrets` to reveal values.
 
@@ -2622,6 +2673,8 @@ public sealed record SearchSettings(string? Endpoint);
 
 The model contributes a schema. Options registration is opt-in through `configure: true`.
 
+When a tooling project references several assemblies that generate settings, use the assembly-qualified `SettingsSchemas` type for each assembly. For example, call `StaticNorth.Valiant.Generated.Assembly_MyApp.Assembly_Configuration.SettingsSchemas.All` for `MyApp.Configuration`. The assembly name encoding is the same as for the generated [registration helpers](https://valiant.staticnorth.dev/settings/guides/binding-validation/).
+
 #### Model schema
 
 `ValiantSettingsSchema` exposes `SettingsType`, `Name`, `SectionPath`, and `Properties`.
@@ -2657,5 +2710,7 @@ Only types marked with `[ValiantSettings]` enter the incremental generator pipel
 | `VLS001` | The settings model or one of its containing types is generic |
 | `VLS002` | The settings section path is empty |
 | `VLS003` | The settings model is inaccessible from another file in the same assembly |
+| `VLS004` | Options binding requires a non-abstract class with a public parameterless constructor |
+| `VLS005` | A model expands beyond 16,384 schema properties, including collection items. Split the configuration into smaller settings models. |
 
 The section path is deliberately required so generated binding and external tooling share one unambiguous configuration identity.

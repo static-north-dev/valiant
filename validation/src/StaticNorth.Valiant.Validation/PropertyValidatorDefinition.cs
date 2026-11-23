@@ -35,7 +35,7 @@ public abstract class PropertyValidatorDefinition<T> : IPropertyValidator<T>
     /// <returns>The validation result.</returns>
     public virtual ValueTask<ValidationResult> ValidateAsync(T value, CancellationToken cancellationToken = default)
     {
-        _ = cancellationToken;
+        cancellationToken.ThrowIfCancellationRequested();
         EnterBridge();
         try
         {

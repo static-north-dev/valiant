@@ -29,7 +29,6 @@ builder.Services.AddValiantEndpoints(options =>
     options.ConfigureEndpointGroup = (group, registration) =>
     {
         group.AddEndpointFilter<ExceptionHandlingFilter>();
-        group.WithOpenApi();
     };
 
     options.ConfigureEndpoint = (endpoint, registration) =>
@@ -62,7 +61,9 @@ Set `Order` on endpoint and group marker attributes when one generated mapping m
 internal sealed class SearchOrdersEndpoint : IEndpoint { /* ... */ }
 ```
 
-Types with the same order are sorted by type name, keeping generated output deterministic.
+Within each registered assembly, Valiant creates the groups first. On .NET 11 and later targets, it then sorts grouped and standalone endpoints together by `Order` and type name. On earlier targets, it keeps the 1.2.1 order and maps the grouped endpoints before the standalone endpoints.
+
+Set `options.OrderEndpointsAcrossGroups` in `AddValiantEndpoints` to override the target's default. This setting controls the order of startup callbacks. Use ASP.NET Core's `.WithOrder()` to set route matching priority.
 
 ## Standalone endpoints
 

@@ -15,6 +15,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
 {
     private const int DictionaryLookupThreshold = 8;
     private const int MaxSchemaNestingDepth = 32;
+    private const int MaxSchemaProperties = 16_384;
     private const string SettingsAttributeMetadataName = "StaticNorth.Valiant.Settings.ValiantSettingsAttribute";
     private const string SecretAttributeMetadataName = "StaticNorth.Valiant.Settings.ValiantSecretAttribute";
     private const string ConfigurationKeyNameAttribute = "Microsoft.Extensions.Configuration.ConfigurationKeyNameAttribute";
@@ -53,6 +54,22 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         DiagnosticSeverity.Error,
         true);
 
+    private static readonly DiagnosticDescriptor UnsupportedOptionsModel = new(
+        "VLS004",
+        "Settings model cannot be bound through Options",
+        "Settings model '{0}' must be a non-abstract class with a public parameterless constructor to use configure: true",
+        "StaticNorth.Valiant.Settings",
+        DiagnosticSeverity.Error,
+        true);
+
+    private static readonly DiagnosticDescriptor SettingsSchemaTooLarge = new(
+        "VLS005",
+        "Settings schema exceeds the property limit",
+        "Settings model '{0}' expands beyond 16384 schema properties. Split the model into smaller settings sections.",
+        "StaticNorth.Valiant.Settings",
+        DiagnosticSeverity.Error,
+        true);
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var settingsModels = context.SyntaxProvider
@@ -79,15 +96,16 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
                 model.ProviderTypeName))
             .Collect()
             .WithTrackingName("Settings.Registrations");
-        var settingsRegistrationFeatures = context.CompilationProvider
-            .Select(static (compilation, _) => GetSettingsRegistrationFeatures(compilation));
+        var assemblyName = context.CompilationProvider.Select(static (compilation, _) => compilation.AssemblyName ?? string.Empty);
+        var settingsRegistrationFeatures = context.CompilationProvider.Select(static (compilation, _) => GetSettingsRegistrationFeatures(compilation));
 
         context.RegisterSourceOutput(settingsModels, static (context, model) => ExecuteDiagnostics(context, model));
         context.RegisterSourceOutput(validSettingsModels, static (context, model) => ExecuteSchemaProvider(context, model));
-        context.RegisterSourceOutput(schemaProviders, static (context, models) => ExecuteSchemaRegistry(context, models));
+        context.RegisterSourceOutput(assemblyName.Combine(schemaProviders),
+            static (context, source) => ExecuteSchemaRegistry(context, source.Left, source.Right));
         context.RegisterSourceOutput(
-            settingsRegistrationFeatures.Combine(settingsRegistrations),
-            static (context, source) => ExecuteSettingsRegistration(context, source.Left, source.Right));
+            assemblyName.Combine(settingsRegistrationFeatures).Combine(settingsRegistrations),
+            static (context, source) => ExecuteSettingsRegistration(context, source.Left.Right, source.Left.Left, source.Right));
     }
 
     private static bool IsSettingsCandidate(SyntaxNode node)
@@ -137,15 +155,24 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
                 attribute.Location ?? typeSyntax.Identifier.GetLocation());
         }
 
-        var properties = CreatePropertyModels(
-            settingsType, compilation,
-            new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), includeDefaults: true, cancellationToken);
+        if (attribute.Configure && (settingsType.TypeKind != TypeKind.Class || settingsType.IsAbstract ||
+            !settingsType.InstanceConstructors.Any(static ctor => ctor.DeclaredAccessibility == Accessibility.Public && ctor.Parameters.IsEmpty)))
+        {
+            return SettingsModel.Invalid(UnsupportedOptionsModel, settingsType.Name, fullTypeName, typeSyntax.Identifier.GetLocation());
+        }
+
+        var expansion = new SchemaExpansion();
+        var properties = CreatePropertyModels(settingsType, compilation, expansion, includeDefaults: true, cancellationToken);
+        if (expansion.Exceeded)
+        {
+            return SettingsModel.Invalid(SettingsSchemaTooLarge, settingsType.Name, fullTypeName, typeSyntax.Identifier.GetLocation());
+        }
 
         return SettingsModel.Valid(
             settingsType.Name,
             fullTypeName,
             attribute.SectionPath,
-            settingsType.IsReferenceType && attribute.Configure,
+            attribute.Configure,
             CreateProviderTypeName(fullTypeName),
             properties);
     }
@@ -184,6 +211,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.Append(model.ProviderTypeName);
         builder.AppendLine(" : global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider");
         builder.AppendLine("    {");
+        var propertyArrays = AppendPropertyArrayFields(builder, model.Properties);
         builder.Append("        public global::System.Type SettingsType => typeof(");
         builder.Append(model.FullTypeName);
         builder.AppendLine(");");
@@ -204,7 +232,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.Append(model.SectionPath is null ? "null" : ToLiteral(model.SectionPath));
         builder.AppendLine(",");
         builder.Append("                ");
-        AppendPropertyArray(builder, model.Properties, "                ");
+        AppendPropertyArrayReference(builder, model.Properties, propertyArrays);
         builder.AppendLine(");");
         builder.AppendLine("    }");
         builder.AppendLine("}");
@@ -214,6 +242,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
 
     private static void ExecuteSchemaRegistry(
         SourceProductionContext context,
+        string assemblyName,
         ImmutableArray<SettingsSchemaProviderRegistrationModel> models)
     {
         if (models.IsEmpty)
@@ -228,18 +257,19 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         var builder = new StringBuilder();
         ValiantSourceBuilder.AppendGeneratedFileHeader(builder);
         builder.AppendLine();
-        builder.AppendLine("namespace StaticNorth.Valiant.Settings");
+        var assemblyNamespace = ValiantSourceBuilder.AppendAssemblyNamespace(new StringBuilder(), assemblyName).ToString();
+        builder.Append("namespace ").AppendLine(assemblyNamespace);
         builder.AppendLine("{");
         builder.AppendLine("    /// <summary>");
         builder.AppendLine("    /// Provides access to source-generated Valiant settings schemas in the current compilation.");
         builder.AppendLine("    /// </summary>");
-        builder.AppendLine("    public static class ValiantSettingsSchemas");
+        builder.AppendLine("    public static class SettingsSchemas");
         builder.AppendLine("    {");
         builder.AppendLine("        /// <summary>");
         builder.AppendLine("        /// Gets all generated Valiant settings schema providers in the current compilation.");
         builder.AppendLine("        /// </summary>");
         builder.AppendLine("        public static global::System.Collections.Generic.IReadOnlyList<global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider> All { get; } =");
-        builder.AppendLine("            new global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider[]");
+        builder.AppendLine("            global::System.Array.AsReadOnly(new global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider[]");
         builder.AppendLine("            {");
         foreach (var model in orderedModels)
         {
@@ -248,7 +278,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             builder.AppendLine("(),");
         }
 
-        builder.AppendLine("            };");
+        builder.AppendLine("            });");
         if (orderedModels.Length > DictionaryLookupThreshold)
         {
             builder.AppendLine();
@@ -309,6 +339,24 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.AppendLine("    }");
         builder.AppendLine("}");
 
+        builder.AppendLine();
+        builder.AppendLine("namespace StaticNorth.Valiant.Settings");
+        builder.AppendLine("{");
+        builder.AppendLine("    /// <summary>Provides access to schemas generated in this assembly.</summary>");
+        builder.AppendLine("    public static class ValiantSettingsSchemas");
+        builder.AppendLine("    {");
+        builder.AppendLine("        /// <summary>Gets all generated schema providers in this assembly.</summary>");
+        builder.Append("        public static global::System.Collections.Generic.IReadOnlyList<global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider> All => global::")
+            .Append(assemblyNamespace).AppendLine(".SettingsSchemas.All;");
+        builder.AppendLine("        /// <summary>Gets the generated schema provider for the specified settings model type.</summary>");
+        builder.Append("        public static global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider Get<TSettings>() => global::")
+            .Append(assemblyNamespace).AppendLine(".SettingsSchemas.Get<TSettings>();");
+        builder.AppendLine("        /// <summary>Tries to get the generated schema provider for the specified settings model type.</summary>");
+        builder.Append("        public static bool TryGet<TSettings>(out global::StaticNorth.Valiant.Settings.IValiantSettingsSchemaProvider? provider) => global::")
+            .Append(assemblyNamespace).AppendLine(".SettingsSchemas.TryGet<TSettings>(out provider);");
+        builder.AppendLine("    }");
+        builder.AppendLine("}");
+
         context.AddSource("ValiantSettingsSchemas.g.cs", builder.ToString());
     }
 
@@ -362,6 +410,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
     private static void ExecuteSettingsRegistration(
         SourceProductionContext context,
         SettingsRegistrationFeatures features,
+        string assemblyName,
         ImmutableArray<SettingsRegistrationModel> models)
     {
         if (!features.HasSettingsRegistration ||
@@ -385,7 +434,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.AppendLine("    /// <summary>");
         builder.AppendLine("    /// Provides dependency injection registration for source-generated Valiant settings schemas.");
         builder.AppendLine("    /// </summary>");
-        builder.AppendLine("    public static class ValiantSettingsServiceCollectionExtensions");
+        builder.AppendLine("    internal static class ValiantSettingsServiceCollectionExtensions");
         builder.AppendLine("    {");
         builder.AppendLine("        /// <summary>");
         builder.AppendLine("        /// Registers generated Valiant settings schema providers with default options.");
@@ -400,6 +449,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.AppendLine("        /// </summary>");
         builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantSettings(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::System.Action<global::StaticNorth.Valiant.Settings.ValiantSettingsOptions>? configure)");
         builder.AppendLine("        {");
+        builder.AppendLine("            _ = services ?? throw new global::System.ArgumentNullException(nameof(services));");
         builder.AppendLine("            var valiantSettingsOptions = new global::StaticNorth.Valiant.Settings.ValiantSettingsOptions();");
         builder.AppendLine("            configure?.Invoke(valiantSettingsOptions);");
         builder.AppendLine();
@@ -423,6 +473,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             builder.AppendLine("        /// </summary>");
             builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantSettings(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::Microsoft.Extensions.Configuration.IConfiguration configuration, global::System.Action<global::StaticNorth.Valiant.Settings.Validation.ValiantSettingsValidationOptions>? configure)");
             builder.AppendLine("        {");
+            builder.AppendLine("            _ = services ?? throw new global::System.ArgumentNullException(nameof(services));");
             builder.AppendLine("            _ = configuration ?? throw new global::System.ArgumentNullException(nameof(configuration));");
             builder.AppendLine();
             builder.AppendLine("            var valiantSettingsValidationOptions = new global::StaticNorth.Valiant.Settings.Validation.ValiantSettingsValidationOptions();");
@@ -449,6 +500,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             builder.AppendLine("        /// </summary>");
             builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantSettings(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::Microsoft.Extensions.Configuration.IConfiguration configuration, global::System.Action<global::StaticNorth.Valiant.Settings.ValiantSettingsOptions>? configure)");
             builder.AppendLine("        {");
+            builder.AppendLine("            _ = services ?? throw new global::System.ArgumentNullException(nameof(services));");
             builder.AppendLine("            _ = configuration ?? throw new global::System.ArgumentNullException(nameof(configuration));");
             builder.AppendLine();
             builder.AppendLine("            var valiantSettingsOptions = new global::StaticNorth.Valiant.Settings.ValiantSettingsOptions();");
@@ -464,8 +516,6 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.AppendLine();
         builder.AppendLine("        private static void AddValiantSettingsCore(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::StaticNorth.Valiant.Settings.ValiantSettingsOptions options)");
         builder.AppendLine("        {");
-        builder.AppendLine("            _ = services ?? throw new global::System.ArgumentNullException(nameof(services));");
-        builder.AppendLine("            _ = options ?? throw new global::System.ArgumentNullException(nameof(options));");
         builder.AppendLine();
         builder.AppendLine("            if (!options.RegisterSchemaProviders)");
         builder.AppendLine("            {");
@@ -478,6 +528,17 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         builder.AppendLine("    }");
         builder.AppendLine("}");
 
+        const string configureSettings = ", global::System.Action<global::StaticNorth.Valiant.Settings.ValiantSettingsOptions>? configure";
+        const string configuration = ", global::Microsoft.Extensions.Configuration.IConfiguration configuration";
+        var configureBinding = features.HasValidationIntegration
+            ? ", global::System.Action<global::StaticNorth.Valiant.Settings.Validation.ValiantSettingsValidationOptions>? configure"
+            : configureSettings;
+        ValiantSourceBuilder.AppendAssemblyRegistration(builder, assemblyName, "Settings",
+            "global::StaticNorth.Valiant.Settings.DependencyInjection.ValiantSettingsServiceCollectionExtensions", "AddValiantSettings",
+            (string.Empty, string.Empty),
+            (configureSettings, ", configure"),
+            (configuration, ", configuration"),
+            (configuration + configureBinding, ", configuration, configure"));
         context.AddSource("StaticNorth.Valiant.Settings.DependencyInjection.g.cs", builder.ToString());
     }
 
@@ -510,10 +571,20 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
     private static ImmutableArray<SettingsPropertyModel> CreatePropertyModels(
         INamedTypeSymbol type,
         Compilation compilation,
-        HashSet<ITypeSymbol> visitedTypes,
+        SchemaExpansion expansion,
         bool includeDefaults,
         CancellationToken cancellationToken)
     {
+        var depth = expansion.ActiveTypes.Count;
+        if (expansion.Cache.TryGetValue(type, out var cached) &&
+            cached.TryGetValue((depth, includeDefaults), out var subtree))
+        {
+            expansion.Spend(subtree.Cost);
+            return subtree.Properties;
+        }
+
+        var startBudget = expansion.Remaining;
+        var startTruncations = expansion.Truncations;
         var properties = ImmutableArray.CreateBuilder<SettingsPropertyModel>();
         var names = new HashSet<string>(StringComparer.Ordinal);
         for (var current = type; current is not null; current = current.BaseType)
@@ -528,6 +599,11 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
                         continue;
                     }
 
+                    if (!expansion.Spend(1))
+                    {
+                        return [];
+                    }
+
                     var isSecret = HasSecretAttribute(property);
                     var includePropertyDefaults = includeDefaults && !isSecret &&
                         !SensitiveSettingsNames.IsSensitive(property.Name, configurationKey);
@@ -539,14 +615,26 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
                         isSecret,
                         includePropertyDefaults ? GetDeclaredDefault(property, compilation, cancellationToken) : null,
                         compilation,
-                        visitedTypes,
+                        expansion,
                         includePropertyDefaults,
                         cancellationToken));
                 }
             }
         }
 
-        return properties.ToImmutable();
+        var result = properties.ToImmutable();
+        if (!expansion.Exceeded && startTruncations == expansion.Truncations)
+        {
+            if (cached is null)
+            {
+                cached = [];
+                expansion.Cache.Add(type, cached);
+            }
+
+            cached.Add((depth, includeDefaults), (result, startBudget - expansion.Remaining));
+        }
+
+        return result;
     }
 
     private static bool IsSettingsProperty(IPropertySymbol property)
@@ -618,7 +706,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         bool isSecret,
         string? defaultValue,
         Compilation compilation,
-        HashSet<ITypeSymbol> visitedTypes,
+        SchemaExpansion expansion,
         bool includeDefaults,
         CancellationToken cancellationToken)
     {
@@ -629,23 +717,31 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         var nestedProperties = ImmutableArray<SettingsPropertyModel>.Empty;
 
         // Recursive generic types can produce a different constructed type on every level.
-        if ((itemType is not null || kind == SettingsPropertyKind.Object) &&
-            visitedTypes.Count < MaxSchemaNestingDepth &&
-            visitedTypes.Add(effectiveType))
+        if (itemType is not null || kind == SettingsPropertyKind.Object)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (itemType is not null)
+            if (expansion.ActiveTypes.Count >= MaxSchemaNestingDepth || !expansion.ActiveTypes.Add(effectiveType))
             {
-                item = CreatePropertyModel(
-                    itemType, "$item", "$item", false, false, null,
-                    compilation, visitedTypes, includeDefaults, cancellationToken);
+                expansion.Truncations++;
             }
-            else if (effectiveType is INamedTypeSymbol namedType)
+            else
             {
-                nestedProperties = CreatePropertyModels(namedType, compilation, visitedTypes, includeDefaults, cancellationToken);
-            }
+                cancellationToken.ThrowIfCancellationRequested();
+                if (itemType is not null)
+                {
+                    if (expansion.Spend(1))
+                    {
+                        item = CreatePropertyModel(
+                            itemType, "$item", "$item", false, false, null,
+                            compilation, expansion, includeDefaults, cancellationToken);
+                    }
+                }
+                else if (effectiveType is INamedTypeSymbol namedType)
+                {
+                    nestedProperties = CreatePropertyModels(namedType, compilation, expansion, includeDefaults, cancellationToken);
+                }
 
-            visitedTypes.Remove(effectiveType);
+                expansion.ActiveTypes.Remove(effectiveType);
+            }
         }
 
         return new SettingsPropertyModel(
@@ -659,6 +755,22 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             defaultValue,
             item,
             nestedProperties);
+    }
+
+    private sealed class SchemaExpansion
+    {
+        public HashSet<ITypeSymbol> ActiveTypes { get; } = new(SymbolEqualityComparer.Default);
+        public Dictionary<ITypeSymbol, Dictionary<(int Depth, bool Defaults), (ImmutableArray<SettingsPropertyModel> Properties, int Cost)>> Cache { get; }
+            = new(SymbolEqualityComparer.IncludeNullability);
+        public int Remaining { get; private set; } = MaxSchemaProperties;
+        public int Truncations { get; set; }
+        public bool Exceeded => Remaining < 0;
+
+        public bool Spend(int count)
+        {
+            Remaining -= count;
+            return !Exceeded;
+        }
     }
 
     private static bool HasSecretAttribute(IPropertySymbol property)
@@ -754,7 +866,9 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         }
 
         if (type is INamedTypeSymbol namedType &&
-            !IsSystemType(namedType) &&
+            (!IsSystemType(namedType) ||
+                (namedType.MetadataName == "KeyValuePair`2" &&
+                    namedType.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")) &&
             (type.TypeKind == TypeKind.Class || type.TypeKind == TypeKind.Struct))
         {
             return SettingsPropertyKind.Object;
@@ -766,8 +880,8 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
     private static bool IsSystemType(INamedTypeSymbol type)
     {
         var containingNamespace = type.ContainingNamespace?.ToDisplayString();
-        return containingNamespace is not null &&
-            containingNamespace.StartsWith("System", StringComparison.Ordinal);
+        return containingNamespace is "System" ||
+            containingNamespace?.StartsWith("System.", StringComparison.Ordinal) is true;
     }
 
     private static bool IsNullable(ITypeSymbol type)
@@ -780,30 +894,59 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         return type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
     }
 
-    private static void AppendPropertyArray(
-        StringBuilder builder,
-        ImmutableArray<SettingsPropertyModel> properties,
-        string indent)
+    private static Dictionary<ImmutableArray<SettingsPropertyModel>, string> AppendPropertyArrayFields(
+        StringBuilder builder, ImmutableArray<SettingsPropertyModel> properties)
     {
-        builder.AppendLine("new global::StaticNorth.Valiant.Settings.ValiantSettingsPropertySchema[]");
-        builder.Append(indent);
-        builder.AppendLine("{");
-        foreach (var property in properties)
-        {
-            builder.Append(indent);
-            builder.Append("    ");
-            AppendPropertySchema(builder, property, indent + "    ");
-            builder.AppendLine(",");
-        }
+        var arrays = new Dictionary<ImmutableArray<SettingsPropertyModel>, string>();
+        VisitArray(properties);
+        return arrays;
 
-        builder.Append(indent);
-        builder.Append("}");
+        void VisitArray(ImmutableArray<SettingsPropertyModel> children)
+        {
+            if (children.IsEmpty || arrays.ContainsKey(children))
+            {
+                return;
+            }
+
+            foreach (var child in children)
+            {
+                for (var property = child; property is not null; property = property.Item)
+                {
+                    VisitArray(property.Properties);
+                }
+            }
+
+            var name = "Properties" + arrays.Count.ToString(CultureInfo.InvariantCulture);
+            arrays.Add(children, name);
+            builder.Append("        private static readonly global::System.Collections.Generic.IReadOnlyList<global::StaticNorth.Valiant.Settings.ValiantSettingsPropertySchema> ")
+                .Append(name).AppendLine(" = global::System.Array.AsReadOnly(new global::StaticNorth.Valiant.Settings.ValiantSettingsPropertySchema[]");
+            builder.AppendLine("        {");
+            foreach (var child in children)
+            {
+                builder.Append("            ");
+                AppendPropertySchema(builder, child, "            ", arrays);
+                builder.AppendLine(",");
+            }
+
+            builder.AppendLine("        });");
+            builder.AppendLine();
+        }
+    }
+
+    private static void AppendPropertyArrayReference(
+        StringBuilder builder, ImmutableArray<SettingsPropertyModel> properties,
+        Dictionary<ImmutableArray<SettingsPropertyModel>, string> arrays)
+    {
+        builder.Append(properties.IsEmpty
+            ? "global::System.Array.Empty<global::StaticNorth.Valiant.Settings.ValiantSettingsPropertySchema>()"
+            : arrays[properties]);
     }
 
     private static void AppendPropertySchema(
         StringBuilder builder,
         SettingsPropertyModel property,
-        string indent)
+        string indent,
+        Dictionary<ImmutableArray<SettingsPropertyModel>, string> arrays)
     {
         builder.AppendLine("new global::StaticNorth.Valiant.Settings.ValiantSettingsPropertySchema(");
         builder.Append(indent);
@@ -846,13 +989,13 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         }
         else
         {
-            AppendPropertySchema(builder, property.Item, indent + "    ");
+            AppendPropertySchema(builder, property.Item, indent + "    ", arrays);
             builder.AppendLine(",");
         }
 
         builder.Append(indent);
         builder.Append("    ");
-        AppendPropertyArray(builder, property.Properties, indent + "    ");
+        AppendPropertyArrayReference(builder, property.Properties, arrays);
         builder.Append(")");
     }
 

@@ -9,8 +9,122 @@ using StaticNorth.Valiant.SourceGeneration.Testing;
 
 namespace StaticNorth.Valiant.Mapping.Tests;
 
-public sealed class SourceGenerationTests
+public sealed partial class SourceGenerationTests
 {
+    [Test]
+    [Arguments(ValiantMappingMode.Fast)]
+    [Arguments(ValiantMappingMode.Debuggable)]
+    public async Task Mapper_Uses_Optional_Constructor_Parameter_Defaults(ValiantMappingMode mode)
+    {
+        var assembly = CompileAndLoad(
+            """
+            using StaticNorth.Valiant.Mapping;
+
+            public sealed record Input(int Count);
+            public enum Units { Boxes, Items }
+            public sealed record Output(int Count, string Label = "preset", Units? Units = global::Units.Items, double Scale = double.PositiveInfinity);
+
+            [ValiantMapper]
+            public sealed partial class CounterMapper : MapperDefinition<Input, Output>
+            {
+                public override void Configure(MappingContext<Input, Output> context)
+                {
+                    context.Map(input => input.Count, output => output.Count);
+                }
+            }
+
+            public static class TestRunner
+            {
+                public static string Run(ValiantMappingMode mode)
+                {
+                    var result = new CounterMapper(new ValiantMappingOptions { Mode = mode }).Map(new Input(7));
+                    return $"{result.Count}/{result.Label}/{result.Units}/{double.IsPositiveInfinity(result.Scale)}";
+                }
+            }
+            """);
+
+        var actual = (string)assembly.GetType("TestRunner", throwOnError: true)!.GetMethod("Run")!.Invoke(null, [mode])!;
+        await Assert.That(actual).IsEqualTo("7/preset/Items/True");
+    }
+
+    [Test]
+    public async Task Mapper_Uses_Struct_Constructor_And_Escapes_Identifiers_In_Both_Modes()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using StaticNorth.Valiant.Mapping;
+
+            public sealed record Input(int @event);
+
+            public readonly struct Output(int @event)
+            {
+                public int @event { get; } = @event;
+            }
+
+            [ValiantMapper]
+            public sealed partial class ConventionMapper : MapperDefinition<Input, Output>;
+
+            [ValiantMapper]
+            public sealed partial class ExplicitMapper : MapperDefinition<ExplicitInput, Output>
+            {
+                public override void Configure(MappingContext<ExplicitInput, Output> context)
+                {
+                    context.Map(x => x.Value, x => x.@event);
+                }
+            }
+
+            public sealed record ExplicitInput(int Value);
+
+            public static class TestRunner
+            {
+                public static int[] Run() =>
+                [
+                    new ConventionMapper().Map(new Input(42)).@event,
+                    new ExplicitMapper(new ValiantMappingOptions { Mode = ValiantMappingMode.Fast }).Map(new ExplicitInput(41)).@event,
+                    new ExplicitMapper(new ValiantMappingOptions { Mode = ValiantMappingMode.Debuggable }).Map(new ExplicitInput(41)).@event
+                ];
+            }
+            """);
+
+        var actual = (int[])assembly.GetType("TestRunner", throwOnError: true)!.GetMethod("Run")!.Invoke(null, [])!;
+        await Assert.That(actual).IsEquivalentTo([42, 41, 41]);
+    }
+
+    [Test]
+    public async Task Mapper_Preserves_Required_Member_Initialized_By_Constructor()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using System.Diagnostics.CodeAnalysis;
+            using StaticNorth.Valiant.Mapping;
+
+            public sealed record Input(int Count);
+            public sealed class Output
+            {
+                public int Count { get; }
+                public required string Units { get; init; }
+
+                [SetsRequiredMembers]
+                public Output(int count)
+                {
+                    Count = count;
+                    Units = "items";
+                }
+            }
+
+            [ValiantMapper]
+            public sealed partial class CounterMapper : MapperDefinition<Input, Output>;
+
+            public static class TestRunner
+            {
+                public static string Run() => new CounterMapper().Map(new Input(42)).Units;
+            }
+            """);
+
+        var actual = (string)assembly.GetType("TestRunner", throwOnError: true)!.GetMethod("Run")!.Invoke(null, [])!;
+        await Assert.That(actual).IsEqualTo("items");
+    }
+
     [Test]
     public async Task Trusted_Platform_References_Exclude_Local_Generated_Assemblies()
     {
@@ -2989,7 +3103,7 @@ public sealed class SourceGenerationTests
 
     private static void RegisterMappers(System.Reflection.Assembly assembly, IServiceCollection services)
     {
-        assembly.GetType("StaticNorth.Valiant.Mapping.ValiantMappingServiceCollectionExtensions", throwOnError: true)!
+        assembly.GetExportedTypes().Single(static type => type.Name == "Mappers")
             .GetMethod("AddValiantMappers")!.Invoke(null, [services, null]);
     }
 

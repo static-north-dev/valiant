@@ -73,13 +73,25 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
             .GroupBy(property => jsonProperties[property.PropertyName], StringComparer.Ordinal);
         foreach (var propertyGroup in propertyGroups)
         {
-            if (!schema.Properties.TryGetValue(propertyGroup.Key, out var propertySchema) ||
-                propertySchema is not OpenApiSchema openApiPropertySchema)
+            if (!schema.Properties.TryGetValue(propertyGroup.Key, out var propertySchema))
             {
                 continue;
             }
 
-            ApplyMetadata(schema, propertyGroup.Key, openApiPropertySchema, propertyGroup);
+            var schemaType = propertySchema.Type;
+            if (propertySchema is OpenApiSchemaReference reference)
+            {
+                // Constraints belong to this property occurrence, not the shared component.
+                propertySchema = new OpenApiSchema { AllOf = [reference] };
+                schema.Properties[propertyGroup.Key] = propertySchema;
+            }
+
+            if (propertySchema is not OpenApiSchema openApiPropertySchema)
+            {
+                continue;
+            }
+
+            ApplyMetadata(schema, propertyGroup.Key, openApiPropertySchema, schemaType, propertyGroup);
         }
     }
 
@@ -88,9 +100,9 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var property in jsonTypeInfo.Properties)
         {
-            if (property.AttributeProvider is PropertyInfo propertyInfo)
+            if (property.AttributeProvider is MemberInfo member)
             {
-                map[propertyInfo.Name] = property.Name;
+                map[member.Name] = property.Name;
             }
 
             map.TryAdd(property.Name, property.Name);
@@ -103,6 +115,7 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
         OpenApiSchema parentSchema,
         string jsonPropertyName,
         OpenApiSchema propertySchema,
+        JsonSchemaType? schemaType,
         IEnumerable<ValiantPropertyValidationMetadata> properties)
     {
         var rules = new JsonArray();
@@ -110,12 +123,17 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
         {
             foreach (var check in property.Checks)
             {
-                rules.Add(CreateRuleExtension(check));
+                var isConditional = property.IsConditional || check.IsConditional;
+                rules.Add(CreateRuleExtension(check, isConditional));
 
-                if (!property.IsConditional && !check.IsConditional &&
-                    check.Severity is null or nameof(ValiantSeverity.Error))
+                if (!isConditional && check.Severity is null or nameof(ValiantSeverity.Error))
                 {
-                    ApplySchemaConstraint(parentSchema, jsonPropertyName, propertySchema, check);
+                    ApplySchemaConstraint(
+                        parentSchema,
+                        jsonPropertyName,
+                        propertySchema,
+                        schemaType ?? GetSizeSchemaType(property.PropertyType),
+                        check);
                 }
             }
         }
@@ -127,13 +145,13 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
         }
     }
 
-    private static JsonObject CreateRuleExtension(ValiantValidationCheckMetadata check)
+    private static JsonObject CreateRuleExtension(ValiantValidationCheckMetadata check, bool isConditional)
     {
         var rule = new JsonObject
         {
             ["kind"] = check.Kind,
             ["severity"] = check.Severity ?? "Error",
-            ["conditional"] = check.IsConditional,
+            ["conditional"] = isConditional,
             ["async"] = check.IsAsync
         };
 
@@ -176,13 +194,14 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
         OpenApiSchema parentSchema,
         string jsonPropertyName,
         OpenApiSchema propertySchema,
+        JsonSchemaType? schemaType,
         ValiantValidationCheckMetadata check)
     {
         switch (check.Kind)
         {
             case "Required":
                 MarkRequired(parentSchema, jsonPropertyName, propertySchema);
-                if (HasSchemaType(propertySchema, JsonSchemaType.String))
+                if (schemaType == JsonSchemaType.String || schemaType == (JsonSchemaType.String | JsonSchemaType.Null))
                 {
                     propertySchema.MinLength = Max(propertySchema.MinLength, 1);
                 }
@@ -192,56 +211,58 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
                 MarkRequired(parentSchema, jsonPropertyName, propertySchema);
                 break;
             case "NotEmpty":
-                ApplyMinimumSize(propertySchema, 1);
+                MarkRequired(parentSchema, jsonPropertyName, propertySchema);
+                ApplyMinimumSize(propertySchema, schemaType, 1);
                 break;
             case "LengthBetween":
                 if (TryGetInt(check, 0, out var minLength) && TryGetInt(check, 1, out var maxLength))
                 {
-                    ApplyMinimumSize(propertySchema, minLength);
-                    ApplyMaximumSize(propertySchema, maxLength);
+                    ApplyMinimumSize(propertySchema, schemaType, minLength);
+                    ApplyMaximumSize(propertySchema, schemaType, maxLength);
                 }
 
                 break;
             case "MinLength":
                 if (TryGetInt(check, 0, out var min))
                 {
-                    ApplyMinimumSize(propertySchema, min);
+                    ApplyMinimumSize(propertySchema, schemaType, min);
                 }
 
                 break;
             case "MaxLength":
                 if (TryGetInt(check, 0, out var max))
                 {
-                    ApplyMaximumSize(propertySchema, max);
+                    ApplyMaximumSize(propertySchema, schemaType, max);
                 }
 
                 break;
             case "Count":
                 if (TryGetInt(check, 0, out var count))
                 {
-                    ApplyExactSize(propertySchema, count);
+                    ApplyMinimumSize(propertySchema, schemaType, count);
+                    ApplyMaximumSize(propertySchema, schemaType, count);
                 }
 
                 break;
             case "CountBetween":
                 if (TryGetInt(check, 0, out var minCount) && TryGetInt(check, 1, out var maxCount))
                 {
-                    ApplyMinimumSize(propertySchema, minCount);
-                    ApplyMaximumSize(propertySchema, maxCount);
+                    ApplyMinimumSize(propertySchema, schemaType, minCount);
+                    ApplyMaximumSize(propertySchema, schemaType, maxCount);
                 }
 
                 break;
             case "MinCount":
                 if (TryGetInt(check, 0, out var minimumCount))
                 {
-                    ApplyMinimumSize(propertySchema, minimumCount);
+                    ApplyMinimumSize(propertySchema, schemaType, minimumCount);
                 }
 
                 break;
             case "MaxCount":
                 if (TryGetInt(check, 0, out var maximumCount))
                 {
-                    ApplyMaximumSize(propertySchema, maximumCount);
+                    ApplyMaximumSize(propertySchema, schemaType, maximumCount);
                 }
 
                 break;
@@ -268,49 +289,87 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
 
     private static void MarkRequired(OpenApiSchema parentSchema, string jsonPropertyName, OpenApiSchema propertySchema)
     {
-        _ = propertySchema;
         parentSchema.Required ??= new HashSet<string>(StringComparer.Ordinal);
         parentSchema.Required.Add(jsonPropertyName);
+        if (propertySchema.Type is { } type && type != JsonSchemaType.Null)
+        {
+            propertySchema.Type = type & ~JsonSchemaType.Null;
+            return;
+        }
+
+        if (propertySchema.Not is null)
+        {
+            propertySchema.Not = new OpenApiSchema { Type = JsonSchemaType.Null };
+        }
+        else if (propertySchema.Not is not OpenApiSchema { Type: JsonSchemaType.Null })
+        {
+            propertySchema.AllOf ??= [];
+            propertySchema.AllOf.Add(new OpenApiSchema { Not = new OpenApiSchema { Type = JsonSchemaType.Null } });
+        }
     }
 
-    private static void ApplyMinimumSize(OpenApiSchema schema, int minimum)
+    private static void ApplyMinimumSize(OpenApiSchema schema, JsonSchemaType? schemaType, int minimum)
     {
-        if (HasSchemaType(schema, JsonSchemaType.String))
+        if (minimum < 0)
         {
-            schema.MinLength = Max(schema.MinLength, minimum);
             return;
         }
 
-        if (HasSchemaType(schema, JsonSchemaType.Object))
+        switch (schemaType & ~JsonSchemaType.Null)
         {
-            schema.MinProperties = Max(schema.MinProperties, minimum);
-            return;
+            case JsonSchemaType.String:
+                schema.MinLength = Max(schema.MinLength, minimum);
+                break;
+            case JsonSchemaType.Object:
+                schema.MinProperties = Max(schema.MinProperties, minimum);
+                break;
+            case JsonSchemaType.Array:
+                schema.MinItems = Max(schema.MinItems, minimum);
+                break;
         }
-
-        schema.MinItems = Max(schema.MinItems, minimum);
     }
 
-    private static void ApplyMaximumSize(OpenApiSchema schema, int maximum)
+    private static void ApplyMaximumSize(OpenApiSchema schema, JsonSchemaType? schemaType, int maximum)
     {
-        if (HasSchemaType(schema, JsonSchemaType.String))
+        if (maximum < 0)
         {
-            schema.MaxLength = Min(schema.MaxLength, maximum);
             return;
         }
 
-        if (HasSchemaType(schema, JsonSchemaType.Object))
+        switch (schemaType & ~JsonSchemaType.Null)
         {
-            schema.MaxProperties = Min(schema.MaxProperties, maximum);
-            return;
+            case JsonSchemaType.String:
+                schema.MaxLength = Min(schema.MaxLength, maximum);
+                break;
+            case JsonSchemaType.Object:
+                schema.MaxProperties = Min(schema.MaxProperties, maximum);
+                break;
+            case JsonSchemaType.Array:
+                schema.MaxItems = Min(schema.MaxItems, maximum);
+                break;
         }
-
-        schema.MaxItems = Min(schema.MaxItems, maximum);
     }
 
-    private static void ApplyExactSize(OpenApiSchema schema, int count)
+    private static JsonSchemaType? GetSizeSchemaType(Type type)
     {
-        ApplyMinimumSize(schema, count);
-        ApplyMaximumSize(schema, count);
+        if (type == typeof(string))
+        {
+            return JsonSchemaType.String;
+        }
+
+        if (typeof(System.Collections.IDictionary).IsAssignableFrom(type) ||
+            IsGenericDictionary(type) ||
+            type.GetInterfaces().Any(IsGenericDictionary))
+        {
+            return JsonSchemaType.Object;
+        }
+
+        return typeof(System.Collections.IEnumerable).IsAssignableFrom(type) ? JsonSchemaType.Array : null;
+
+        static bool IsGenericDictionary(Type candidate) =>
+            candidate.IsGenericType &&
+            candidate.GetGenericTypeDefinition() is var definition &&
+            (definition == typeof(IDictionary<,>) || definition == typeof(IReadOnlyDictionary<,>));
     }
 
     private static void ApplyMinimum(OpenApiSchema schema, ValiantValidationCheckMetadata check, bool exclusive)
@@ -375,8 +434,8 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
         value = 0;
         return check.Arguments.Count > index &&
             decimal.TryParse(
-                check.Arguments[index].TrimEnd('m', 'M', 'd', 'D', 'f', 'F'),
-                NumberStyles.Number,
+                check.Arguments[index].TrimEnd('m', 'M', 'd', 'D', 'f', 'F', 'u', 'U', 'l', 'L'),
+                NumberStyles.Float,
                 CultureInfo.InvariantCulture,
                 out value);
     }
@@ -401,14 +460,9 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
         return FormatDecimal(TryParseDecimal(current, out var parsed) ? Math.Min(parsed, value) : value);
     }
 
-    private static bool HasSchemaType(OpenApiSchema schema, JsonSchemaType type)
-    {
-        return schema.Type is null || schema.Type.Value.HasFlag(type);
-    }
-
     private static bool TryParseDecimal(string? value, out decimal parsed)
     {
-        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed);
+        return decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed);
     }
 
     private static string FormatDecimal(decimal value)

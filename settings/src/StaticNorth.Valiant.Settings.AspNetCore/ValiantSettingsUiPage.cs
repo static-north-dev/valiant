@@ -691,6 +691,14 @@ internal static class ValiantSettingsUiPage
       text-align: right;
     }
 
+    .clipboard-status {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+
     .json-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -825,6 +833,7 @@ internal static class ValiantSettingsUiPage
         <div class="schema-list" id="schemaList"></div>
       </aside>
 
+      <div class="clipboard-status" id="clipboardStatus" role="status"></div>
       <main class="detail" id="detail">
         <div class="empty">Loading settings schemas.</div>
       </main>
@@ -837,14 +846,13 @@ internal static class ValiantSettingsUiPage
       selected: 0,
       filter: "",
       propertyFilter: "",
-      copiedKey: null,
       jsonVisible: false,
       jsonMode: "runtime",
       runtime: null,
       runtimeRequest: null,
       showRuntimeValues: false,
       canRevealSecrets: false,
-      theme: localStorage.getItem("valiant-settings-theme") || "light"
+      theme: readTheme()
     };
 
     const schemaList = document.getElementById("schemaList");
@@ -872,13 +880,13 @@ internal static class ValiantSettingsUiPage
 
       themeToggle.addEventListener("click", () => {
         state.theme = state.theme === "light" ? "dark" : "light";
-        localStorage.setItem("valiant-settings-theme", state.theme);
         applyTheme();
+        try { localStorage.setItem("valiant-settings-theme", state.theme); } catch { /* Storage can be disabled. */ }
       });
 
       detail.addEventListener("click", event => {
         const button = event.target.closest("[data-copy]");
-        if (button) copyText(button.dataset.copy || "", button.dataset.copyKey || "");
+        if (button) copyText(button);
         if (event.target.closest("[data-toggle-secrets]")) {
           const reveal = !state.runtime?.secretsRevealed;
           resetRuntime();
@@ -932,6 +940,7 @@ internal static class ValiantSettingsUiPage
       const schema = state.schemas[state.selected];
       const url = new URL(schemaUrl);
       url.searchParams.set("schemaType", schema.typeName);
+      url.searchParams.set("schemaAssembly", schema.assemblyName);
       url.searchParams.set("section", schema.sectionPath || "");
       url.searchParams.set("name", schema.name);
       if (reveal) url.searchParams.set("revealSecrets", "true");
@@ -953,6 +962,11 @@ internal static class ValiantSettingsUiPage
     function applyTheme() {
       document.documentElement.dataset.theme = state.theme;
       themeIcon.innerHTML = state.theme === "dark" ? icons.moon(13) : icons.sun(13);
+    }
+
+    function readTheme() {
+      try { return localStorage.getItem("valiant-settings-theme") === "dark" ? "dark" : "light"; }
+      catch { return "light"; }
     }
 
     function renderChrome() {
@@ -1056,10 +1070,10 @@ internal static class ValiantSettingsUiPage
             <span class="meta-label">Fully qualified name</span>
             <span class="mono">${escapeHtml(schema.typeName)}</span>
           </span>
-          <button class="copy-chip" type="button" data-copy="${escapeAttribute(schema.sectionPath || "")}" data-copy-key="section">
+          <button class="copy-chip" type="button" data-copy="${escapeAttribute(schema.sectionPath || "")}" ${schema.sectionPath ? "" : "disabled"}>
             <span class="meta-label">Section path</span>
             <span class="mono">${escapeHtml(schema.sectionPath || "No configuration section")}</span>
-            <span class="copy-icon">${copyIcon("section")}</span>
+            <span class="copy-icon">${icons.copy(13)}</span>
           </button>
           <label class="meta-chip json-view-control">
             <span class="meta-label">JSON view</span>
@@ -1190,9 +1204,9 @@ internal static class ValiantSettingsUiPage
               <div class="mono">${escapeHtml(schema.sectionPath || schema.name)}</div>
             </div>
             <div class="json-actions">
-              <button class="copy-chip" type="button" data-copy="${escapeAttribute(json)}" data-copy-key="section-json">
+              <button class="copy-chip" type="button" data-copy="${escapeAttribute(json)}">
                 <span class="meta-label">Copy</span>
-                <span class="copy-icon">${copyIcon("section-json")}</span>
+                <span class="copy-icon">${icons.copy(13)}</span>
               </button>
             </div>
           </div>
@@ -1229,9 +1243,9 @@ internal static class ValiantSettingsUiPage
               <div class="mono">${escapeHtml(schema.sectionPath || schema.name)}</div>
             </div>
             <div class="json-actions">
-              <button class="copy-chip" type="button" data-copy="${escapeAttribute(json)}" data-copy-key="runtime-values">
+              <button class="copy-chip" type="button" data-copy="${escapeAttribute(json)}">
                 <span class="meta-label">Copy</span>
-                <span class="copy-icon">${copyIcon("runtime-values")}</span>
+                <span class="copy-icon">${icons.copy(13)}</span>
               </button>
               ${state.canRevealSecrets
                 ? `<button class="copy-chip" type="button" data-toggle-secrets>
@@ -1248,7 +1262,6 @@ internal static class ValiantSettingsUiPage
 
     function renderProperty(property) {
       const meta = typeMeta(property.kind, property.typeName);
-      const copied = state.copiedKey === property.copyKey;
       const defaultMarkup = property.defaultValue != null
         ? `<span class="default-value">Declared default: ${escapeHtml(property.defaultValue === "" ? '""' : property.defaultValue)}</span>`
         : "";
@@ -1272,8 +1285,8 @@ internal static class ValiantSettingsUiPage
             <p class="property-description">${escapeHtml(descriptionForProperty(property))}</p>
             <div class="path-row">
               <code class="path-code">${escapeHtml(property.fullPath)}</code>
-              <button class="icon-button" type="button" aria-label="Copy path" data-copy="${escapeAttribute(property.fullPath)}" data-copy-key="${escapeAttribute(property.copyKey)}">
-                ${copied ? icons.check(13) : icons.copy(13)}
+              <button class="icon-button" type="button" aria-label="Copy path" data-copy="${escapeAttribute(property.fullPath)}">
+                <span class="copy-icon">${icons.copy(13)}</span>
               </button>
             </div>
           </div>
@@ -1293,8 +1306,7 @@ internal static class ValiantSettingsUiPage
       const visit = (properties, prefix, depth) => {
         (properties || []).forEach(property => {
           const fullPath = prefix ? `${prefix}:${property.configurationKey}` : property.configurationKey;
-          const copyKey = `${schema.typeName}:${fullPath}`;
-          output.push({ ...property, depth, fullPath, copyKey });
+          output.push({ ...property, depth, fullPath });
 
           if (property.item) {
             visit([{ ...property.item, name: property.item.name === "$item" ? "Item" : property.item.name, configurationKey: "$item" }], fullPath, depth + 1);
@@ -1375,23 +1387,22 @@ internal static class ValiantSettingsUiPage
       return icons.settings(size);
     }
 
-    function copyText(text, key) {
+    async function copyText(button) {
+      const text = button.dataset.copy;
       if (!text) return;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).catch(() => {});
+      const status = document.getElementById("clipboardStatus");
+      status.textContent = "";
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        status.textContent = "Could not copy to the clipboard.";
+        return;
       }
 
-      state.copiedKey = key;
-      renderSelected();
-      clearTimeout(copyText.timer);
-      copyText.timer = setTimeout(() => {
-        state.copiedKey = null;
-        renderSelected();
-      }, 1400);
-    }
-
-    function copyIcon(key) {
-      return state.copiedKey === key ? icons.check(13) : icons.copy(13);
+      status.textContent = "Copied to the clipboard.";
+      const icon = button.querySelector(".copy-icon");
+      icon.innerHTML = icons.check(13);
+      setTimeout(() => { icon.innerHTML = icons.copy(13); }, 1400);
     }
 
     function escapeHtml(value) {

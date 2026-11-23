@@ -82,7 +82,7 @@ after(async () => {
   }
 });
 
-const request = (route, options) => worker.fetch(new Request(`https://valiant.staticnorth.dev${route}`, options), env);
+const request = (route, options, assets = env.ASSETS) => worker.fetch(new Request(`https://valiant.staticnorth.dev${route}`, options), {ASSETS: assets});
 
 test('Markdown exports isolate historical, current, and default documentation and preserve code', async () => {
   assert.equal(index.defaultVersion, '2');
@@ -104,9 +104,26 @@ test('negotiation honors explicit Markdown, HTML preference, q=0, and wildcard d
   for (const accept of ['', '*/*', 'text/*', 'text/markdown;q=0', 'text/markdown;q=0, */*;q=1', 'text/markdown;q=0.2,text/html;q=0.9', 'text/markdown;q=garbage']) {
     assert.equal(prefersMarkdown(accept), false, accept);
   }
-  for (const accept of ['text/markdown', 'text/markdown, */*', 'text/markdown;q=0.9,text/html;q=0.1', 'text/markdown;q=1,text/html;q=0']) {
+  for (const accept of ['text/markdown', 'text/markdown, */*', 'text/markdown;q=0.9,text/html;q=0.1', 'text/markdown;q=1,text/html;q=0', 'text/markdown ; q=1']) {
     assert.equal(prefersMarkdown(accept), true, accept);
   }
+});
+
+test('Markdown rewriting preserves literal code and external URLs and resolves Markdown references', async () => {
+  const {transformMarkdown} = await load('scripts/markdown-content.mjs');
+  const markdown = [
+    '# Heading ##', '', '[Page](<./guide.md?example=true#heading> "Title")', '', '[ref]: ./guide.md#details', '',
+    '[External](https://example.test/guide.md)', '`[Literal](./unpublished.md)`', '',
+    '````markdown', '```', '# Inside', '[Literal](./unpublished.md)', '````', '',
+    '    [Indented code](./unpublished.md)', '', '# After the fence',
+  ].join('\n');
+  assert.equal(transformMarkdown(markdown, (file, suffix) => {
+    assert.equal(file, './guide.md');
+    return `https://valiant.staticnorth.dev/guide/${suffix}`;
+  }, 2), markdown
+    .replace('# Heading', '### Heading')
+    .replace('# After the fence', '### After the fence')
+    .replaceAll('./guide.md', 'https://valiant.staticnorth.dev/guide/'));
 });
 
 test('known pages return real Markdown, preserve cache variants, and support HEAD', async () => {
@@ -126,6 +143,16 @@ test('known pages return real Markdown, preserve cache variants, and support HEA
   assert.equal((await request('/unknown/', {headers: {Accept: 'text/markdown'}})).status, 404);
   const asset = await request('/markdown/validation.md');
   assert.equal(asset.status, 200);
+});
+
+test('negotiated routes preserve existing Link and Vary headers', async () => {
+  for (const vary of ['accept', '*']) {
+    const assets = {fetch: async () => new Response('# Guide', {headers: {Vary: vary, Link: '</original>; rel="canonical"'}})};
+    const response = await request('/validation/', {headers: {Accept: 'text/markdown'}}, assets);
+    assert.equal(response.headers.get('Vary'), vary);
+    assert.match(response.headers.get('Link'), /<\/original>; rel="canonical"/);
+    assert.match(response.headers.get('Link'), /rel="alternate"/);
+  }
 });
 
 test('HTML, Markdown, API, preflight, and error responses carry CSP and framing protection', async () => {
@@ -150,6 +177,8 @@ test('HTML uses fresh nonces and discards stale validators while Markdown retain
   const htmlEnv = {ASSETS: {fetch: async (request) => {
     assert.equal(request.headers.get('If-None-Match'), null);
     assert.equal(request.headers.get('If-Modified-Since'), null);
+    assert.equal(request.headers.get('Range'), null);
+    assert.equal(request.headers.get('If-Range'), null);
     return new Response('<html>Documentation</html>', {headers: {
       'Content-Type': 'text/html', 'Cache-Control': 'public, max-age=3600', ETag: '"original"',
       'Content-Length': '26', 'Last-Modified': 'Wed, 01 Jan 2025 00:00:00 GMT',
@@ -157,6 +186,7 @@ test('HTML uses fresh nonces and discards stale validators while Markdown retain
   }}};
   const htmlRequest = new Request('https://valiant.staticnorth.dev/validation/', {headers: {
     Accept: 'text/html', 'If-None-Match': '"original"', 'If-Modified-Since': 'Wed, 01 Jan 2025 00:00:00 GMT',
+    Range: 'bytes=0-10', 'If-Range': '"original"',
   }});
   const first = await worker.fetch(htmlRequest, htmlEnv);
   const second = await worker.fetch(htmlRequest, htmlEnv);
@@ -173,19 +203,20 @@ test('HTML uses fresh nonces and discards stale validators while Markdown retain
 });
 
 test('documentation API defaults to stable, bounds searches, and never fetches caller paths', async () => {
-  const list = await (await request('/api/docs')).json();
+  const assets = {...env.ASSETS};
+  const initialRequests = assetRequests.length;
+  const list = await (await request('/api/docs', undefined, assets)).json();
   assert.equal(list.documents.length, 5);
   assert.ok(list.documents.every((document) => document.version === '2' && !document.content));
-  const search = await (await request('/api/docs/search?query=composition&limit=1')).json();
+  const search = await (await request('/api/docs/search?query=composition&limit=1', undefined, assets)).json();
   assert.equal(search.results.length, 1);
   assert.equal(search.total, 4);
   assert.ok(search.results[0].excerpt.length <= 500);
-  const history = await (await request('/api/docs/search?query=composition&version=1')).json();
+  const history = await (await request('/api/docs/search?query=composition&version=1', undefined, assets)).json();
   assert.ok(history.results.every((document) => document.version === '1'));
-  const count = assetRequests.length;
-  const missing = await request('/api/docs/read?path=' + encodeURIComponent('/.well-known/secret'));
+  const missing = await request('/api/docs/read?path=' + encodeURIComponent('/.well-known/secret'), undefined, assets);
   assert.equal(missing.status, 404);
-  assert.deepEqual(assetRequests.slice(count), ['/agents/documents.json']);
+  assert.deepEqual(assetRequests.slice(initialRequests), ['/agents/documents.json']);
   assert.equal((await request('/api/docs/read?path=https://example.com/')).status, 400);
   assert.equal((await request('/api/docs/search?query=composition&limit=100')).status, 400);
   assert.equal((await request('/api/docs?version=missing')).status, 400);
@@ -194,6 +225,34 @@ test('documentation API defaults to stable, bounds searches, and never fetches c
   const head = await request('/api/docs', {method: 'HEAD'});
   assert.equal(head.status, 200);
   assert.equal(await head.text(), '');
+});
+
+test('status reads the small manifest without loading the document index', async () => {
+  const count = assetRequests.length;
+  const response = await request('/api/docs/status', undefined, {...env.ASSETS});
+  assert.deepEqual(await response.json(), {status: 'ok', defaultVersion: '2', sourceRevision: 'test-revision'});
+  assert.deepEqual(assetRequests.slice(count), ['/agents/documents-status.json']);
+});
+
+test('API HEAD has no body for client and server failures and unknown endpoints need no index', async () => {
+  const invalid = await request('/api/docs?version=missing', {method: 'HEAD'});
+  assert.equal(invalid.status, 400);
+  assert.equal(await invalid.text(), '');
+  const unavailable = {fetch: async () => new Response(null, {status: 404})};
+  const failure = await request('/api/docs', {method: 'HEAD'}, unavailable);
+  assert.equal(failure.status, 503);
+  assert.equal(await failure.text(), '');
+  assert.equal((await request('/api/docs/unknown', {}, unavailable)).status, 404);
+  assert.equal((await request('/api/docs', {method: 'OPTIONS'})).headers.get('Access-Control-Allow-Methods'), 'GET, HEAD, OPTIONS');
+  assert.equal((await request('/mcp', {method: 'OPTIONS'})).headers.get('Access-Control-Allow-Methods'), 'POST, OPTIONS');
+});
+
+test('search excerpts contain document text without generated frontmatter', async () => {
+  const {searchDocuments} = await load('src/agents/documentation.mjs');
+  const result = searchDocuments(index, {query: 'validation composition', module: 'validation'});
+  assert.ok(result.results[0].excerpt.includes('Validator composition'));
+  assert.doesNotMatch(result.results[0].excerpt, /source_revision:/);
+  assert.equal(searchDocuments(index, {query: 'test-revision'}).total, 0);
 });
 
 test('an unavailable documentation index is an explicit service failure', async () => {
@@ -269,6 +328,14 @@ test('WebMCP feature detection, registration, and execution use the shared read-
   const failing = {registerTool: async (tool, options) => {signal = options.signal; throw new Error('Registration rejected.');}};
   await assert.rejects(registerDocumentationTools(failing, async () => index), /Registration rejected/);
   assert.equal(signal.aborted, true);
+
+  let attempts = 0;
+  const retrying = {registerTool() {
+    if (attempts++ === 0) throw new Error('Synchronous registration failure.');
+  }};
+  await assert.rejects(registerDocumentationTools(retrying, async () => index), /Synchronous registration failure/);
+  assert.equal(await registerDocumentationTools(retrying, async () => index), true);
+  assert.equal(attempts, 4);
 });
 
 test('skill digests and catalog entries resolve to real built resources', async () => {

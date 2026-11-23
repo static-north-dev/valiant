@@ -380,7 +380,6 @@ public static class TypedPropertyValidationExtensions
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
     public static PropertyValidation<T, TCollection> CountBetween<T, TCollection>(this PropertyValidation<T, TCollection> property, int min, int max, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
-        where TCollection : System.Collections.ICollection?
     {
         if (property.ShouldSkip)
         {
@@ -398,7 +397,6 @@ public static class TypedPropertyValidationExtensions
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
     public static PropertyValidation<T, TCollection> MinCount<T, TCollection>(this PropertyValidation<T, TCollection> property, int min, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
-        where TCollection : System.Collections.ICollection?
     {
         if (property.ShouldSkip)
         {
@@ -416,7 +414,6 @@ public static class TypedPropertyValidationExtensions
     /// <param name="code">Optional error code used when this check fails.</param>
     /// <param name="message">Optional error message used when this check fails.</param>
     public static PropertyValidation<T, TCollection> MaxCount<T, TCollection>(this PropertyValidation<T, TCollection> property, int max, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
-        where TCollection : System.Collections.ICollection?
     {
         if (property.ShouldSkip)
         {

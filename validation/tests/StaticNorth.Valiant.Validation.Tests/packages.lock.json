@@ -14,12 +14,12 @@
       },
       "Microsoft.CodeAnalysis.CSharp": {
         "type": "Direct",
-        "requested": "[5.12.0, )",
-        "resolved": "5.12.0",
-        "contentHash": "6W6vBcpQFjlxog+KUGNM2fFy+XA2StC1PtnkEkechk68vFy3a28tGjEdnoA7NrxhMdr8a+zh/AmiUtBAmdkQPg==",
+        "requested": "[5.9.0, )",
+        "resolved": "5.9.0",
+        "contentHash": "7JGDA0UT1+h7k9ZcA3rF4eFC8+QPq1xyYaXxag4p8r/zzPurEJxvdi7aM+MRL/SfP7XADXpWF/pl/eUYXOq/ww==",
         "dependencies": {
-          "Microsoft.CodeAnalysis.Analyzers": "5.9.0",
-          "Microsoft.CodeAnalysis.Common": "[5.12.0]"
+          "Microsoft.CodeAnalysis.Analyzers": "5.9.0-1.26328.17",
+          "Microsoft.CodeAnalysis.Common": "[5.9.0]"
         }
       },
       "TUnit": {
@@ -52,15 +52,15 @@
       },
       "Microsoft.CodeAnalysis.Analyzers": {
         "type": "Transitive",
-        "resolved": "5.9.0",
-        "contentHash": "jMNOo+uoBGiWbZ6Wx0dqU93r5WD4P5WnIRZdoz67RP5N09OUetHgAbo4L7hihOH1NHdD2TgW5/l+SP4gQukwww=="
+        "resolved": "5.9.0-1.26328.17",
+        "contentHash": "HP9NNk8ZjOSI2hgOyXnQg+kv7/X837Vr2nAlXiGAtqtYnYKjRRa1UmQFr8KFs5ynGYKqfbb8zB9APoWjiAGdMg=="
       },
       "Microsoft.CodeAnalysis.Common": {
         "type": "Transitive",
-        "resolved": "5.12.0",
-        "contentHash": "0C7o9ys497xp0kZ64sL7C6nY/5WPQlxia28VlezdonBmjxbC6mIovAYs8mBoh/QooxBBZQCo/wMuZnV1kNk9GA==",
+        "resolved": "5.9.0",
+        "contentHash": "IYaIaUWdIx539AReKZOBEqTskFusZfCh/wFSPilDvCn5Say8MegLw2LONcSIcVy+v3Gzv53qYBspgvBGSErfbQ==",
         "dependencies": {
-          "Microsoft.CodeAnalysis.Analyzers": "5.9.0"
+          "Microsoft.CodeAnalysis.Analyzers": "5.9.0-1.26328.17"
         }
       },
       "Microsoft.DiaSymReader": {
@@ -161,7 +161,7 @@
       "staticnorth.valiant.validation.aspnetcore": {
         "type": "Project",
         "dependencies": {
-          "StaticNorth.Valiant.Validation": "[0.1.0-preview.1, )"
+          "StaticNorth.Valiant.Validation": "[1.2.1-ci.1, )"
         }
       },
       "staticnorth.valiant.validation.aspnetcore.openapi": {
@@ -169,35 +169,35 @@
         "dependencies": {
           "Microsoft.AspNetCore.OpenApi": "[11.0.0, )",
           "Microsoft.OpenApi": "[3.11.0, 4.0.0)",
-          "StaticNorth.Valiant.Validation": "[0.1.0-preview.1, )"
+          "StaticNorth.Valiant.Validation": "[1.2.1-ci.1, )"
         }
       },
       "staticnorth.valiant.validation.aspnetcore.samples": {
         "type": "Project",
         "dependencies": {
-          "StaticNorth.Valiant.Validation": "[0.1.0-preview.1, )",
-          "StaticNorth.Valiant.Validation.AspNetCore": "[0.1.0-preview.1, )",
-          "StaticNorth.Valiant.Validation.AspNetCore.OpenApi": "[0.1.0-preview.1, )"
+          "StaticNorth.Valiant.Validation": "[1.2.1-ci.1, )",
+          "StaticNorth.Valiant.Validation.AspNetCore": "[1.2.1-ci.1, )",
+          "StaticNorth.Valiant.Validation.AspNetCore.OpenApi": "[1.2.1-ci.1, )"
         }
       },
       "staticnorth.valiant.validation.mediator": {
         "type": "Project",
         "dependencies": {
           "Mediator.Abstractions": "[3.0.2, )",
-          "StaticNorth.Valiant.Validation": "[0.1.0-preview.1, )"
+          "StaticNorth.Valiant.Validation": "[1.2.1-ci.1, )"
         }
       },
       "staticnorth.valiant.validation.mediatr": {
         "type": "Project",
         "dependencies": {
           "MediatR": "[12.5.0, 12.5.0]",
-          "StaticNorth.Valiant.Validation": "[0.1.0-preview.1, )"
+          "StaticNorth.Valiant.Validation": "[1.2.1-ci.1, )"
         }
       },
       "staticnorth.valiant.validation.samples": {
         "type": "Project",
         "dependencies": {
-          "StaticNorth.Valiant.Validation": "[0.1.0-preview.1, )"
+          "StaticNorth.Valiant.Validation": "[1.2.1-ci.1, )"
         }
       },
       "staticnorth.valiant.validation.sourcegeneration": {

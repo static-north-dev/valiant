@@ -19,12 +19,13 @@ public sealed class GeneratorArchitectureTests
     }
 
     [Test]
-    public async Task Validation_Generator_Keeps_Compilation_Provider_Limited_To_Di_Feature_Gate()
+    public async Task Validation_Generator_Keeps_Compilation_Provider_Limited_To_Di_Assembly_Name()
     {
         var source = ReadRepositoryFile("validation/src/StaticNorth.Valiant.Validation.SourceGeneration/ValiantGenerator.cs");
 
         await Assert.That(CountOccurrences(source, "CompilationProvider")).IsEqualTo(1);
-        await Assert.That(source.Contains(".Select(static (compilation, _) => ValiantDependencyInjectionSymbols.HasDependencyInjection(compilation))", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(source).Contains(".Select(static (compilation, _) => ValiantDependencyInjectionSymbols.HasDependencyInjection(compilation)");
+        await Assert.That(source).Contains("? compilation.AssemblyName ?? string.Empty");
         await Assert.That(source.Contains("CompilationProvider.Combine", StringComparison.Ordinal)).IsFalse();
     }
 

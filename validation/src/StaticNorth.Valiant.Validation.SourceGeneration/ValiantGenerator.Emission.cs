@@ -31,16 +31,16 @@ public sealed partial class ValiantGenerator
 
     private static void ExecuteDependencyInjection(
         SourceProductionContext context,
-        bool hasDependencyInjection,
+        string? assemblyName,
         ImmutableArray<DependencyInjectionValidatorModel> validators,
         ImmutableArray<DependencyInjectionPropertyValidatorModel> propertyValidators)
     {
-        if (!hasDependencyInjection)
+        if (assemblyName is null)
         {
             return;
         }
 
-        context.AddSource("StaticNorth.Valiant.Validation.DependencyInjection.g.cs", SourceText.From(GenerateDependencyInjection(validators, propertyValidators), Encoding.UTF8));
+        context.AddSource("StaticNorth.Valiant.Validation.DependencyInjection.g.cs", SourceText.From(GenerateDependencyInjection(assemblyName, validators, propertyValidators), Encoding.UTF8));
     }
 
     private static void ExecuteDuplicateValidatorModelDiagnostics(
@@ -157,10 +157,12 @@ public sealed partial class ValiantGenerator
     private static void AppendConstructorXmlDocumentation(
         StringBuilder builder,
         string? namespaceName,
-        ConstructorModel constructor)
+        ConstructorModel constructor,
+        string optionsParameter)
     {
         var parameters = constructor.Parameters
             .Select(static parameter => (parameter.Name, "A constructor dependency passed through to the user-defined validator constructor."))
+            .Concat([(optionsParameter, "The validation options to use for this validator instance.")])
             .ToArray();
 
         AppendXmlDocumentation(builder, namespaceName, 1, "Initializes a new validator instance.", null, parameters);
@@ -176,6 +178,11 @@ public sealed partial class ValiantGenerator
         builder.AppendLine();
 
         var declaration = validator.Declaration;
+        if (!declaration.CanActivate && declaration.Constructor is null)
+        {
+            return;
+        }
+
         var constructor = declaration.Constructor;
         if (constructor is null)
         {
@@ -207,7 +214,13 @@ public sealed partial class ValiantGenerator
             return;
         }
 
-        AppendConstructorXmlDocumentation(builder, namespaceName, constructor);
+        var optionsParameter = "valiantValidationOptions";
+        while (constructor.Parameters.Any(parameter => parameter.Name == optionsParameter))
+        {
+            optionsParameter += "_";
+        }
+
+        AppendConstructorXmlDocumentation(builder, namespaceName, constructor, optionsParameter);
         AppendIndent(builder, 1, namespaceName);
         builder.Append("public ").Append(declaration.Name).Append('(');
         for (var index = 0; index < constructor.Parameters.Length; index++)
@@ -218,7 +231,8 @@ public sealed partial class ValiantGenerator
             }
 
             var parameter = constructor.Parameters[index];
-            builder.Append(parameter.Type).Append(' ').Append(EscapeConstructorParameter(parameter.Name));
+            builder.Append(GetConstructorParameterModifier(parameter.RefKind, declaration: true))
+                .Append(parameter.Type).Append(' ').Append(EscapeConstructorParameter(parameter.Name));
         }
 
         if (constructor.Parameters.Length > 0)
@@ -226,7 +240,7 @@ public sealed partial class ValiantGenerator
             builder.Append(", ");
         }
 
-        builder.Append("global::StaticNorth.Valiant.Validation.ValiantValidationOptions valiantValidationOptions) : this(");
+        builder.Append("global::StaticNorth.Valiant.Validation.ValiantValidationOptions ").Append(optionsParameter).Append(") : this(");
         for (var index = 0; index < constructor.Parameters.Length; index++)
         {
             if (index > 0)
@@ -234,14 +248,17 @@ public sealed partial class ValiantGenerator
                 builder.Append(", ");
             }
 
-            builder.Append(EscapeConstructorParameter(constructor.Parameters[index].Name));
+            var parameter = constructor.Parameters[index];
+            builder.Append(GetConstructorParameterModifier(parameter.RefKind, declaration: false))
+                .Append(EscapeConstructorParameter(parameter.Name));
         }
 
         builder.AppendLine(")");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("{");
         AppendIndent(builder, 2, namespaceName);
-        builder.AppendLine("_valiantValidationOptions = valiantValidationOptions ?? throw new global::System.ArgumentNullException(nameof(valiantValidationOptions));");
+        builder.Append("_valiantValidationOptions = ").Append(optionsParameter)
+            .Append(" ?? throw new global::System.ArgumentNullException(nameof(").Append(optionsParameter).AppendLine("));");
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
         builder.AppendLine();
@@ -277,9 +294,23 @@ public sealed partial class ValiantGenerator
     {
         return validatorSymbol.InstanceConstructors
             .Where(static constructor => !constructor.IsImplicitlyDeclared && constructor.DeclaredAccessibility == Accessibility.Public)
-            .OrderByDescending(static constructor => constructor.Parameters.Length)
+            .OrderByDescending(CanActivateConstructor)
+            .ThenByDescending(static constructor => constructor.Parameters.Length)
             .FirstOrDefault();
     }
+
+    private static bool CanActivateConstructor(IMethodSymbol constructor) =>
+        constructor.DeclaredAccessibility == Accessibility.Public &&
+        constructor.Parameters.All(static parameter => parameter.RefKind == RefKind.None);
+
+    private static string GetConstructorParameterModifier(RefKind refKind, bool declaration) => refKind switch
+    {
+        RefKind.Ref => "ref ",
+        RefKind.Out => "out ",
+        RefKind.In => "in ",
+        RefKind.RefReadOnlyParameter => declaration ? "ref readonly " : "in ",
+        _ => string.Empty
+    };
 
     private static void AppendStatusMethods(
         StringBuilder builder,
@@ -915,10 +946,12 @@ public sealed partial class ValiantGenerator
             validator.Declaration.Type,
             validator.ModelType!,
             validator.Declaration.MetadataProviderType,
-            validator.RegisterAsDefault);
+            validator.RegisterAsDefault,
+            validator.Declaration.CanActivate);
     }
 
     private static string GenerateDependencyInjection(
+        string assemblyName,
         ImmutableArray<DependencyInjectionValidatorModel> validators,
         ImmutableArray<DependencyInjectionPropertyValidatorModel> propertyValidators)
     {
@@ -929,7 +962,7 @@ public sealed partial class ValiantGenerator
         builder.AppendLine("    /// <summary>");
         builder.AppendLine("    /// Provides dependency injection registration helpers for Valiant validators discovered by the source generator.");
         builder.AppendLine("    /// </summary>");
-        builder.AppendLine("    public static class ValiantServiceCollectionExtensions");
+        builder.AppendLine("    internal static class ValiantServiceCollectionExtensions");
         builder.AppendLine("    {");
         builder.AppendLine("        /// <summary>");
         builder.AppendLine("        /// Registers all Valiant validators discovered in the current compilation.");
@@ -951,19 +984,25 @@ public sealed partial class ValiantGenerator
 
         foreach (var validator in validators.OrderBy(static validator => validator.ValidatorType, StringComparer.Ordinal))
         {
-            builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, CreateValidatorDescriptor<")
-                .Append(validator.ValidatorType)
-                .Append(", ")
-                .Append(validator.ValidatorType)
-                .AppendLine(">(valiantValidationOptions.Lifetime));");
+            if (validator.CanActivate)
+            {
+                builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, CreateValidatorDescriptor<")
+                    .Append(validator.ValidatorType)
+                    .Append(", ")
+                    .Append(validator.ValidatorType)
+                    .AppendLine(">(valiantValidationOptions.Lifetime));");
+            }
 
             if (validator.RegisterAsDefault)
             {
-                builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, CreateValidatorDescriptor<global::StaticNorth.Valiant.Validation.IValidator<")
-                    .Append(validator.ModelType)
-                    .Append(">, ")
-                    .Append(validator.ValidatorType)
-                    .AppendLine(">(valiantValidationOptions.Lifetime));");
+                if (validator.CanActivate)
+                {
+                    builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, CreateValidatorDescriptor<global::StaticNorth.Valiant.Validation.IValidator<")
+                        .Append(validator.ModelType)
+                        .Append(">, ")
+                        .Append(validator.ValidatorType)
+                        .AppendLine(">(valiantValidationOptions.Lifetime));");
+                }
 
                 builder.Append("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton<global::StaticNorth.Valiant.Validation.IValiantValidationMetadataProvider, ")
                     .Append(validator.MetadataProviderType)
@@ -1021,6 +1060,9 @@ public sealed partial class ValiantGenerator
         builder.AppendLine("    }");
         builder.AppendLine("}");
 
+        AppendAssemblyRegistration(builder, assemblyName, "Validators",
+            "global::StaticNorth.Valiant.Validation.DependencyInjection.ValiantServiceCollectionExtensions", "AddValiantValidators",
+            (", global::System.Action<global::StaticNorth.Valiant.Validation.ValiantValidationOptions>? configure = null", ", configure"));
         return builder.ToString();
     }
 
@@ -1410,7 +1452,7 @@ public sealed partial class ValiantGenerator
 
     private static string GetComparisonFailureCondition(RuleModel rule, string localName, string argument, string comparison)
     {
-        var condition = "global::System.Collections.Generic.Comparer<" + rule.PropertyType + ">.Default.Compare(" + localName + ", " + argument + ") " + comparison;
+        var condition = GetComparisonExpression(rule, localName, argument) + " " + comparison;
         return rule.IsNullableValueType
             ? localName + ".HasValue && " + condition
             : condition;
@@ -1424,12 +1466,25 @@ public sealed partial class ValiantGenerator
         string upperArgument,
         string upperComparison)
     {
-        var lowerCondition = "global::System.Collections.Generic.Comparer<" + rule.PropertyType + ">.Default.Compare(" + localName + ", " + lowerArgument + ") " + lowerComparison;
-        var upperCondition = "global::System.Collections.Generic.Comparer<" + rule.PropertyType + ">.Default.Compare(" + localName + ", " + upperArgument + ") " + upperComparison;
+        var lowerCondition = GetComparisonExpression(rule, localName, lowerArgument) + " " + lowerComparison;
+        var upperCondition = GetComparisonExpression(rule, localName, upperArgument) + " " + upperComparison;
         var condition = lowerCondition + " || " + upperCondition;
         return rule.IsNullableValueType
             ? localName + ".HasValue && (" + condition + ")"
             : condition;
+    }
+
+    private static string GetComparisonExpression(RuleModel rule, string localName, string argument)
+    {
+        // Comparison attributes take Int32 bounds, which need not fit in the annotated integer type.
+        if (rule.PropertyType is "byte" or "byte?" or "sbyte" or "sbyte?" or "short" or "short?" or
+            "ushort" or "ushort?" or "uint" or "uint?" or "ulong" or "ulong?")
+        {
+            var value = rule.IsNullableValueType ? localName + ".Value" : localName;
+            return "global::System.Decimal.Compare((decimal)" + value + ", " + argument + ")";
+        }
+
+        return "global::System.Collections.Generic.Comparer<" + rule.PropertyType + ">.Default.Compare(" + localName + ", " + argument + ")";
     }
 
     private static string GetDefaultMessageExpression(RuleModel rule, RuleCheck check)

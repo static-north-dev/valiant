@@ -142,7 +142,6 @@ public static class CollectionPropertyValidationExtensions
     /// <param name="message">Optional error message used when this check fails.</param>
     /// <param name="severity">The severity level of the validation failure.</param>
     public static PropertyValidation<T, TCollection> Count<T, TCollection>(this PropertyValidation<T, TCollection> property, int count, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
-        where TCollection : System.Collections.ICollection?
     {
         if (property.ShouldSkip)
         {
@@ -336,8 +335,8 @@ public static class CollectionPropertyValidationExtensions
                 {
                     var itemContext = new ValidationContext<TItem>(item, property.Context.CreateChildPropertyPathPrefix(property.PropertyName, index));
                     configure(itemContext, collection, state);
-                    property.Context.AddFailures(itemContext.ToResult().Failures);
-                    if (property.Context.ShouldStopValidation)
+                    property.AddNestedFailures(itemContext.ToResult());
+                    if (property.ShouldSkip)
                     {
                         break;
                     }
@@ -364,8 +363,8 @@ public static class CollectionPropertyValidationExtensions
                 {
                     var itemContext = new ValidationContext<TItem>(item, property.Context.CreateChildPropertyPathPrefix(property.PropertyName, index));
                     configure(itemContext, collection, state);
-                    property.Context.AddFailures((await itemContext.ToResultAsync(cancellationToken).ConfigureAwait(false)).Failures);
-                    if (property.Context.ShouldStopValidation)
+                    property.AddNestedFailures(await itemContext.ToResultAsync(cancellationToken).ConfigureAwait(false));
+                    if (property.ShouldSkip)
                     {
                         break;
                     }

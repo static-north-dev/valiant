@@ -1,0 +1,15 @@
+<Project>
+  <ItemGroup>
+    <_ValiantCSharpRequirement Include="$(MSBuildThisFileName)" MinimumVersion="8.0"
+          Condition="'$(MSBuildThisFileName)' == 'StaticNorth.Valiant.Mapping' or '$(MSBuildThisFileName)' == 'StaticNorth.Valiant.Settings'" />
+    <_ValiantCSharpRequirement Include="$(MSBuildThisFileName)" MinimumVersion="9.0"
+          Condition="'$(MSBuildThisFileName)' == 'StaticNorth.Valiant.Validation'" />
+    <_ValiantCSharpRequirement Include="$(MSBuildThisFileName)" MinimumVersion="11.0"
+          Condition="'$(MSBuildThisFileName)' == 'StaticNorth.Valiant.Endpoints.AspNetCore'" />
+  </ItemGroup>
+  <Target Name="CheckValiantCSharpVersion" BeforeTargets="CoreCompile"
+          Condition="'$(Language)' == 'C#' and $([System.Text.RegularExpressions.Regex]::IsMatch('$(LangVersion)', '^\d+(\.\d+)?$'))">
+    <Error Code="VALIANT001" Condition="$([MSBuild]::VersionLessThan('$(LangVersion)', '%(_ValiantCSharpRequirement.MinimumVersion)'))"
+           Text="%(_ValiantCSharpRequirement.Identity) requires C# %(_ValiantCSharpRequirement.MinimumVersion) or later. Set &lt;LangVersion&gt;%(_ValiantCSharpRequirement.MinimumVersion)&lt;/LangVersion&gt; (or later) in the project." />
+  </Target>
+</Project>

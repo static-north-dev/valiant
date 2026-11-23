@@ -10,7 +10,7 @@ Valiant query binding is disabled by default, leaving request parameters to nati
 ```csharp
 using StaticNorth.Valiant.Endpoints.AspNetCore;
 
-[assembly: ValiantGenerateQueryBinding]
+[assembly: ValiantGenerateQueryBinding(UseStrictBinding = true)]
 ```
 
 Register the endpoint assembly with `AddValiantEndpoints`. The host can configure the parsing formats for whole-request and `[AsParameters]` binding.
@@ -20,12 +20,15 @@ builder.Services.AddValiantEndpoints(options =>
 {
     options.QueryParameters.Parsing = new QueryParsingOptions
     {
+        UseStrictBinding = true,
         SupportedObjectFormats = [QueryObjectFormat.Flat, QueryObjectFormat.DotNotation]
     };
 });
 ```
 
 Existing projects can still opt into generation with a direct literal `true` assignment in the `AddValiantEndpoints` setup lambda in the endpoint assembly. The assembly attribute also works when registration lives in a helper or a different assembly.
+
+These examples select strict binding on every target. With both settings omitted, .NET 11 and later targets default to strict binding, and earlier targets use 1.2.1 behavior. The runtime setting controls full-query parsing, alias binding, required members, and structured whole-request errors. The assembly setting selects strict generated `TryParse` methods.
 
 :::caution Compile-time boundary
 
@@ -65,11 +68,13 @@ public sealed record CarFilter
 ```
 
 Valiant emits `BindAsync(HttpContext, ParameterInfo)` on `ListCarsRequest`. Only root properties marked `[FromQuery]` with public setters participate, including public `init` accessors. Set `[FromQuery(Name = "filter")]` to use a query key different from the CLR property name. Nested filter members use their public property names.
+
+Omitting a `required` query property on the request or on a supplied nested query object returns a `MissingQueryValue` error with its full path. A constructor marked with `[SetsRequiredMembers]` can supply defaults.
 If the request is nested inside an endpoint or another type, every containing declaration must also be `partial` so generated code can reopen the complete declaration chain.
 
 ## `[AsParameters]`
 
-ASP.NET Core first constructs the request. A Valiant endpoint filter then applies the supplied `[FromQuery]` values using the configured formats and aliases. Properties with no matching query key keep their existing values.
+ASP.NET Core first constructs the request. The Valiant binder applies supplied `[FromQuery]` values using the configured formats and aliases before other endpoint filters run. Properties using their own native parser keep the value ASP.NET Core bound. Properties with no matching query key keep their existing values.
 
 ```csharp
 return builder.MapGet("/cars", static ([AsParameters] ListCarsRequest request) =>
@@ -88,7 +93,7 @@ public sealed partial record CarFilter
 }
 ```
 
-The complex `[FromQuery]` type must be `partial` in this shape. Valiant generates a `TryParse(string, out T)` shim because ASP.NET Core checks property bindability before endpoint filters run.
+The complex `[FromQuery]` type must be `partial` in this shape. Valiant generates a `TryParse(string, out T)` method that reads JSON for native ASP.NET Core property binding. Valiant applies the endpoint's configured parsing policy when it binds the full query.
 The same containing-type rule applies when that complex type is nested.
 
 The Valiant filter reparses the query only after native parameter binding succeeds. For example, ASP.NET Core rejects comma-separated `?ids=1,2,3` for an `int[] Ids` property and controls the resulting HTTP response. Use generated whole-request binding when every configured format must work without native `[AsParameters]` constraints.
@@ -116,11 +121,11 @@ public sealed class CarsEndpoint : IEndpoint
 }
 ```
 
-The policy is compiled into the generated method. JSON is enabled when the policy attribute is absent or parameterless. Explicit `Disabled` returns HTTP 400. The array and object formats apply to full-query binding only. User-authored `TryParse` methods keep their own behavior. Conflicting policies for the same generated parser type report `VLE011`.
+The policy is compiled into the generated method. JSON is enabled when the policy attribute is absent or parameterless. In strict mode, generated `TryParse` returns `false` for malformed or disabled JSON. In 1.2.1 compatibility mode, it throws `BadHttpRequestException`. ASP.NET Core returns HTTP 400 in both modes. The array and object formats apply to full-query binding only. User-authored `TryParse` methods keep their own behavior. Conflicting policies for the same generated parser type report `VLE011`.
 
 ## Failure response
 
-For example, `/cars?filter.year=abc` produces HTTP 400 in both full-query examples. On mapped Valiant endpoints, both the whole-request binder and the Valiant `[AsParameters]` filter return a JSON array with an `InvalidQueryValue` error for `Filter.Year` when Valiant handles the binding failure. Each entry identifies a `Path`, stable `Code`, human-readable `Message`, and `Kind` (`Validation` or `Configuration`).
+For example, `/cars?filter.year=abc` produces HTTP 400 in both full-query examples. With strict parsing, both the whole-request binder and the Valiant `[AsParameters]` filter return a JSON array with an `InvalidQueryValue` error for `Filter.Year` when Valiant handles the binding failure. In 1.2.1 compatibility mode, ASP.NET Core handles whole-request binding errors. Each structured entry identifies a `Path`, stable `Code`, human-readable `Message`, and `Kind` (`Validation` or `Configuration`).
 
 ## Configure accepted formats
 
@@ -154,7 +159,7 @@ return builder.MapGet("/search", Handle)
     });
 ```
 
-This is a full replacement, not a merge. Other endpoints continue using the global parsing options.
+This replaces the base parsing options with a snapshot taken when the convention is added. Explicit source-generated overrides still take precedence.
 
 When only selected settings differ, use a partial attribute override:
 
@@ -178,6 +183,6 @@ public sealed partial class SearchEndpoint : IEndpoint
 }
 ```
 
-Explicit attribute properties win over `.WithQueryParsingOptions(...)`, which wins over global parsing options and then defaults. Omitted or `null` array properties inherit; `[]` disables every format in that category. The array and object properties affect full-query binding only. Explicit `JsonValues` affects full-query binding and generated direct complex `[FromQuery]`; when omitted, full-query binding inherits while direct JSON remains enabled.
+Explicit attribute properties win over `.WithQueryParsingOptions(...)`, conditional registration, global parsing options, and then defaults, in that order. Omitted or `null` array properties inherit. An empty array disables every format in that category. The array and object formats affect full-query binding only. Explicit `JsonValues` affects full-query binding and generated direct complex `[FromQuery]`. When omitted, full-query binding inherits and direct JSON remains enabled.
 
 See the [query parameter reference](../reference/query-parameters.md) for all formats and direct parser/serializer APIs.

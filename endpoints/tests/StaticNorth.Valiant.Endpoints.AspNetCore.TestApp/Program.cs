@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using StaticNorth.Valiant.Endpoints.AspNetCore;
 using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 using StaticNorth.Valiant.Endpoints.AspNetCore.TestApp;
@@ -22,5 +23,6 @@ builder.Services.AddValiantEndpoints(options =>
 var app = builder.Build();
 
 app.MapValiantEndpoints();
+app.MapGet("/integration/query/native", ([FromQuery] QueryFilter filter) => filter);
 
 app.Run();

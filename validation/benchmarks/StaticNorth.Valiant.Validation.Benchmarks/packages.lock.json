@@ -189,12 +189,12 @@
       "staticnorth.valiant.validation.aspnetcore": {
         "type": "Project",
         "dependencies": {
-          "StaticNorth.Valiant.Validation": "[0.1.0-preview.1, )"
+          "StaticNorth.Valiant.Validation": "[1.2.1-ci.1, )"
         }
       },
       "Microsoft.CodeAnalysis.CSharp": {
         "type": "CentralTransitive",
-        "requested": "[5.12.0, )",
+        "requested": "[5.9.0, )",
         "resolved": "5.6.0",
         "contentHash": "r1DrKQ/L0xTw03wJrLr36AMQNslyaeEKBFyFmQcOKa8HX3YvmhY//JEUafb6IR/m0gmaUVCfBTWitKJRNb7YAA==",
         "dependencies": {

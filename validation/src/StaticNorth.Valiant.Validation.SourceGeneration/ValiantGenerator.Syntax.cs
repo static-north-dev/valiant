@@ -124,8 +124,22 @@ public sealed partial class ValiantGenerator
             expression is PostfixUnaryExpressionSyntax postfix && (postfix.IsKind(SyntaxKind.PostIncrementExpression) || postfix.IsKind(SyntaxKind.PostDecrementExpression));
     }
 
-    private static MethodDeclarationSyntax? FindConfigureMethod(INamedTypeSymbol validatorSymbol, string configureMethodName, CancellationToken cancellationToken)
+    private static MethodDeclarationSyntax? FindConfigureMethod(
+        INamedTypeSymbol validatorSymbol,
+        ITypeSymbol modelType,
+        string configureMethodName,
+        CancellationToken cancellationToken)
     {
+        foreach (var method in validatorSymbol.GetMembers(configureMethodName).OfType<IMethodSymbol>())
+        {
+            if (method.DeclaredAccessibility == Accessibility.Public &&
+                HasConfigureParameter(method, modelType) &&
+                method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax(cancellationToken) is MethodDeclarationSyntax declaration)
+            {
+                return declaration;
+            }
+        }
+
         foreach (var reference in validatorSymbol.DeclaringSyntaxReferences)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -145,6 +159,16 @@ public sealed partial class ValiantGenerator
         }
 
         return null;
+    }
+
+    private static bool HasConfigureParameter(IMethodSymbol method, ITypeSymbol modelType)
+    {
+        return method.Arity == 0 &&
+            method.Parameters.Length == 1 &&
+            method.Parameters[0] is { RefKind: RefKind.None, Type: INamedTypeSymbol parameter } &&
+            parameter.OriginalDefinition.MetadataName == "ValidationContext`1" &&
+            parameter.ContainingNamespace.ToDisplayString() == "StaticNorth.Valiant.Validation" &&
+            SymbolEqualityComparer.Default.Equals(parameter.TypeArguments[0], modelType);
     }
 
     private static string GetConfigureMethodName(AttributeData attribute)

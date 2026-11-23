@@ -182,7 +182,7 @@ public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(Dynamica
     {
         var targetType = typeof(TTarget);
         boundParameters = [];
-        if (targetType.IsValueType)
+        if (targetType.IsValueType && constructorParameterTypes is not { Length: > 0 })
         {
             return Activator.CreateInstance<TTarget>();
         }
@@ -205,8 +205,10 @@ public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(Dynamica
             for (var index = 0; index < parameters.Length; index++)
             {
                 var parameter = parameters[index];
-                arguments[index] = GetDefault(parameter.ParameterType);
-                if (HasActiveIgnore(parameter.Name!))
+                var parameterType = parameter.ParameterType;
+                var argumentType = parameterType.IsByRef ? parameterType.GetElementType()! : parameterType;
+                arguments[index] = GetConstructorDefault(parameter, argumentType);
+                if (HasActiveIgnore(parameter.Name!, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -214,7 +216,7 @@ public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(Dynamica
                 foreach (var map in _maps)
                 {
                     if (string.Equals(map.TargetMember.Name, parameter.Name, StringComparison.OrdinalIgnoreCase) &&
-                        TryGetMappedValue(map, parameter.ParameterType, resolveMapper, out var value))
+                        TryGetMappedValue(map, argumentType, resolveMapper, out var value))
                     {
                         arguments[index] = value;
                         break;
@@ -227,6 +229,20 @@ public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(Dynamica
         }
 
         throw new InvalidOperationException("Target type '" + targetType.FullName + "' does not have a public constructor.");
+    }
+
+    private static object? GetConstructorDefault(ParameterInfo parameter, Type argumentType)
+    {
+        if (!parameter.HasDefaultValue)
+        {
+            return GetDefault(argumentType);
+        }
+
+        var value = parameter.DefaultValue;
+        var enumType = Nullable.GetUnderlyingType(argumentType);
+        return value is not null && enumType is { IsEnum: true } && value.GetType() != enumType
+            ? Enum.ToObject(enumType, value)
+            : value;
     }
 
     private void ApplyAssignments(object target, ParameterInfo[] parameters, string[]? initializerMembers, Func<Type, object?>? resolveMapper)
@@ -279,11 +295,11 @@ public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(Dynamica
         return map.Fallback is not null;
     }
 
-    private bool HasActiveIgnore(string targetName)
+    private bool HasActiveIgnore(string targetName, StringComparison comparison = StringComparison.Ordinal)
     {
         foreach (var ignore in _ignores)
         {
-            if (string.Equals(ignore.TargetMember.Name, targetName, StringComparison.OrdinalIgnoreCase) &&
+            if (string.Equals(ignore.TargetMember.Name, targetName, comparison) &&
                 (ignore.Condition is null || ignore.Condition(Source)))
             {
                 return true;
@@ -384,7 +400,8 @@ public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(Dynamica
     [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Reflection collection mapping is used only by the debuggable runtime mapping backend.")]
     private static bool TryGetEnumerableElementType(Type type, out Type elementType)
     {
-        if (type.IsArray)
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        if (type.IsArray && type.GetArrayRank() == 1)
         {
             elementType = type.GetElementType()!;
             return true;
@@ -411,9 +428,16 @@ public sealed class MappingContext<TSource, [DynamicallyAccessedMembers(Dynamica
 
     private static MemberInfo GetSelectedMember(LambdaExpression expression)
     {
-        return expression.Body is MemberExpression memberExpression
+        var body = expression.Body;
+        if (body is UnaryExpression { NodeType: ExpressionType.Convert, Method: null } conversion &&
+            body.Type.IsAssignableFrom(conversion.Operand.Type))
+        {
+            body = conversion.Operand;
+        }
+
+        return body is MemberExpression memberExpression && memberExpression.Expression == expression.Parameters[0]
             ? memberExpression.Member
-            : throw new ArgumentException("Selector must be a member expression.", nameof(expression));
+            : throw new ArgumentException("Selector must select a direct target field or property.", nameof(expression));
     }
 
     private static Type GetMemberType(MemberInfo member)

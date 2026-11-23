@@ -12,6 +12,13 @@ namespace StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure;
 public static class ValiantEndpointGeneratedCode
 {
     /// <summary>
+    /// Gets whether to map grouped and standalone endpoints in a single order.
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static bool OrderEndpointsAcrossGroups(IEndpointRouteBuilder builder) =>
+        ValiantEndpointRouteBuilderExtensions.GetOptions(builder).OrderEndpointsAcrossGroups;
+
+    /// <summary>
     /// Creates the binding failure handled by the mapped endpoint.
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
@@ -193,7 +200,16 @@ public static class ValiantEndpointGeneratedCode
     public static T BindQueryRequest<T>(HttpContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        var query = new QueryStringParser.QueryInput(context.Request.QueryString.Value, ResolveQueryParsingOptions(context));
+        var options = ResolveQueryParsingOptions(context);
+        var queryString = context.Request.QueryString.Value;
+        if (!options.UseStrictBinding)
+        {
+            var result = QueryStringParser.Parse<T>(queryString, options);
+            return result.IsSuccess ? result.Value! : throw new BadHttpRequestException(
+                result.Errors[0].Message, StatusCodes.Status400BadRequest);
+        }
+
+        var query = new QueryStringParser.QueryInput(queryString, options, QueryStringParser.GetEndpointQueryAliases(typeof(T)));
         var value = query.BindEndpointRequest(typeof(T), instance: null, out var errors);
         return errors.Count == 0 ? (T)value! : throw CreateQueryBindingException(errors);
     }

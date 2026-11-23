@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -16,6 +17,28 @@ namespace StaticNorth.Valiant.Settings.Tests;
 
 public sealed class SourceGenerationTests
 {
+    [Test]
+    public async Task Settings_Schema_Shares_Repeated_Subtrees_And_Limits_Expanded_Size()
+    {
+        static string CreateModel(int depth) =>
+            "using StaticNorth.Valiant.Settings; [ValiantSettings(\"Root\")] " +
+            string.Join("\n", Enumerable.Range(0, depth).Select(index => index == depth - 1
+                ? $"public sealed class Node{index} {{ public int Value {{ get; set; }} }}"
+                : $"public sealed class Node{index} {{ public Node{index + 1} A {{ get; set; }} " +
+                  $"public Node{index + 1} B {{ get; set; }} public Node{index + 1} C {{ get; set; }} }}"));
+
+        var compact = RunGenerator(CreateModel(7));
+        var schema = compact.GeneratedSources.Single(static source =>
+            source.HintName.EndsWith(".ValiantSettingsSchema.g.cs", StringComparison.Ordinal));
+        await Assert.That(compact.Diagnostics).IsEmpty();
+        await Assert.That(schema.SourceText.Length < 30_000).IsTrue();
+
+        var oversized = RunGenerator(CreateModel(10));
+        await Assert.That(oversized.Diagnostics.Select(static diagnostic => diagnostic.Id)).Contains("VLS005");
+        await Assert.That(oversized.GeneratedSources.Any(static source =>
+            source.HintName.EndsWith(".ValiantSettingsSchema.g.cs", StringComparison.Ordinal))).IsFalse();
+    }
+
     [Test]
     public async Task Trusted_Platform_References_Exclude_The_Executing_Test_Assembly()
     {
@@ -59,11 +82,42 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
+    public async Task Generated_Registry_Exposes_An_Assembly_Qualified_Read_Only_List()
+    {
+        const string source = """
+            using StaticNorth.Valiant.Settings;
+            [ValiantSettings("Example")]
+            public sealed class ExampleSettings { public Systematic.Example Value { get; set; } = new(); }
+            namespace Systematic
+            {
+                public sealed class Example { public string Region { get; set; } = "EU"; }
+            }
+            """;
+        var first = CompileAndLoad(source, "Settings.One-Library");
+        var second = CompileAndLoad(source, "Settings.OtherLibrary");
+        var firstRegistry = first.GetType("StaticNorth.Valiant.Generated.Assembly_Settings.Assembly_One_002DLibrary.SettingsSchemas", throwOnError: true)!;
+        var secondRegistry = second.GetType("StaticNorth.Valiant.Generated.Assembly_Settings.Assembly_OtherLibrary.SettingsSchemas", throwOnError: true)!;
+        var firstProviders = (IReadOnlyList<IValiantSettingsSchemaProvider>)firstRegistry.GetProperty("All")!.GetValue(null)!;
+        var secondProviders = (IReadOnlyList<IValiantSettingsSchemaProvider>)secondRegistry.GetProperty("All")!.GetValue(null)!;
+        var legacy = first.GetType("StaticNorth.Valiant.Settings.ValiantSettingsSchemas", throwOnError: true)!;
+
+        await Assert.That(ReferenceEquals(legacy.GetProperty("All")!.GetValue(null), firstProviders)).IsTrue();
+        await Assert.That(((IList<IValiantSettingsSchemaProvider>)firstProviders).IsReadOnly).IsTrue();
+        await Assert.That(firstProviders[0].SettingsType.Assembly).IsEqualTo(first);
+        await Assert.That(secondProviders[0].SettingsType.Assembly).IsEqualTo(second);
+        await Assert.That(firstProviders[0].Schema.Properties[0].Kind).IsEqualTo(ValiantSettingsPropertyKind.Object);
+        await Assert.That(firstProviders[0].Schema.Properties[0].Properties[0].DefaultValue).IsEqualTo("EU");
+    }
+
+    [Test]
     public async Task Inherited_Properties_Preserve_Secrets_Overrides_And_Public_Getter_Visibility()
     {
         var assembly = CompileAndLoad(
             """
+            using Microsoft.Extensions.DependencyInjection;
+            using Microsoft.Extensions.Options;
             using StaticNorth.Valiant.Settings;
+            using StaticNorth.Valiant.Settings.AspNetCore;
             [ValiantSettings("Inherited")]
             public sealed class Derived : Base
             {
@@ -77,6 +131,17 @@ public sealed class SourceGenerationTests
                 public string Hidden { get; set; } = "";
                 public string Visible { get; set; } = "";
             }
+
+            public static class TestRunner
+            {
+                public static ValiantSettingsSchemaDocument Read()
+                {
+                    var services = new ServiceCollection();
+                    services.AddSingleton(Options.Create(new Derived { Hidden = 42 }));
+                    using var provider = services.BuildServiceProvider();
+                    return ValiantSettingsSchemaDocumentFactory.Create(ValiantSettingsSchemas.All, provider, true);
+                }
+            }
             """);
         var registry = assembly.GetType("StaticNorth.Valiant.Settings.ValiantSettingsSchemas", throwOnError: true)!;
         var provider = ((IReadOnlyList<IValiantSettingsSchemaProvider>)registry.GetProperty("All")!.GetValue(null)!).Single();
@@ -86,6 +151,11 @@ public sealed class SourceGenerationTests
         await Assert.That(properties.Single(static property => property.Name == "Credential").IsSecret).IsTrue();
         await Assert.That(properties.Single(static property => property.Name == "Hidden").Kind).IsEqualTo(ValiantSettingsPropertyKind.Integer);
         await Assert.That(properties.Select(static property => property.Name)).Contains("Visible");
+        var document = (ValiantSettingsSchemaDocument)assembly.GetType("TestRunner")!.GetMethod("Read")!.Invoke(null, [])!;
+        var entry = document.Schemas.Single();
+        await Assert.That(entry.RuntimeValuesError).IsNull();
+        var values = (IReadOnlyDictionary<string, object?>)entry.RuntimeValues!;
+        await Assert.That((int)values["Hidden"]!).IsEqualTo(42);
     }
 
     [Test]
@@ -410,6 +480,7 @@ public sealed class SourceGenerationTests
         var validatorType = assembly.GetType("DbSettingsValidator", throwOnError: true)!;
         var validatorServiceType = typeof(IValidator<>).MakeGenericType(settingsType);
         services.AddSingleton(validatorServiceType, validatorType);
+        services.AddSingleton(validatorServiceType, validatorType);
 
         var extensionType = assembly.GetType("StaticNorth.Valiant.Settings.DependencyInjection.ValiantSettingsServiceCollectionExtensions", throwOnError: true)!;
         extensionType.GetMethod(
@@ -442,7 +513,10 @@ public sealed class SourceGenerationTests
 
         await Assert.That(validators).Count().IsEqualTo(1);
         await Assert.That(exception).IsNotNull();
-        await Assert.That(exception!.Failures).Contains("ConnectionString: Connection string is required.");
+        await Assert.That(exception!.Failures).IsEquivalentTo([
+            "ConnectionString: Connection string is required.",
+            "ConnectionString: Connection string is required."
+        ]);
     }
 
     [Test]
@@ -603,11 +677,42 @@ public sealed class SourceGenerationTests
         services.Configure<TestSettings>(_ => throw new InvalidOperationException("Password=sensitive-test-value"));
         using var serviceProvider = services.BuildServiceProvider();
 
-        var document = ValiantSettingsSchemaDocumentFactory.Create([provider], serviceProvider, includeRuntimeValues: true);
+        var document = ValiantSettingsSchemaDocumentFactory.Create([provider], serviceProvider, includeRuntimeValues: true,
+            revealSecrets: true, canRevealSecrets: true);
 
         await Assert.That(document.Schemas[0].RuntimeValues).IsNull();
         await Assert.That(document.Schemas[0].RuntimeValuesError).IsNotNull();
         await Assert.That(document.Schemas[0].RuntimeValuesError!).DoesNotContain("sensitive-test-value");
+        await Assert.That(document.SecretsRevealed).IsFalse();
+    }
+
+    [Test]
+    public async Task Options_Runtime_Projection_Produces_Serializable_Values_And_Reports_Missing_Instances()
+    {
+        var provider = new TestSettingsSchemaProvider(new ValiantSettingsSchema(typeof(TestSettings), nameof(TestSettings), "Tests:Settings",
+        [
+            new ValiantSettingsPropertySchema(nameof(TestSettings.Rate), nameof(TestSettings.Rate), "double",
+                ValiantSettingsPropertyKind.Number, isRequired: false, isNullable: false),
+            new ValiantSettingsPropertySchema(nameof(TestSettings.NativeValue), nameof(TestSettings.NativeValue), "nint",
+                ValiantSettingsPropertyKind.Unknown, isRequired: false, isNullable: false)
+        ]));
+        using var supplied = new ServiceCollection()
+            .AddSingleton(Options.Create(new TestSettings { Rate = double.NaN, NativeValue = 1 }))
+            .BuildServiceProvider();
+        using var missing = new ServiceCollection().AddSingleton(Options.Create<TestSettings>(null!)).BuildServiceProvider();
+
+        var document = ValiantSettingsSchemaDocumentFactory.Create([provider], supplied, includeRuntimeValues: true);
+        var values = (IReadOnlyDictionary<string, object?>)document.Schemas[0].RuntimeValues!;
+        await Assert.That(values[nameof(TestSettings.Rate)]).IsNull();
+        await Assert.That(values[nameof(TestSettings.NativeValue)]).IsNull();
+        await Assert.That(System.Text.Json.JsonSerializer.Serialize(values)).Contains("\"Rate\":null");
+
+        var noInstance = ValiantSettingsSchemaDocumentFactory.Create([provider], missing, includeRuntimeValues: true);
+        await Assert.That(noInstance.Schemas[0].RuntimeValuesError!).Contains("no settings instance");
+
+        var schemaOnly = ValiantSettingsSchemaDocumentFactory.Create([provider], supplied, includeRuntimeValues: false,
+            revealSecrets: true, canRevealSecrets: true);
+        await Assert.That(schemaOnly.CanRevealSecrets).IsFalse();
     }
 
     private static TestSettingsSchemaProvider CreateSecretProvider() => new(
@@ -640,6 +745,48 @@ public sealed class SourceGenerationTests
         var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(start);
         allocated = GC.GetAllocatedBytesForCurrentThread() - allocated;
         Console.WriteLine(FormattableString.Invariant($"RUNTIME,Settings,document,{elapsed.TotalNanoseconds / iterations:F1} ns/op,{allocated / iterations} B/op"));
+    }
+
+    [Test]
+    public async Task Settings_Ui_Uses_Assembly_Identity_For_Runtime_Values()
+    {
+        const string source = """
+            using StaticNorth.Valiant.Settings;
+            [ValiantSettings("Shared")]
+            public sealed class SharedSettings { public int Count { get; set; } }
+            """;
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        var first = RegisterSettings("Settings.LibraryA", 11);
+        var second = RegisterSettings("Settings.LibraryB", 22);
+        await using var app = builder.Build();
+        app.MapValiantSettingsUi(options => options.ShowRuntimeValues = true);
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+        const string endpoint = "/_valiant/settings/schemas?schemaType=SharedSettings&section=Shared&name=SharedSettings";
+
+        using var ambiguous = await client.GetAsync(endpoint);
+        await Assert.That((int)ambiguous.StatusCode).IsEqualTo(404);
+        foreach (var (identity, expected) in new[] { (first, 11), (second, 22) })
+        {
+            using var response = await client.GetAsync(endpoint + "&schemaAssembly=" + Uri.EscapeDataString(identity));
+            using var document = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            await Assert.That(document.RootElement.GetProperty("runtimeValues").GetProperty("Count").GetInt32())
+                .IsEqualTo(expected);
+        }
+
+        string RegisterSettings(string assemblyName, int count)
+        {
+            var assembly = CompileAndLoad(source, assemblyName);
+            var type = assembly.GetType("SharedSettings", throwOnError: true)!;
+            var instance = Activator.CreateInstance(type);
+            type.GetProperty("Count")!.SetValue(instance, count);
+            var options = typeof(Options).GetMethod(nameof(Options.Create))!.MakeGenericMethod(type).Invoke(null, [instance])!;
+            builder.Services.AddSingleton(typeof(IOptions<>).MakeGenericType(type), options);
+            var provider = assembly.GetTypes().Single(static type => type.IsAssignableTo(typeof(IValiantSettingsSchemaProvider)));
+            builder.Services.AddSingleton((IValiantSettingsSchemaProvider)Activator.CreateInstance(provider)!);
+            return assembly.FullName!;
+        }
     }
 
     [Test]
@@ -749,6 +896,9 @@ public sealed class SourceGenerationTests
     [Arguments("public sealed class Parent<T> { [ValiantSettings(\"Nested\")] public sealed class Nested; }", "VLS001")]
     [Arguments("public sealed class Parent { [ValiantSettings(\"Nested\")] private sealed class Nested; }", "VLS003")]
     [Arguments("[ValiantSettings(\"Local\")] file sealed class LocalSettings;", "VLS003")]
+    [Arguments("[ValiantSettings(\"Bound\", configure: true)] public struct BoundSettings;", "VLS004")]
+    [Arguments("[ValiantSettings(\"Bound\", configure: true)] public abstract class BoundSettings;", "VLS004")]
+    [Arguments("[ValiantSettings(\"Bound\", configure: true)] public class BoundSettings(int value) { public int Value => value; }", "VLS004")]
     public async Task Settings_Model_That_Cannot_Be_Referenced_Reports_A_Diagnostic(string declaration, string diagnosticId)
     {
         var result = RunGenerator("using StaticNorth.Valiant.Settings;\n" + declaration);
@@ -874,7 +1024,9 @@ public sealed class SourceGenerationTests
             .ToString();
     }
 
-    private static System.Reflection.Assembly CompileAndLoad(string source)
+    private static System.Reflection.Assembly CompileAndLoad(
+        string source,
+        string assemblyName = "StaticNorth.Valiant.Settings.GeneratedSchema.Tests")
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var syntaxTree = CSharpSyntaxTree.ParseText(
@@ -888,7 +1040,7 @@ public sealed class SourceGenerationTests
             .Add(MetadataReference.CreateFromFile(typeof(IValidator<>).Assembly.Location));
 
         var compilation = CSharpCompilation.Create(
-            "StaticNorth.Valiant.Settings.GeneratedSchema.Tests",
+            assemblyName,
             [syntaxTree],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
@@ -930,6 +1082,10 @@ public sealed class SourceGenerationTests
         public string Name { get; set; } = string.Empty;
 
         public string Password { get; set; } = string.Empty;
+
+        public double Rate { get; set; }
+
+        public nint NativeValue { get; set; }
     }
 
     private sealed class TestSettingsSchemaProvider(ValiantSettingsSchema schema) : IValiantSettingsSchemaProvider

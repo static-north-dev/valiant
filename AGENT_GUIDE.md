@@ -263,13 +263,22 @@ in the owning project.
 `StaticNorth.Valiant.Pack.proj` is the authoritative publish manifest. Its verifier asserts
 the ten expected NuGet and symbol packages, package metadata, dependencies,
 analyzers, `buildTransitive`/content assets, and the bundled endpoint contracts.
-Leaf-only consumer applications verify transitive package and analyzer delivery.
+Leaf-only consumer applications verify transitive package and analyzer delivery. A
+.NET Standard 2.0 consumer checks source generation at C# 9 for the three core packages.
+Package validation compares against the latest released package baseline declared in
+`Directory.Build.props`. Update that version after a release and record any approved
+compatibility exceptions in the affected project's `CompatibilitySuppressions.xml`.
 
 CI runs for pushes and pull requests targeting `main`. Publishing is owned by
 `.github/workflows/release.yml`, which runs when a GitHub Release is published.
 Release tags must be SemVer with an optional leading `v`; the normalized tag
 version is applied to compiled assemblies and NuGet packages. Releases verify
 and publish NuGet packages only; documentation publication is independent.
+The workflow packages into a fresh directory, uploads the files named in the
+verifier's SHA-256 manifest, and validates the manifest before publication.
+Publication fails if any package already exists at the target version. After a
+partial publication, inspect the completed uploads and recover with the original
+verified artifact under the production environment's controls.
 Release restore, build, test, and audit commands use `StaticNorth.Valiant.Release.slnf`.
 Keep that filter synchronized with every `.csproj` in `StaticNorth.Valiant.sln` and exclude
 the documentation `.esproj`, so releases cannot invoke npm or deploy the site.

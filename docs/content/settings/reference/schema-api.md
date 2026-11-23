@@ -48,6 +48,8 @@ public sealed record SearchSettings(string? Endpoint);
 
 The model contributes a schema. Options registration is opt-in through `configure: true`.
 
+When a tooling project references several assemblies that generate settings, use the assembly-qualified `SettingsSchemas` type for each assembly. For example, call `StaticNorth.Valiant.Generated.Assembly_MyApp.Assembly_Configuration.SettingsSchemas.All` for `MyApp.Configuration`. The assembly name encoding is the same as for the generated [registration helpers](../guides/binding-validation.md).
+
 ## Model schema
 
 `ValiantSettingsSchema` exposes `SettingsType`, `Name`, `SectionPath`, and `Properties`.
@@ -83,6 +85,8 @@ Only types marked with `[ValiantSettings]` enter the incremental generator pipel
 | `VLS001` | The settings model or one of its containing types is generic |
 | `VLS002` | The settings section path is empty |
 | `VLS003` | The settings model is inaccessible from another file in the same assembly |
+| `VLS004` | Options binding requires a non-abstract class with a public parameterless constructor |
+| `VLS005` | A model expands beyond 16,384 schema properties, including collection items. Split the configuration into smaller settings models. |
 
 The section path is deliberately required so generated binding and external tooling share one unambiguous configuration identity.
 

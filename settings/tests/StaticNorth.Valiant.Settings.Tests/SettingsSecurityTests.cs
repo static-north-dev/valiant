@@ -31,6 +31,8 @@ public sealed class SettingsSecurityTests
         var json = JsonSerializer.Serialize(document);
         await Assert.That(json).DoesNotContain("sensitive-test-value");
         await Assert.That(json).DoesNotContain("opaque-sensitive-value");
+        await Assert.That(json).DoesNotContain("dictionary-sensitive-value");
+        await Assert.That(json).Contains("visible-region");
         await Assert.That(json).Contains("********");
     }
 }

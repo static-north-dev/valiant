@@ -182,8 +182,8 @@ public static class ValiantEndpointRouteBuilderExtensions
         ArgumentNullException.ThrowIfNull(endpoint);
         ArgumentNullException.ThrowIfNull(options);
 
-        endpoint.Add(endpointBuilder =>
-            endpointBuilder.Metadata.Add(new EndpointQueryParsingOptionsMetadata(options)));
+        var metadata = new EndpointQueryParsingOptionsMetadata(QueryParsingOptionsSnapshot.Clone(options));
+        endpoint.Add(endpointBuilder => endpointBuilder.Metadata.Add(metadata));
         return endpoint;
     }
 
@@ -289,7 +289,7 @@ public static class ValiantEndpointRouteBuilderExtensions
         return builder;
     }
 
-    private static ValiantEndpointOptions GetOptions(IEndpointRouteBuilder builder)
+    internal static ValiantEndpointOptions GetOptions(IEndpointRouteBuilder builder)
     {
         return builder.ServiceProvider.GetService<IOptions<ValiantEndpointOptions>>()?.Value ?? new ValiantEndpointOptions();
     }
@@ -315,7 +315,7 @@ public static class ValiantEndpointRouteBuilderExtensions
     {
         endpoint.Add(static endpointBuilder =>
         {
-            endpointBuilder.FilterFactories.Add(CreateValiantQueryBindingFilter);
+            endpointBuilder.FilterFactories.Insert(0, CreateValiantQueryBindingFilter);
         });
     }
 
@@ -342,6 +342,10 @@ public static class ValiantEndpointRouteBuilderExtensions
             return next;
         }
 
+        var aliases = asParametersCandidates.SelectMany(static candidate => QueryStringParser.GetEndpointQueryAliases(candidate.RequestType))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(static alias => alias.Length)
+            .ToArray();
         return invocationContext =>
         {
             // ASP.NET Core can invoke the filter pipeline after rejecting parameter binding.
@@ -355,14 +359,16 @@ public static class ValiantEndpointRouteBuilderExtensions
 
             foreach (var candidate in asParametersCandidates)
             {
-                if (candidate.ArgumentIndex >= invocationContext.Arguments.Count)
+                if (candidate.ArgumentIndex >= invocationContext.Arguments.Count ||
+                    options.UseStrictBinding && !candidate.RebindInStrictMode)
                 {
                     continue;
                 }
 
                 query ??= new QueryStringParser.QueryInput(
                     invocationContext.HttpContext.Request.QueryString.Value,
-                    options);
+                    options,
+                    aliases);
                 var parsed = query.BindEndpointRequest(
                     candidate.RequestType, invocationContext.Arguments[candidate.ArgumentIndex], out var errors);
                 if (errors.Count > 0)
@@ -394,7 +400,8 @@ public static class ValiantEndpointRouteBuilderExtensions
             }
 
             candidates ??= [];
-            candidates.Add(new AsParametersQueryBindingCandidate(i, parameter.ParameterType));
+            candidates.Add(new AsParametersQueryBindingCandidate(i, parameter.ParameterType,
+                QueryStringParser.HasEndpointQueryMembers(parameter.ParameterType, useStrictBinding: true)));
         }
 
         return candidates?.ToArray() ?? [];
@@ -402,6 +409,7 @@ public static class ValiantEndpointRouteBuilderExtensions
 
     private sealed record AsParametersQueryBindingCandidate(
         int ArgumentIndex,
-        Type RequestType);
+        Type RequestType,
+        bool RebindInStrictMode);
 
 }

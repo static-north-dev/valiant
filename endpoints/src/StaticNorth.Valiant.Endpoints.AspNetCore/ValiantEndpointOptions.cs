@@ -8,7 +8,19 @@ namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 /// </summary>
 public sealed class ValiantEndpointOptions
 {
+#if NET11_0_OR_GREATER
+    internal const bool UseNet11Defaults = true;
+#else
+    internal const bool UseNet11Defaults = false;
+#endif
+
     private readonly List<EndpointConfigurationRule> _endpointConfigurationRules = [];
+
+    /// <summary>
+    /// Gets or sets whether grouped and standalone endpoints share one mapping order within each assembly.
+    /// Defaults to <see langword="true" /> when targeting .NET 11 or later.
+    /// </summary>
+    public bool OrderEndpointsAcrossGroups { get; set; } = UseNet11Defaults;
 
     /// <summary>
     /// Gets or sets the predicate that determines whether source-generated endpoint groups should be mapped.

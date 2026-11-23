@@ -300,6 +300,12 @@ public sealed class ValidationModeParityTests
             Invalid(static () => new CollectionModel(), Failure("Values", "NotEmpty")),
             Valid(static () => new CollectionModel { Values = [1] }));
         await AssertSyncParity(
+            "GenericCollectionCount",
+            mode => new SetCountValidator(Options(mode)),
+            Invalid(static () => new CollectionModel { UniqueValues = [1] }, Failure("UniqueValues", "Count")),
+            Invalid(static () => new CollectionModel { UniqueValues = [1, 2, 3] }, Failure("UniqueValues", "Count")),
+            Valid(static () => new CollectionModel { UniqueValues = [1, 2] }));
+        await AssertSyncParity(
             "Count",
             mode => new CountCollectionValidator(Options(mode)),
             Invalid(static () => new CollectionModel { Values = [1, 2] }, Failure("Values", "Count")),

@@ -438,6 +438,15 @@ public readonly struct PropertyValidation<T, TProperty>
         return ShouldSkip || !ShouldRun();
     }
 
+    internal void AddNestedFailures(ValidationResult result)
+    {
+        if (result.Failures.Count > 0)
+        {
+            _state.HasFailure = true;
+            _context.AddFailures(result.Failures);
+        }
+    }
+
     internal bool TryGetValue(out TProperty value)
     {
         return _state.TryGetValue(_property, _context.Instance, out value);

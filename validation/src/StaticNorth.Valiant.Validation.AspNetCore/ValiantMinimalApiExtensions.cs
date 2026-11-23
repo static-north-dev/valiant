@@ -69,7 +69,7 @@ public static class ValiantMinimalApiExtensions
         }
 
         List<ValidationFailure>? failures = null;
-        var validators = ResolveValidatorArray<T>(invocationContext.HttpContext.RequestServices);
+        IValidator<T>[]? validators = null;
 
         foreach (var argument in invocationContext.Arguments)
         {
@@ -78,6 +78,7 @@ public static class ValiantMinimalApiExtensions
                 continue;
             }
 
+            validators ??= ResolveValidatorArray<T>(invocationContext.HttpContext.RequestServices);
             foreach (var validator in validators)
             {
                 var result = await validator.ValidateAsync(model, invocationContext.HttpContext.RequestAborted).ConfigureAwait(false);
@@ -224,39 +225,14 @@ public static class ValiantMinimalApiExtensions
 
     private static ValidationTypePlan CreateValidationTypePlanCore<T>()
     {
-        return new ValidationTypePlan(
-            ResolveValidatorArray<T>,
-            static (validators, model, cancellationToken) => ValidateModelAsync(
-                (IValidator<T>[])validators,
-                (T)model,
-                cancellationToken));
+        var invoker = new ValiantValidatorInvoker<T>();
+        return new ValidationTypePlan(invoker.ResolveValidators, invoker.ValidateAsync);
     }
 
     private static IValidator<T>[] ResolveValidatorArray<T>(IServiceProvider services)
     {
         var validators = services.GetServices<IValidator<T>>();
         return validators as IValidator<T>[] ?? validators.ToArray();
-    }
-
-    private static async ValueTask<ValidationResult> ValidateModelAsync<T>(
-        IValidator<T>[] validators,
-        T model,
-        CancellationToken cancellationToken)
-    {
-        List<ValidationFailure>? failures = null;
-        foreach (var validator in validators)
-        {
-            var result = await validator.ValidateAsync(model, cancellationToken).ConfigureAwait(false);
-            if (result.Failures.Count == 0)
-            {
-                continue;
-            }
-
-            failures ??= [];
-            failures.AddRange(result.Failures);
-        }
-
-        return failures is null ? ValidationResult.Valid : new ValidationResult(failures);
     }
 
     private delegate object ResolveValidatorsDelegate(IServiceProvider services);

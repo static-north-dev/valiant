@@ -41,7 +41,7 @@ The incremental generator starts from marker attributes—not an assembly-wide i
 
 The companion analyzer checks only direct `IEndpoint` and `IEndpointGroup` declarations for missing markers. It intentionally avoids indirect and aliased implementation scans to keep IDE analysis bounded.
 
-`IEndpointGroup.CreateGroup` is a static abstract interface member. The C# compiler requires every endpoint group type to provide a public static implementation.
+Endpoint and group declarations can be classes or record classes. They must be closed types accessible from generated code. Both a public static implementation and an explicit static implementation satisfy the interface members.
 
 ## Diagnostics
 
@@ -57,5 +57,7 @@ The companion analyzer checks only direct `IEndpoint` and `IEndpointGroup` decla
 | `VLE008` | Group marker was applied to an endpoint |
 | `VLE009` | An endpoint uses more than one endpoint marker form |
 | `VLE010` | A query type cannot receive the generated binder |
+| `VLE011` | Direct query parameters share a generated parser and specify conflicting JSON policies |
+| `VLE012` | An endpoint or group is an open generic, file-local, or inaccessible from generated code |
 
-`VLE010` covers shapes such as non-partial source types, static types, open generics, or containing types that cannot receive generated members.
+`VLE010` covers shapes such as non-partial source types, static and file-local types, open generics, or containing types that cannot receive generated members.

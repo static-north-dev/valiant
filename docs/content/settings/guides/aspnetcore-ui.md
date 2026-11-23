@@ -56,7 +56,7 @@ app.MapValiantSettingsUi(options =>
 }).RequireAuthorization("SettingsAdministrators");
 ```
 
-Runtime values come from the host's default `IOptions<TSettings>` instance for each registered schema. The explorer reports values as unavailable when the host has neither Options configuration for that model nor an explicitly supplied options instance. Runtime values can include defaults and values assigned by configuration or post-configuration. Declared defaults in the property list describe constant initializers.
+Runtime values come from the host's default `IOptions<TSettings>` instance for each registered schema. With the default Options registration, this instance is cached on first use and does not track configuration reloads. The explorer reports values as unavailable when the host has neither Options configuration for that model nor an explicitly supplied options instance. Runtime values can include defaults and values assigned by configuration or post-configuration. Declared defaults in the property list describe constant initializers.
 
 The explorer loads the schema catalog first and requests values for the selected section when you open its Runtime view. Changing sections clears revealed values. A request to `/schemas` without a section selector still returns the full document.
 
@@ -78,7 +78,7 @@ settings.RequireAuthorization("SettingsAdministrators");
 
 Secret values remain masked until a user selects reveal. The JSON endpoint accepts `?revealSecrets=true` only when `AllowSecretReveal` is enabled.
 
-Masked secret getters are not evaluated. Runtime values are projected through the generated schema: recursive objects beyond the schema boundary become empty objects, and unsupported opaque values become `null`. Options or getter failures return a generic message so exception text cannot expose credentials. Schema responses use `Cache-Control: no-store`, including when secrets are revealed.
+Masked secret getters are not evaluated. The generated schema controls runtime projection. Recursive objects beyond the schema boundary become empty objects. Unsupported opaque values and non-finite floating-point values become `null`. Options or getter failures return a generic message so exception text cannot expose credentials. Schema responses use `Cache-Control: no-store`, including when secrets are revealed.
 
 Direct callers of `ValiantSettingsSchemaDocumentFactory.Create` must also enable both `revealSecrets` and `canRevealSecrets` to reveal values.
 

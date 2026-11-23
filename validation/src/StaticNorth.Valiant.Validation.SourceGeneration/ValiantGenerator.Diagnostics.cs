@@ -33,6 +33,7 @@ public sealed partial class ValiantGenerator
         AppendFingerprintValue(builder, declaration.Modifier);
         AppendFingerprintValue(builder, declaration.MetadataProviderType);
         AppendFingerprintValue(builder, declaration.Location.ToString());
+        AppendFingerprintValue(builder, declaration.CanActivate ? "public-constructor" : "non-public-constructor");
         foreach (var containingType in declaration.ContainingTypes)
         {
             AppendFingerprintValue(builder, containingType.Modifier);
@@ -46,6 +47,7 @@ public sealed partial class ValiantGenerator
             {
                 AppendFingerprintValue(builder, parameter.Type);
                 AppendFingerprintValue(builder, parameter.Name);
+                AppendFingerprintValue(builder, parameter.RefKind.ToString());
             }
         }
 

@@ -11,21 +11,19 @@ export function registerDocumentationTools(context, loadIndex) {
   }
   const controller = new AbortController();
   const registration = (async () => {
-    try {
-      for (const tool of documentationTools) {
-        await context.registerTool({
-          ...tool,
-          annotations: {readOnlyHint: true},
-          execute: async (args) => ({content: [{type: 'text', text: JSON.stringify(executeDocumentationTool(await loadIndex(), tool.name, args))}]}),
-        }, {signal: controller.signal});
-      }
-      return true;
-    } catch (error) {
-      controller.abort();
-      registrations.delete(context);
-      throw error;
+    for (const tool of documentationTools) {
+      await context.registerTool({
+        ...tool,
+        annotations: {readOnlyHint: true},
+        execute: async (args) => ({content: [{type: 'text', text: JSON.stringify(executeDocumentationTool(await loadIndex(), tool.name, args))}]}),
+      }, {signal: controller.signal});
     }
-  })();
+    return true;
+  })().catch((error) => {
+    registrations.delete(context);
+    controller.abort();
+    throw error;
+  });
   registrations.set(context, registration);
   return registration;
 }

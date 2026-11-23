@@ -63,6 +63,7 @@ public sealed partial class ValiantMappingGenerator
                 AppendFingerprintValue(builder, argument.ParameterName);
                 AppendFingerprintValue(builder, argument.ParameterType);
                 AppendFingerprintValue(builder, argument.RuntimeParameterType);
+                AppendFingerprintValue(builder, argument.IsIn ? "in" : string.Empty);
                 AppendFingerprintValue(builder, argument.SourceExpression);
             }
 

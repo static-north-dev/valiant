@@ -9,6 +9,201 @@ namespace StaticNorth.Valiant.Validation.Tests;
 public sealed class SourceGenerationTests
 {
     [Test]
+    public async Task Attribute_Validators_Keep_Inherited_And_Escaped_Rules_And_Constructor_Metadata()
+    {
+        const string source = """
+            using StaticNorth.Valiant.Validation;
+
+            public class BaseModel
+            {
+                [Required(null, "Inherited message", ValiantSeverity.Warning)]
+                public virtual string? Name { get; init; }
+            }
+
+            public sealed class Model : BaseModel
+            {
+                public override string? Name { get; init; }
+
+                [Equal(null!, code: null)]
+                public string? Other { get; init; }
+
+                [Required(ConditionMethod = nameof(@switch))]
+                public string? @event { get; init; }
+
+                [GreaterThan(256)]
+                public byte Count { get; init; }
+
+                [InclusiveBetween(-2, 3)]
+                public ulong? Width { get; init; }
+
+                public static bool @switch(Model model) => true;
+            }
+
+            [ValiantValidator]
+            public sealed partial class ModelValidator : ValidatorDefinition<Model>;
+            """;
+        var result = RunGenerator(source);
+        var text = result.GeneratedSources.Single(file => file.HintName.EndsWith("ModelValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
+
+        await Assert.That(RunCompilation(source).Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(text).Contains("Inherited message");
+        await Assert.That(text).Contains("ValiantSeverity.Warning");
+        await Assert.That(text).Contains("instance.@event");
+        await Assert.That(text).Contains("global::Model.@switch");
+        await Assert.That(text).Contains("(string?)null");
+        await Assert.That(text).Contains("global::System.Decimal.Compare");
+    }
+
+    [Test]
+    public async Task Configure_Uses_The_Context_Overload_And_Accepts_Expression_Bodies()
+    {
+        const string source = """
+            using StaticNorth.Valiant.Validation;
+
+            public sealed record Model(string? Name);
+
+            [ValiantValidator]
+            public sealed partial class ModelValidator : ValidatorDefinition<Model>
+            {
+                public void Configure() { }
+
+                public override void Configure(ValidationContext<Model> context) =>
+                    context.Property(model => model.Name).Required();
+            }
+            """;
+        var result = RunGenerator(source);
+        var text = result.GeneratedSources.Single(file => file.HintName.EndsWith("ModelValidator.Validator.g.cs", StringComparison.Ordinal)).SourceText.ToString();
+
+        await Assert.That(RunCompilation(source).Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(text).Contains("ValiantPropertyValidationMetadata(\"Name\"");
+    }
+
+    [Test]
+    public async Task Attribute_Enum_Checks_Report_A_Diagnostic_For_A_Non_Enum_Type()
+    {
+        var result = RunGenerator("""
+            using StaticNorth.Valiant.Validation;
+
+            public sealed class Model
+            {
+                [EnumName(typeof(string))]
+                public string? Name { get; init; }
+            }
+
+            [ValiantValidator]
+            public sealed partial class ModelValidator : ValidatorDefinition<Model>;
+            """);
+
+        await Assert.That(result.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error &&
+            diagnostic.GetMessage().Contains("requires an enum type argument", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task By_Reference_Constructor_Chains_And_Allows_Manual_Registration()
+    {
+        const string source = """
+            using StaticNorth.Valiant.Validation;
+
+            public sealed record Input(int Count);
+
+            [ValiantValidator]
+            public sealed partial class InputValidator : ValidatorDefinition<Input>
+            {
+                public InputValidator(ref int minimum) { }
+
+                public static InputValidator Create()
+                {
+                    var minimum = 1;
+                    return new InputValidator(ref minimum, new ValiantValidationOptions());
+                }
+
+                public override void Configure(ValidationContext<Input> context)
+                {
+                    context.Property(input => input.Count).GreaterThan(0);
+                }
+            }
+            """;
+        var result = RunGenerator(source);
+        var registration = result.GeneratedSources.Single(static generated =>
+            generated.HintName == "StaticNorth.Valiant.Validation.DependencyInjection.g.cs");
+
+        await Assert.That(RunCompilation(source).Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+        await Assert.That(registration.SourceText.ToString()).DoesNotContain("global::InputValidator");
+        await Assert.That(registration.SourceText.ToString()).Contains("ValiantValidatorInvoker<global::Input>");
+    }
+
+    [Test]
+    public async Task Collection_Count_Attributes_Accept_Generic_Only_Collections()
+    {
+        var diagnostics = RunCompilation(
+            """
+            using System.Collections.Generic;
+            using StaticNorth.Valiant.Validation;
+
+            [ValiantValidator]
+            public sealed partial class InputValidator : ValidatorDefinition<Input>;
+
+            public sealed class Input
+            {
+                [Count(2)]
+                public HashSet<int> Values { get; set; } = [];
+            }
+            """);
+
+        await Assert.That(diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Constructor_Options_Parameter_Avoids_User_Parameter_Names()
+    {
+        var result = RunGenerator(
+            """
+            using StaticNorth.Valiant.Validation;
+
+            public sealed record Input(int Count);
+
+            [ValiantValidator]
+            public sealed partial class InputValidator : ValidatorDefinition<Input>
+            {
+                public InputValidator(int valiantValidationOptions, string valiantValidationOptions_) { }
+
+                public override void Configure(ValidationContext<Input> context)
+                {
+                    context.Property(input => input.Count).GreaterThan(0);
+                }
+            }
+            """);
+
+        var declaration = result.GeneratedSources.Single(static source =>
+            source.HintName.EndsWith("InputValidator.Validator.g.cs", StringComparison.Ordinal));
+        await Assert.That(declaration.SourceText.ToString())
+            .Contains("ValiantValidationOptions valiantValidationOptions__) : this(valiantValidationOptions, valiantValidationOptions_)");
+    }
+
+    [Test]
+    public async Task Factory_Only_Validator_Keeps_Its_Own_Constructor()
+    {
+        var result = RunGenerator(
+            """
+            using StaticNorth.Valiant.Validation;
+            public sealed record Input(int Minimum);
+
+            [ValiantValidator]
+            public sealed partial class FactoryValidator : ValidatorDefinition<Input>
+            {
+                private FactoryValidator(int minimum) { }
+                public static FactoryValidator Create() => new(10);
+            }
+            """);
+
+        var declaration = result.GeneratedSources.Single(static source => source.HintName.EndsWith("FactoryValidator.Validator.g.cs", StringComparison.Ordinal));
+        var registration = result.GeneratedSources.Single(static source => source.HintName == "StaticNorth.Valiant.Validation.DependencyInjection.g.cs");
+        await Assert.That(declaration.SourceText.ToString()).DoesNotContain("public FactoryValidator(");
+        await Assert.That(registration.SourceText.ToString()).DoesNotContain("global::FactoryValidator");
+        await Assert.That(registration.SourceText.ToString()).Contains("ValiantValidatorInvoker<global::Input>");
+    }
+
+    [Test]
     public async Task Distinct_Validator_Declarations_Keep_Unique_Hint_And_Metadata_Names()
     {
         const string source = """

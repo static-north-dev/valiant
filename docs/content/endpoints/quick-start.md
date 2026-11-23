@@ -7,15 +7,19 @@ description: Install StaticNorth.Valiant.Endpoints.AspNetCore and map your first
 
 ## 1. Create a project and install Valiant
 
-Use the **.NET 10.0.400 SDK or newer** to build this example with Valiant 1.2.1. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+Use the **.NET 10.0.400 SDK or newer** with this guide. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+
+Generated code requires **C# 11.0 or later**.
 
 ```bash
 dotnet new web -n EndpointsDemo -f net8.0
 cd EndpointsDemo
-dotnet add package StaticNorth.Valiant.Endpoints.AspNetCore --version 1.2.1
+dotnet add package StaticNorth.Valiant.Endpoints.AspNetCore
 ```
 
 This is the consumer package. It includes the shared endpoint contracts and bundles the source generator; do not add separate `StaticNorth.Valiant.Endpoints` or generator references.
+
+The install command selects the latest stable package. Add `--version` to select a specific release or prerelease that matches the guide you are following.
 
 ## 2. Create an endpoint
 

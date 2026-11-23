@@ -25,7 +25,7 @@ services.AddValiantMappers(options =>
 
 ## Constructor arguments and nulls
 
-A skipped constructor mapping uses the configured fallback or the parameter type's default value. For a reference type, that default is `null`. Use a nullable parameter when absence is valid. For a required value, use an explicit mapping with a non-null fallback or `MapNull()` when the source already guarantees a non-null value and you want to bypass the null-skip rule.
+A skipped constructor mapping uses the configured fallback, the parameter's declared default, or the parameter type's default, in that order. Use a nullable parameter when absence is valid. For a required value, use an explicit mapping with a non-null fallback or `MapNull()` when the source already guarantees a non-null value and you want to bypass the null-skip rule.
 
 ## Generator scope
 
@@ -58,7 +58,8 @@ A separate narrowly scoped analyzer checks statically knowable `IMapper` and `IM
 
 - Mapper and containing declarations that receive generated members must be `partial`.
 - Each source/target pair has one default generated mapper.
-- Targets need a usable public construction path.
+- Targets need a usable public constructor. Constructor parameters may be passed by value or declared with `in`. Structs can also use default construction.
+- Collection element conversion supports one-dimensional arrays. Compatible array types can be assigned directly.
 - `Configure` is intentionally generator-readable; unsupported expression shapes produce `VLM004` instead of silently changing behavior.
 - Use `TryMap` or `TryCreateMapper` for pairs that are optional at runtime.
 

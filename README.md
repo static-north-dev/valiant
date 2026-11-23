@@ -44,7 +44,8 @@ dotnet restore StaticNorth.Valiant.sln --force-evaluate
 `StaticNorth.Valiant.Pack.proj` is the authoritative ten-package release manifest. Its
 verification targets pack serially, inspect NuGet and symbol-package contents,
 and run leaf-only applications that restore the produced packages from the
-local feed. `StaticNorth.Valiant.Endpoints` is an internal contract assembly bundled inside
+local feed. Local verification writes packages to `artifacts/packages/<version>`.
+`StaticNorth.Valiant.Endpoints` is an internal contract assembly bundled inside
 `StaticNorth.Valiant.Endpoints.AspNetCore`; it is not a standalone package.
 
 ## Contributing and security

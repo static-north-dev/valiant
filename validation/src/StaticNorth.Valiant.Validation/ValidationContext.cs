@@ -9,7 +9,7 @@ namespace StaticNorth.Valiant.Validation;
 public sealed class ValidationContext<T>
 {
     private readonly List<ValidationFailure> _failures;
-    private readonly List<ValidationContextDeferredValidation> _deferredValidations;
+    private readonly ValidationContextExecution _execution;
     private readonly string _propertyPathPrefix;
     private ValiantFailureBehavior _failureBehavior;
     private ValiantFailureBehavior _executionFailureBehavior;
@@ -25,7 +25,7 @@ public sealed class ValidationContext<T>
     }
 
     internal ValidationContext(T instance, string propertyPathPrefix, ValiantFailureBehavior failureBehavior = ValiantFailureBehavior.ValidateAll)
-        : this(instance, propertyPathPrefix, [], [], failureBehavior)
+        : this(instance, propertyPathPrefix, [], new ValidationContextExecution(), failureBehavior)
     {
     }
 
@@ -33,13 +33,13 @@ public sealed class ValidationContext<T>
         T instance,
         string propertyPathPrefix,
         List<ValidationFailure> failures,
-        List<ValidationContextDeferredValidation> deferredValidations,
+        ValidationContextExecution execution,
         ValiantFailureBehavior failureBehavior)
     {
         Instance = instance;
         _propertyPathPrefix = propertyPathPrefix ?? throw new ArgumentNullException(nameof(propertyPathPrefix));
         _failures = failures ?? throw new ArgumentNullException(nameof(failures));
-        _deferredValidations = deferredValidations ?? throw new ArgumentNullException(nameof(deferredValidations));
+        _execution = execution;
         _failureBehavior = failureBehavior;
         _executionFailureBehavior = failureBehavior;
     }
@@ -114,7 +114,7 @@ public sealed class ValidationContext<T>
     private void SetFailureBehavior(ValiantFailureBehavior behavior)
     {
         _failureBehavior = behavior;
-        if (_deferredValidations.Count == 0)
+        if (_execution.Count == 0)
         {
             _executionFailureBehavior = behavior;
             return;
@@ -150,7 +150,7 @@ public sealed class ValidationContext<T>
             item,
             CreateChildPropertyPathPrefix(GetPropertyName(collectionExpression), index),
             _failures,
-            _deferredValidations,
+            _execution,
             _failureBehavior);
     }
 
@@ -183,7 +183,7 @@ public sealed class ValidationContext<T>
     {
         if (!ShouldStopValidation)
         {
-            _deferredValidations.Add(new ValidationContextDeferredValidation(validation, null));
+            _execution.Add(new ValidationContextDeferredValidation(validation, null));
         }
     }
 
@@ -191,7 +191,7 @@ public sealed class ValidationContext<T>
     {
         if (!ShouldStopValidation)
         {
-            _deferredValidations.Add(new ValidationContextDeferredValidation(validation, null));
+            _execution.Add(new ValidationContextDeferredValidation(validation, null));
         }
     }
 
@@ -202,7 +202,7 @@ public sealed class ValidationContext<T>
             return;
         }
 
-        _deferredValidations.Add(new ValidationContextDeferredValidation(
+        _execution.Add(new ValidationContextDeferredValidation(
             null, validation ?? throw new ArgumentNullException(nameof(validation))));
     }
 
@@ -213,7 +213,7 @@ public sealed class ValidationContext<T>
             return;
         }
 
-        _deferredValidations.Add(new ValidationContextDeferredValidation(
+        _execution.Add(new ValidationContextDeferredValidation(
             validate ?? throw new ArgumentNullException(nameof(validate)),
             validateAsync ?? throw new ArgumentNullException(nameof(validateAsync))));
     }
@@ -250,7 +250,7 @@ public sealed class ValidationContext<T>
     /// Completes synchronous validation and returns the collected result.
     /// </summary>
     /// <returns>The validation result.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when asynchronous validations were declared and <see cref="ToResultAsync" /> should be used instead.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when completion has already started or the context contains asynchronous rules.</exception>
     public ValidationResult ToResult()
     {
         Execute();
@@ -269,7 +269,8 @@ public sealed class ValidationContext<T>
 
     private void Execute()
     {
-        foreach (var validation in _deferredValidations)
+        _execution.Start();
+        foreach (var validation in _execution)
         {
             if (ShouldStopValidation)
             {
@@ -290,6 +291,7 @@ public sealed class ValidationContext<T>
     /// </summary>
     /// <param name="cancellationToken">A cancellation token for asynchronous validations.</param>
     /// <returns>The validation result.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when completion has already started.</exception>
     public ValueTask<ValidationResult> ToResultAsync(CancellationToken cancellationToken = default)
     {
         return ExecuteAsync(static context => context.BuildResult(), cancellationToken);
@@ -309,7 +311,9 @@ public sealed class ValidationContext<T>
         Func<ValidationContext<T>, TResult> finish,
         CancellationToken cancellationToken)
     {
-        foreach (var validation in _deferredValidations)
+        _execution.Start();
+        cancellationToken.ThrowIfCancellationRequested();
+        foreach (var validation in _execution)
         {
             if (ShouldStopValidation)
             {
@@ -379,13 +383,21 @@ public sealed class ValidationContext<T>
             start = firstDot + 1;
         }
 
-        var nameEnd = start;
-        while (nameEnd < end && expression[nameEnd] is not (' ' or ')' or '}'))
+        System.Text.StringBuilder? name = null;
+        for (var index = start; index < end; index++)
         {
-            nameEnd++;
+            var character = expression[index];
+            if (char.IsWhiteSpace(character) || character is '!' or '@' or '(' or ')')
+            {
+                name ??= new System.Text.StringBuilder(end - start).Append(expression, start, index - start);
+            }
+            else
+            {
+                name?.Append(character);
+            }
         }
 
-        return expression.Substring(start, nameEnd - start).Replace("!", string.Empty);
+        return name?.ToString() ?? expression.Substring(start, end - start);
     }
 
     private string ApplyPropertyPathPrefix(string propertyName)

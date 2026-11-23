@@ -80,15 +80,17 @@ export function searchDocuments(index, {query, limit = 8, ...filters} = {}) {
     throw new TypeError('query must contain a word or identifier.');
   }
   const matches = selectDocuments(index, filters).flatMap((document) => {
-    const text = document.content.toLowerCase();
-    if (!terms.every((term) => text.includes(term))) {
-      return [];
-    }
+    const body = document.content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n\s*/, '');
+    const text = body.toLowerCase();
     const title = document.title.toLowerCase();
     const description = document.description.toLowerCase();
+    if (!terms.every((term) => text.includes(term) || title.includes(term) || description.includes(term))) {
+      return [];
+    }
     const score = terms.reduce((total, term) => total + (title.includes(term) ? 8 : 0) + (description.includes(term) ? 3 : 0) + 1, 0);
-    const start = Math.max(0, text.indexOf(terms[0]) - 100);
-    return [{...metadata(document), score, excerpt: document.content.slice(start, start + 500)}];
+    const positions = terms.map((term) => text.indexOf(term)).filter((position) => position >= 0);
+    const start = positions.length ? Math.max(0, Math.min(...positions) - 100) : 0;
+    return [{...metadata(document), score, excerpt: body.slice(start, start + 500)}];
   });
   matches.sort((left, right) => right.score - left.score || left.path.localeCompare(right.path));
   return {total: matches.length, results: matches.slice(0, limit)};

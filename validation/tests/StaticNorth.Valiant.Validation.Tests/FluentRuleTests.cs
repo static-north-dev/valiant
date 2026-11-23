@@ -3,6 +3,111 @@ namespace StaticNorth.Valiant.Validation.Tests;
 public sealed class FluentRuleTests
 {
     [Test]
+    public async Task Empty_Contexts_And_Sync_Property_Validators_Respect_Async_Cancellation()
+    {
+        var cancellationToken = new CancellationToken(canceled: true);
+        var context = new ValidationContext<AddressModel>(new AddressModel());
+        var validator = new AddressPropertyValidator();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => context.ToResultAsync(cancellationToken).AsTask());
+        await Assert.ThrowsAsync<OperationCanceledException>(() => validator.ValidateAsync(new AddressModel(), cancellationToken).AsTask());
+    }
+
+    [Test]
+    public async Task Runtime_Selectors_Preserve_Nested_Path_With_Typed_Formatting()
+    {
+        var context = new ValidationContext<CustomerModel>(new CustomerModel { Address = new AddressModel() });
+        context.Property(model => (model.Address!)
+                .@Line1)
+            .Required();
+
+        var result = context.ToResult();
+        await Assert.That(result.Errors.Single().PropertyName).IsEqualTo("Address.Line1");
+    }
+
+    [Test]
+    public async Task Null_Dictionary_Key_Is_A_Failed_Check()
+    {
+        var contents = new Dictionary<string, int> { ["first"] = 20 };
+        await Assert.That(ValidationChecks.HasKey(contents, null as string)).IsFalse();
+        await Assert.That(ValidationChecks.HasKey(contents, "first")).IsTrue();
+    }
+
+    [Test]
+    public async Task Completion_Rejects_Repeated_Sync_And_Async_Execution()
+    {
+        var context = new ValidationContext<CollectionModel>(new CollectionModel());
+        context.Property(static model => model.Values).NotEmpty();
+
+        await Assert.That(context.ToResult().Failures).Count().IsEqualTo(1);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Task.FromResult(context.ToResult()));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => context.ToResultAsync().AsTask());
+    }
+
+    [Test]
+    public async Task Item_Context_Shares_The_Parent_Completion_Guard()
+    {
+        var model = new CollectionModel { Values = [1] };
+        var context = new ValidationContext<CollectionModel>(model);
+        var item = context.Item<int, List<int>>(model.Values[0], value => value.Values, 0);
+        item.Property(static value => value).GreaterThan(2);
+
+        await Assert.That((await item.ToResultAsync()).Failures).Count().IsEqualTo(1);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Task.FromResult(context.ToResult()));
+    }
+
+    [Test]
+    public async Task Generic_Collection_Checks_Observe_Emptiness_And_Comparers()
+    {
+        var items = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await Assert.That(ValidationChecks.IsEmpty(items)).IsTrue();
+        items.Add("value");
+        await Assert.That(ValidationChecks.IsEmpty(items)).IsFalse();
+        await Assert.That(ValidationChecks.Contains(items, "VALUE")).IsTrue();
+        await Assert.That(ValidationChecks.HasMaxCount(items, 0)).IsFalse();
+        await Assert.That(ValidationChecks.HasMinCount(items, 2)).IsFalse();
+        await Assert.That(ValidationChecks.HasCount(items, 1)).IsTrue();
+    }
+
+    [Test]
+    public async Task Sequence_Count_Rules_Stop_When_The_Bound_Is_Determined()
+    {
+        await Assert.That(ValidationChecks.HasMinCount(Sequence(), 2)).IsTrue();
+        await Assert.That(ValidationChecks.HasMaxCount(Sequence(), 1)).IsFalse();
+        await Assert.That(ValidationChecks.HasCount(Sequence(), 1)).IsFalse();
+        await Assert.That(ValidationChecks.HasCountBetween(Sequence(), 0, 1)).IsFalse();
+        await Assert.That(ValidationChecks.HasCount(42, 1)).IsFalse();
+
+        static IEnumerable<int> Sequence()
+        {
+            yield return 1;
+            yield return 2;
+            throw new InvalidOperationException("The bound is already determined.");
+        }
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Nested_Failures_Stop_The_Property_Chain(bool asynchronous)
+    {
+        var parent = new ValidationContext<ParentModel>(new ParentModel { Children = [new ChildModel(), new ChildModel()] });
+        parent.Property(model => model.Children).FailFast()
+            .ForEach(item => item.Property(model => model.Name).Required(code: "item-required"))
+            .Satisfies(static _ => false, code: "unexpected-list-check");
+        var customer = new ValidationContext<CustomerModel>(new CustomerModel { Address = new AddressModel() });
+        customer.Property(model => model.Address).FailFast()
+            .Children(child => child.Property(model => model.Line1).Required(code: "child-required"))
+            .Satisfies(static _ => false, code: "unexpected-object-check");
+
+        var parentResult = asynchronous ? await parent.ToResultAsync() : parent.ToResult();
+        var customerResult = asynchronous ? await customer.ToResultAsync() : customer.ToResult();
+
+        await Assert.That(parentResult.Failures.Single().ErrorCode).IsEqualTo("item-required");
+        await Assert.That(customerResult.Failures.Single().ErrorCode).IsEqualTo("child-required");
+    }
+
+    [Test]
     public async Task ValidationResult_Snapshots_Failures()
     {
         var failures = new List<ValidationFailure>
@@ -847,6 +952,8 @@ public sealed class EnumValidationModel
 public sealed class CollectionModel
 {
     public List<int> Values { get; init; } = [];
+
+    public HashSet<int> UniqueValues { get; init; } = [];
 }
 
 public sealed class DictionaryModel

@@ -22,6 +22,8 @@ builder.Services.AddValiantSettings(builder.Configuration);
 
 Valiant emits the equivalent section-aware `services.Configure<S3Settings>(configuration.GetSection("Storage:S3"))` registration.
 
+From a separate host, call each library's generated registration explicitly. For a library named `Storage`, the entry point is `StaticNorth.Valiant.Generated.Assembly_Storage.Settings.AddValiantSettings(services, configuration)`. See [generated registration namespaces](../../mapping/guides/composition-dependency-injection.md) for assembly names with punctuation.
+
 Use `[ConfigurationKeyName("bucket-name")]` from `Microsoft.Extensions.Configuration` to give a property a different configuration key. The generated schema and runtime values use that key, and the schema retains the CLR property name. On .NET 11, properties marked `[ConfigurationIgnore]` are excluded from binding and from the generated schema and runtime values.
 
 Schema providers register by default. Disable them when the application only needs binding and validation:
@@ -60,7 +62,7 @@ builder.Services.AddValiantSettings(builder.Configuration, options =>
 });
 ```
 
-Generated settings registration adds `IValidateOptions<S3Settings>` for configured settings models. It resolves a matching `IValidator<S3Settings>` from DI and translates Valiant errors to normal Options validation failures.
+Generated settings registration adds `IValidateOptions<S3Settings>` for configured settings models. It runs all registered `IValidator<S3Settings>` implementations and combines their errors into Options validation failures.
 
 ## Await validation at startup on .NET 11
 

@@ -105,7 +105,8 @@ public sealed partial class ValiantGenerator
         string metadataProviderType,
         ImmutableArray<ContainingTypeModel> containingTypes,
         Location? location,
-        ConstructorModel? constructor)
+        ConstructorModel? constructor,
+        bool canActivate)
     {
         public string HintName { get; } = hintName;
 
@@ -124,6 +125,8 @@ public sealed partial class ValiantGenerator
         public ValiantDiagnosticLocation Location { get; } = ValiantDiagnosticLocation.Create(location);
 
         public ConstructorModel? Constructor { get; } = constructor;
+
+        public bool CanActivate { get; } = canActivate;
     }
 
     private sealed class ContainingTypeModel(
@@ -145,16 +148,20 @@ public sealed partial class ValiantGenerator
 
     private readonly struct ConstructorParameterModel(
         string type,
-        string name) : IEquatable<ConstructorParameterModel>
+        string name,
+        RefKind refKind) : IEquatable<ConstructorParameterModel>
     {
         public string Type { get; } = type;
 
         public string Name { get; } = name;
 
+        public RefKind RefKind { get; } = refKind;
+
         public bool Equals(ConstructorParameterModel other)
         {
             return string.Equals(Type, other.Type, StringComparison.Ordinal) &&
-                string.Equals(Name, other.Name, StringComparison.Ordinal);
+                string.Equals(Name, other.Name, StringComparison.Ordinal) &&
+                RefKind == other.RefKind;
         }
 
         public override bool Equals(object? obj)
@@ -166,7 +173,8 @@ public sealed partial class ValiantGenerator
         {
             unchecked
             {
-                return (StringComparer.Ordinal.GetHashCode(Type) * 397) ^ StringComparer.Ordinal.GetHashCode(Name);
+                var hashCode = (StringComparer.Ordinal.GetHashCode(Type) * 397) ^ StringComparer.Ordinal.GetHashCode(Name);
+                return (hashCode * 397) ^ (int)RefKind;
             }
         }
     }
@@ -175,7 +183,8 @@ public sealed partial class ValiantGenerator
         string validatorType,
         string modelType,
         string metadataProviderType,
-        bool registerAsDefault) : IEquatable<DependencyInjectionValidatorModel>
+        bool registerAsDefault,
+        bool canActivate) : IEquatable<DependencyInjectionValidatorModel>
     {
         public string ValidatorType { get; } = validatorType;
 
@@ -185,12 +194,15 @@ public sealed partial class ValiantGenerator
 
         public bool RegisterAsDefault { get; } = registerAsDefault;
 
+        public bool CanActivate { get; } = canActivate;
+
         public bool Equals(DependencyInjectionValidatorModel other)
         {
             return string.Equals(ValidatorType, other.ValidatorType, StringComparison.Ordinal) &&
                 string.Equals(ModelType, other.ModelType, StringComparison.Ordinal) &&
                 string.Equals(MetadataProviderType, other.MetadataProviderType, StringComparison.Ordinal) &&
-                RegisterAsDefault == other.RegisterAsDefault;
+                RegisterAsDefault == other.RegisterAsDefault &&
+                CanActivate == other.CanActivate;
         }
 
         public override bool Equals(object? obj)
@@ -206,6 +218,7 @@ public sealed partial class ValiantGenerator
                 hashCode = (hashCode * 397) ^ StringComparer.Ordinal.GetHashCode(ModelType);
                 hashCode = (hashCode * 397) ^ StringComparer.Ordinal.GetHashCode(MetadataProviderType);
                 hashCode = (hashCode * 397) ^ RegisterAsDefault.GetHashCode();
+                hashCode = (hashCode * 397) ^ CanActivate.GetHashCode();
                 return hashCode;
             }
         }

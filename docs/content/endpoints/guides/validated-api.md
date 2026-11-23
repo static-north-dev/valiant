@@ -12,11 +12,13 @@ Use the [.NET SDK listed in the package guide](../../validation/reference/packag
 ```bash
 dotnet new web -n OrdersApi -f net8.0
 cd OrdersApi
-dotnet add package StaticNorth.Valiant.Endpoints.AspNetCore --version 1.2.1
-dotnet add package StaticNorth.Valiant.Validation.AspNetCore --version 1.2.1
-dotnet add package StaticNorth.Valiant.Mapping --version 1.2.1
-dotnet add package StaticNorth.Valiant.Settings --version 1.2.1
+dotnet add package StaticNorth.Valiant.Endpoints.AspNetCore
+dotnet add package StaticNorth.Valiant.Validation.AspNetCore
+dotnet add package StaticNorth.Valiant.Mapping
+dotnet add package StaticNorth.Valiant.Settings
 ```
+
+These commands select the latest stable packages. Use `--version` on each command to try a specific release or prerelease.
 
 Add the order limit to `appsettings.json`:
 

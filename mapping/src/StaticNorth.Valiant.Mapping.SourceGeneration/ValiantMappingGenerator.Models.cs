@@ -157,11 +157,14 @@ public sealed partial class ValiantMappingGenerator
 
     private sealed class ConstructorMappingModel(
         ImmutableArray<ConstructorArgumentModel> arguments,
-        ImmutableArray<CollectionMappingModel> collectionMappings)
+        ImmutableArray<CollectionMappingModel> collectionMappings,
+        bool setsRequiredMembers = false)
     {
         public ImmutableArray<ConstructorArgumentModel> Arguments { get; } = arguments;
 
         public ImmutableArray<CollectionMappingModel> CollectionMappings { get; } = collectionMappings;
+
+        public bool SetsRequiredMembers { get; } = setsRequiredMembers;
     }
 
     private enum NullHandlingPolicy
@@ -171,7 +174,12 @@ public sealed partial class ValiantMappingGenerator
         IgnoreSourceNulls
     }
 
-    private sealed class ConstructorArgumentModel(string parameterName, string parameterType, string runtimeParameterType, string sourceExpression)
+    private sealed class ConstructorArgumentModel(
+        string parameterName,
+        string parameterType,
+        string runtimeParameterType,
+        string sourceExpression,
+        bool isIn)
     {
         public string ParameterName { get; } = parameterName;
 
@@ -180,6 +188,8 @@ public sealed partial class ValiantMappingGenerator
         public string RuntimeParameterType { get; } = runtimeParameterType;
 
         public string SourceExpression { get; } = sourceExpression;
+
+        public bool IsIn { get; } = isIn;
     }
 
     private sealed class MemberAssignmentModel(
@@ -461,12 +471,13 @@ public sealed partial class ValiantMappingGenerator
         }
     }
 
-    private sealed class LambdaParameterRewriter(string parameterName, string replacementName) : CSharpSyntaxRewriter
+    private sealed class LambdaParameterRewriter(ISymbol? parameter, SemanticModel semanticModel) : CSharpSyntaxRewriter
     {
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
         {
-            return string.Equals(node.Identifier.ValueText, parameterName, StringComparison.Ordinal)
-                ? SyntaxFactory.IdentifierName(replacementName)
+            return parameter is not null && node.Identifier.ValueText == parameter.Name &&
+                SymbolEqualityComparer.Default.Equals(semanticModel.GetSymbolInfo(node).Symbol, parameter)
+                ? SyntaxFactory.IdentifierName("source").WithTriviaFrom(node)
                 : base.VisitIdentifierName(node);
         }
     }

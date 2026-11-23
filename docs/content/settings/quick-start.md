@@ -7,15 +7,19 @@ description: Install StaticNorth.Valiant.Settings, generate a schema, and option
 
 ## 1. Create a project and install Valiant
 
-Use the **.NET 10.0.400 SDK or newer** to build this example with Valiant 1.2.1. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+Use the **.NET 10.0.400 SDK or newer** with this guide. The project can target .NET 8. Run `dotnet --version` from the project directory to check the selected SDK. A `CS9057` warning indicates that the selected compiler is too old to load the generator.
+
+Generated code requires **C# 8.0 or later**. Set `<LangVersion>8.0</LangVersion>` explicitly in projects that default to an older language version, including .NET Standard 2.0 projects.
 
 ```bash
 dotnet new web -n SettingsDemo -f net8.0
 cd SettingsDemo
-dotnet add package StaticNorth.Valiant.Settings --version 1.2.1
+dotnet add package StaticNorth.Valiant.Settings
 ```
 
 For the [settings explorer](./guides/aspnetcore-ui.md), choose `StaticNorth.Valiant.Settings.AspNetCore`. For [Options validation](./guides/binding-validation.md), choose `StaticNorth.Valiant.Settings.Validation`. Both integrations bring in the core package and its generator.
+
+The install command selects the latest stable package. Add `--version` to select a specific release or prerelease that matches the guide you are following.
 
 ## 2. Mark a settings model
 

@@ -94,6 +94,8 @@ builder.Services.AddOpenApi(options =>
 
 Valiant projects unconditional rules with a known blocking severity into native constraints such as required, length, count, and comparison bounds. Rules with advisory, dynamic, or conditional severity remain available in the `x-valiant-rules` extension.
 
+String length rules count UTF-16 code units at runtime. OpenAPI length keywords count Unicode code points, so strings containing supplementary characters can have different lengths in an OpenAPI client and the server.
+
 :::info Package references
 Each integration package forwards the core Valiant runtime and generator assets. Add both ASP.NET Core packages when you need request validation and OpenAPI; do not add a redundant direct `StaticNorth.Valiant.Validation` reference.
 :::

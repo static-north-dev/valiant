@@ -8,14 +8,14 @@
       "staticnorth.valiant.settings.aspnetcore": {
         "type": "Project",
         "dependencies": {
-          "StaticNorth.Valiant.Settings": "[0.1.0-preview.1, )"
+          "StaticNorth.Valiant.Settings": "[1.2.1-ci.1, )"
         }
       },
       "staticnorth.valiant.settings.validation": {
         "type": "Project",
         "dependencies": {
-          "StaticNorth.Valiant.Settings": "[0.1.0-preview.1, )",
-          "StaticNorth.Valiant.Validation": "[0.1.0-preview.1, )"
+          "StaticNorth.Valiant.Settings": "[1.2.1-ci.1, )",
+          "StaticNorth.Valiant.Validation": "[1.2.1-ci.1, )"
         }
       },
       "staticnorth.valiant.validation": {

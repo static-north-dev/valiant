@@ -8,6 +8,7 @@ import {build} from 'esbuild';
 import {contentSignal, discoveryLinks, moduleNames} from '../src/agents/documentation.mjs';
 import {serverInfo} from '../src/agents/mcp.mjs';
 import {contentSecurityPolicy} from '../src/agents/security.mjs';
+import {transformMarkdown} from './markdown-content.mjs';
 
 const require = createRequire(import.meta.url);
 const {DEFAULT_PARSE_FRONT_MATTER} = require('@docusaurus/utils');
@@ -25,32 +26,13 @@ function withoutFrontmatter(markdown) {
 }
 
 export function resolveMarkdownLinks(markdown, source, documentsBySource, siteUrl) {
-  let fence;
-  return markdown.split(/\r?\n/).map((line) => {
-    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/);
-    if (marker) {
-      if (!fence) {
-        fence = marker[1];
-      } else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) {
-        fence = undefined;
-      }
-      return line;
+  return transformMarkdown(markdown, (file, suffix) => {
+    const linked = documentsBySource.get(path.resolve(path.dirname(source), file));
+    if (!linked) {
+      throw new Error(`Markdown link '${file}${suffix}' in '${source}' does not reference a published document.`);
     }
-    if (fence) {
-      return line;
-    }
-    return line.replace(/(\]\(|^\s*\[[^\]]+\]:\s*)([^\s)]+\.md(?:#[^\s)]*)?)/g, (match, prefix, target) => {
-      if (/^[a-z][a-z\d+.-]*:/i.test(target)) {
-        return match;
-      }
-      const [file, fragment] = target.split('#');
-      const linked = documentsBySource.get(path.resolve(path.dirname(source), file));
-      if (!linked) {
-        throw new Error(`Markdown link '${target}' in '${source}' does not reference a published document.`);
-      }
-      return `${prefix}${siteUrl}${linked.permalink}${fragment ? `#${fragment}` : ''}`;
-    });
-  }).join('\n');
+    return `${siteUrl}${linked.permalink}${suffix}`;
+  });
 }
 
 function frontmatter(document, sourceRevision) {
@@ -104,7 +86,7 @@ function openApi(siteUrl) {
       '/api/docs/read': get('readDocument', 'Read the Markdown for an exact published page path.', 'Document', [
         {name: 'path', in: 'query', required: true, schema: {type: 'string', minLength: 1, maxLength: 300}},
       ]),
-      '/api/docs/status': get('documentationStatus', 'Check that the documentation index is available.', 'Status'),
+      '/api/docs/status': get('documentationStatus', 'Read the published documentation version and source revision.', 'Status'),
     },
     components: {schemas: {
       Version: {
@@ -204,6 +186,7 @@ export async function buildAgentArtifacts({siteDir, outDir, versions, siteUrl, s
     documents,
   };
   await write('/agents/documents.json', index);
+  await write('/agents/documents-status.json', {defaultVersion, sourceRevision});
   const defaults = documents.filter((document) => document.version === defaultVersion).sort(documentOrder);
   await write('/llms-full.txt', contextBundle(defaults, defaultVersion, sourceRevision, 'StaticNorth.Valiant — Full Documentation'));
   const moduleLinks = [];
@@ -285,7 +268,7 @@ export async function buildAgentArtifacts({siteDir, outDir, versions, siteUrl, s
   ].join('\n');
   await write('/_headers', headers);
   await write('/_routes.json', {version: 1, include: ['/*'], exclude: [
-    '/assets/*', '/img/*', '/markdown/*', '/llms*.txt', '/agents/documents.json',
+    '/assets/*', '/img/*', '/markdown/*', '/llms*.txt', '/agents/documents.json', '/agents/documents-status.json',
     '/openapi.json', '/auth.md', '/robots.txt', '/sitemap.xml',
     '/.well-known/agent-skills/*', '/.well-known/api-catalog',
     '/.well-known/ard.json', '/.well-known/ai-catalog.json', '/.well-known/poppy.json',

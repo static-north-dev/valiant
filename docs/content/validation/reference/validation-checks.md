@@ -47,6 +47,8 @@ context.Property(product => product.Price)
 | `CountBetween(min, max)` | Inclusive item-count range |
 | `MinCount(min)` / `MaxCount(max)` | Count bounds |
 | `Contains(item)` / `Excludes(item)` | Membership |
+
+Count checks accept enumerable collections, including sets. For a sequence without a non-generic collection count, validation reads only enough items to decide the bound.
 | `All(predicate)` / `Any(predicate)` / `None(predicate)` | Element predicates |
 | `ForEach(configure)` | Validate every item with a nested context |
 

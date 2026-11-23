@@ -16,7 +16,7 @@ public sealed class QueryBindingSampleApplicationFactory :
 {
     public QueryBindingSampleApplicationFactory()
     {
-        UseKestrel(0);
+        UseKestrel(static options => options.Listen(IPAddress.Loopback, 0));
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -37,7 +37,7 @@ public sealed class QueryBindingTestApplicationFactory :
 {
     public QueryBindingTestApplicationFactory()
     {
-        UseKestrel(0);
+        UseKestrel(static options => options.Listen(IPAddress.Loopback, 0));
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -58,7 +58,7 @@ public sealed class QueryBindingDisabledTestApplicationFactory :
 {
     public QueryBindingDisabledTestApplicationFactory()
     {
-        UseKestrel(0);
+        UseKestrel(static options => options.Listen(IPAddress.Loopback, 0));
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -199,6 +199,54 @@ public sealed class QueryBindingSampleWebApplicationFactoryTests(
 public sealed class QueryBindingWebApplicationFactoryTests(
     QueryBindingTestApplicationFactory factory)
 {
+    [Test]
+    public async Task Query_Binding_Runs_Before_Group_And_Route_Filters()
+    {
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/integration/filter-observation/observe?filter.id=7&day=2026-01-02");
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        await Assert.That(response.Headers.GetValues("X-Group-Observed-Filter").Single()).IsEqualTo("7");
+        await Assert.That(response.Headers.GetValues("X-Route-Observed-Filter").Single()).IsEqualTo("7");
+        using var document = await ReadJson(response);
+        await Assert.That(document.RootElement.GetProperty("day").GetString()).IsEqualTo("2026-01-02");
+    }
+
+    [Test]
+    public async Task Whole_Request_Binds_Inherited_Dotted_Query_Alias()
+    {
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/integration/query/inherited?page.size=5&term=books");
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        using var document = await ReadJson(response);
+        await Assert.That(document.RootElement.GetProperty("limit").GetInt32()).IsEqualTo(5);
+        await Assert.That(document.RootElement.GetProperty("search").GetString()).IsEqualTo("books");
+    }
+
+    [Test]
+    public async Task Whole_Request_Reports_Missing_Required_Query_Alias()
+    {
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/integration/query/inherited?page.size=5");
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        using var document = await ReadJson(response);
+        await Assert.That(document.RootElement[0].GetProperty("code").GetString()).IsEqualTo("MissingQueryValue");
+        await Assert.That(document.RootElement[0].GetProperty("path").GetString()).IsEqualTo("term");
+    }
+
+    [Test]
+    public async Task Ordinary_Route_Binds_A_Query_Type_Also_Used_By_Valiant()
+    {
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/integration/query/native?filter=%7B%22id%22%3A7%7D");
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        using var document = await ReadJson(response);
+        await Assert.That(document.RootElement.GetProperty("id").GetInt32()).IsEqualTo(7);
+    }
+
     [Test]
     public async Task Generated_Whole_Request_Binding_Uses_Only_Declared_Query_Members()
     {

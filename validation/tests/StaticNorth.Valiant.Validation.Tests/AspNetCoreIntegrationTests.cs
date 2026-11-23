@@ -374,6 +374,27 @@ public sealed class AspNetCoreIntegrationTests
     }
 
     [Test]
+    public async Task Typed_Minimal_Api_Validation_Does_Not_Resolve_Validators_For_An_Absent_Argument()
+    {
+        var probe = new OrderedValidationProbe();
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton(probe);
+        builder.Services.AddTransient<IValidator<string>, FirstOrderedStringValidator>();
+
+        await using var app = builder.Build();
+        app.MapGet("/nullable", static (string? value) => Results.Ok(value))
+            .WithValiantValidation<string>();
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+
+        using var response = await client.GetAsync("/nullable");
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        await Assert.That(probe.FirstStringValidatorConstructions).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task Parameterless_Minimal_Api_Validation_Does_Not_Block_On_Warnings_Or_Info()
     {
         var builder = WebApplication.CreateBuilder();

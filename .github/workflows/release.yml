@@ -16,7 +16,6 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   NUGET_SOURCE: https://api.nuget.org/v3/index.json
-  PACKAGE_OUTPUT: artifacts/packages
 
 jobs:
   prepare:
@@ -81,32 +80,32 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Pack, inspect, and run leaf consumers
-        run: >
-          dotnet msbuild StaticNorth.Valiant.Pack.proj
-          -t:VerifyPackageConsumers
-          -m:1
-          -p:Configuration=Release
-          -p:NoBuild=true
-          -p:PackageVersion="${{ steps.version.outputs.package_version }}"
-
-      - name: Publish and run Native AOT package smoke
-        run: >
-          dotnet msbuild StaticNorth.Valiant.Pack.proj
-          -t:VerifyAotSmoke
-          -m:1
-          -p:Configuration=Release
-          -p:NoBuild=true
-          -p:PackageVersion="${{ steps.version.outputs.package_version }}"
-          -p:AotRuntimeIdentifier=linux-x64
+      - name: Verify packages, consumers, and Native AOT
+        id: verified
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+        run: |
+          output="$(mktemp -d "${RUNNER_TEMP}/valiant-${PACKAGE_VERSION}.XXXXXX")"
+          dotnet msbuild StaticNorth.Valiant.Pack.proj \
+            -t:VerifyPackageConsumers,VerifyAotSmoke \
+            -m:1 -p:Configuration=Release -p:NoBuild=true \
+            -p:PackageVersion="$PACKAGE_VERSION" -p:PackageOutputPath="$output" \
+            -p:AotRuntimeIdentifier=linux-x64
+          {
+            echo 'paths<<VERIFIED_PACKAGES'
+            echo "$output/verified-packages.sha256"
+            while read -r checksum file; do
+              echo "$output/$file"
+            done < "$output/verified-packages.sha256"
+            echo 'VERIFIED_PACKAGES'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload verified packages
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: valiant-packages-${{ steps.version.outputs.package_version }}
-          path: |
-            ${{ env.PACKAGE_OUTPUT }}/*.nupkg
-            ${{ env.PACKAGE_OUTPUT }}/*.snupkg
+          path: ${{ steps.verified.outputs.paths }}
           if-no-files-found: error
           retention-days: 30
 
@@ -139,17 +138,39 @@ jobs:
 
       - name: Publish to NuGet
         shell: bash
+        working-directory: artifacts/packages
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+          PACKAGE_VERSION: ${{ needs.prepare.outputs.package_version }}
         run: |
           if [ -z "$NUGET_API_KEY" ]; then
             echo "NuGet trusted publishing did not return a temporary API key." >&2
             exit 1
           fi
 
-          for package in "$PACKAGE_OUTPUT"/*.nupkg; do
+          sha256sum --strict --check verified-packages.sha256
+          packages=()
+          while read -r checksum file; do
+            [[ "$file" == *.nupkg ]] || continue
+            package_id="${file%.${PACKAGE_VERSION}.nupkg}"
+            package_id="${package_id,,}"
+            version="${PACKAGE_VERSION,,}"
+            status="$(curl --silent --show-error --head --output /dev/null --write-out '%{http_code}' \
+              --retry 3 --max-time 30 "https://api.nuget.org/v3-flatcontainer/$package_id/$version/$package_id.$version.nupkg")"
+            if [[ "$status" != 404 ]]; then
+              echo "Cannot publish $file. NuGet package availability check returned HTTP $status." >&2
+              exit 1
+            fi
+            packages+=("$file")
+          done < verified-packages.sha256
+
+          if [[ "${#packages[@]}" -eq 0 ]]; then
+            echo "No verified NuGet packages were found." >&2
+            exit 1
+          fi
+
+          for package in "${packages[@]}"; do
             dotnet nuget push "$package" \
               --api-key "$NUGET_API_KEY" \
-              --source "$NUGET_SOURCE" \
-              --skip-duplicate
+              --source "$NUGET_SOURCE"
           done

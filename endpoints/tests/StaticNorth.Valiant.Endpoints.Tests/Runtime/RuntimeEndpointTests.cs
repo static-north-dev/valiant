@@ -867,12 +867,17 @@ public sealed partial class RuntimeEndpointTests
     {
         var builder = new TestEndpointRouteBuilder(new ServiceCollection().BuildServiceProvider());
         var first = new QueryParsingOptions { EnableJsonQueryValues = true };
-        var last = new QueryParsingOptions { EnableJsonQueryValues = false };
+        var last = new QueryParsingOptions
+        {
+            SupportedArrayFormats = [QueryArrayFormat.CommaSeparated],
+            EnableJsonQueryValues = false
+        };
         var convention = builder.MapGet("/query-options", () => Results.Ok());
 
         var result = convention
             .WithQueryParsingOptions(first)
             .WithQueryParsingOptions(last);
+        last.SupportedArrayFormats[0] = QueryArrayFormat.Brackets;
         var endpoint = builder.DataSources
             .SelectMany(static dataSource => dataSource.Endpoints)
             .Single();
@@ -884,8 +889,9 @@ public sealed partial class RuntimeEndpointTests
         context.SetEndpoint(endpoint);
 
         await Assert.That(result).IsSameReferenceAs(convention);
-        await Assert.That(ValiantEndpointGeneratedCode.ResolveQueryParsingOptions(context))
-            .IsSameReferenceAs(last);
+        var resolved = ValiantEndpointGeneratedCode.ResolveQueryParsingOptions(context);
+        await Assert.That(resolved.EnableJsonQueryValues).IsFalse();
+        await Assert.That(resolved.SupportedArrayFormats.Single()).IsEqualTo(QueryArrayFormat.CommaSeparated);
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
             Task.FromResult(ValiantEndpointRouteBuilderExtensions.WithQueryParsingOptions(null!, first)));
         await Assert.ThrowsAsync<ArgumentNullException>(() =>

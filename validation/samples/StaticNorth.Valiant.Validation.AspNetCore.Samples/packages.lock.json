@@ -8,7 +8,7 @@
       "staticnorth.valiant.validation.aspnetcore": {
         "type": "Project",
         "dependencies": {
-          "StaticNorth.Valiant.Validation": "[0.1.0-preview.1, )"
+          "StaticNorth.Valiant.Validation": "[1.2.1-ci.1, )"
         }
       },
       "staticnorth.valiant.validation.aspnetcore.openapi": {
@@ -16,7 +16,7 @@
         "dependencies": {
           "Microsoft.AspNetCore.OpenApi": "[11.0.0, )",
           "Microsoft.OpenApi": "[3.11.0, 4.0.0)",
-          "StaticNorth.Valiant.Validation": "[0.1.0-preview.1, )"
+          "StaticNorth.Valiant.Validation": "[1.2.1-ci.1, )"
         }
       },
       "Microsoft.AspNetCore.OpenApi": {

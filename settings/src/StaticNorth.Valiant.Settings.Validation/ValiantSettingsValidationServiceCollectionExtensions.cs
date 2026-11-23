@@ -51,10 +51,15 @@ public static class ValiantSettingsValidationServiceCollectionExtensions
             }
 
             using var scope = scopeFactory.CreateScope();
-            var validator = scope.ServiceProvider.GetService<IValidator<TOptions>>();
-            return validator is null
-                ? MissingValidatorResult()
-                : ToOptionsResult(validator.Validate(options));
+            var foundValidator = false;
+            var failures = new List<string>();
+            foreach (var validator in scope.ServiceProvider.GetServices<IValidator<TOptions>>())
+            {
+                foundValidator = true;
+                failures.AddRange(validator.Validate(options).Errors.Select(FormatFailure));
+            }
+
+            return foundValidator ? ToOptionsResult(failures) : MissingValidatorResult();
         }
 
 #if NET11_0_OR_GREATER
@@ -69,10 +74,17 @@ public static class ValiantSettingsValidationServiceCollectionExtensions
             }
 
             await using var scope = scopeFactory.CreateAsyncScope();
-            var validator = scope.ServiceProvider.GetService<IValidator<TOptions>>();
-            return validator is null
-                ? MissingValidatorResult()
-                : ToOptionsResult(await validator.ValidateAsync(options, cancellationToken).ConfigureAwait(false));
+            var foundValidator = false;
+            var failures = new List<string>();
+            foreach (var validator in scope.ServiceProvider.GetServices<IValidator<TOptions>>())
+            {
+                foundValidator = true;
+                cancellationToken.ThrowIfCancellationRequested();
+                var result = await validator.ValidateAsync(options, cancellationToken).ConfigureAwait(false);
+                failures.AddRange(result.Errors.Select(FormatFailure));
+            }
+
+            return foundValidator ? ToOptionsResult(failures) : MissingValidatorResult();
         }
 #endif
 
@@ -83,11 +95,11 @@ public static class ValiantSettingsValidationServiceCollectionExtensions
                 : ValidateOptionsResult.Success;
         }
 
-        private static ValidateOptionsResult ToOptionsResult(ValidationResult result)
+        private static ValidateOptionsResult ToOptionsResult(List<string> failures)
         {
-            return result.IsValid
+            return failures.Count == 0
                 ? ValidateOptionsResult.Success
-                : ValidateOptionsResult.Fail(result.Errors.Select(FormatFailure));
+                : ValidateOptionsResult.Fail(failures);
         }
 
         private static string FormatFailure(ValidationFailure failure)

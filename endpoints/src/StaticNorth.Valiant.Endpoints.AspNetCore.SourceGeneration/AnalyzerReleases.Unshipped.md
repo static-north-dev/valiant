@@ -13,3 +13,4 @@ VLE008 | StaticNorth.Valiant.Endpoints | Error | Endpoint declaration must use V
 VLE009 | StaticNorth.Valiant.Endpoints | Error | Endpoint declaration must use only one ValiantEndpointAttribute form.
 VLE010 | StaticNorth.Valiant.Endpoints | Error | Query object types discovered from Valiant endpoint request models must support generated partial query binding.
 VLE011 | StaticNorth.Valiant.Endpoints | Error | Direct query parameters using the same generated parser type must use one JsonValues policy.
+VLE012 | StaticNorth.Valiant.Endpoints | Error | Endpoint and group registration types must be closed and accessible from generated source.

@@ -2,10 +2,12 @@ import {contentSignal, discoveryLinks, listDocuments, readDocument, searchDocume
 import {handleMcpRequest} from './mcp.mjs';
 import {withSecurityHeaders} from './security.mjs';
 
-function withoutConditionalHeaders(request) {
+function forRewrittenHtml(request) {
   const headers = new Headers(request.headers);
   headers.delete('If-None-Match');
   headers.delete('If-Modified-Since');
+  headers.delete('Range');
+  headers.delete('If-Range');
   return new Request(request, {headers});
 }
 
@@ -14,7 +16,7 @@ export function prefersMarkdown(accept = '') {
     const [type, ...parameters] = range.trim().split(';');
     const parameter = parameters.map((value) => value.trim()).find((value) => value.startsWith('q='));
     const quality = parameter === undefined ? 1 : /^q=(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(parameter) ? Number(parameter.slice(2)) : 0;
-    return {type, quality};
+    return {type: type.trim(), quality};
   });
   if (!ranges.some(({type}) => type === 'text/markdown')) {
     return false;
@@ -31,17 +33,22 @@ export function prefersMarkdown(accept = '') {
   return quality('text/markdown') > 0 && quality('text/markdown') >= quality('text/html');
 }
 
-function withHeaders(response, {markdownPath, varyAccept = false, cors = false, noStore = false} = {}) {
+function withHeaders(response, {markdownPath, varyAccept = false, corsMethods, noStore = false} = {}) {
   const headers = new Headers(response.headers);
-  headers.set('Link', discoveryLinks + (markdownPath ? `, <${markdownPath}>; rel="alternate"; type="text/markdown"` : ''));
+  headers.append('Link', discoveryLinks + (markdownPath ? `, <${markdownPath}>; rel="alternate"; type="text/markdown"` : ''));
   headers.set('Content-Signal', contentSignal);
   headers.set('X-Content-Type-Options', 'nosniff');
   if (varyAccept) {
-    headers.set('Vary', [...new Set((headers.get('Vary') ?? '').split(',').map((value) => value.trim()).filter(Boolean).concat('Accept'))].join(', '));
+    const varies = (headers.get('Vary') ?? '').split(',').map((value) => value.trim()).filter(Boolean);
+    if (varies.includes('*')) {
+      headers.set('Vary', '*');
+    } else if (!varies.some((value) => value.toLowerCase() === 'accept')) {
+      headers.append('Vary', 'Accept');
+    }
   }
-  if (cors) {
+  if (corsMethods) {
     headers.set('Access-Control-Allow-Origin', '*');
-    headers.set('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS');
+    headers.set('Access-Control-Allow-Methods', corsMethods);
     headers.set('Access-Control-Allow-Headers', 'Content-Type, Accept, MCP-Protocol-Version, MCP-Session-Id');
   }
   if (noStore) {
@@ -50,7 +57,20 @@ function withHeaders(response, {markdownPath, varyAccept = false, cors = false, 
   return new Response(response.body, {status: response.status, statusText: response.statusText, headers});
 }
 
+async function readDocumentationAsset(assets, url, path) {
+  try {
+    const response = await assets.fetch(new Request(new URL(path, url)));
+    if (!response.ok) throw new Error('Documentation asset is unavailable.');
+    const asset = await response.json();
+    if (typeof asset?.defaultVersion !== 'string') throw new Error('Documentation asset is invalid.');
+    return asset;
+  } catch (error) {
+    throw new Error('Documentation asset is unavailable.', {cause: error});
+  }
+}
+
 export function createWorker({markdownRoutes}) {
+  const indexes = new WeakMap();
   const worker = {
     async fetch(request, env) {
       const url = new URL(request.url);
@@ -63,8 +83,7 @@ export function createWorker({markdownRoutes}) {
         } else {
           response = Response.json({error: 'Method not allowed.'}, {status: 405, headers: {Allow: 'GET, HEAD, OPTIONS'}});
         }
-        const result = withHeaders(response, {cors: true});
-        result.headers.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+        const result = withHeaders(response, {corsMethods: 'GET, HEAD, OPTIONS'});
         result.headers.set('Access-Control-Allow-Headers', 'Content-Type, If-None-Match');
         result.headers.set('Access-Control-Expose-Headers', 'ETag');
         if (result.ok && request.method !== 'OPTIONS') {
@@ -72,23 +91,25 @@ export function createWorker({markdownRoutes}) {
         }
         return result;
       }
-      const loadIndex = async () => {
-        try {
-          const response = await env.ASSETS.fetch(new Request(new URL('/agents/documents.json', url)));
-          if (!response.ok) {
-            throw new Error('Documentation index is unavailable.');
-          }
-          const index = await response.json();
-          if (typeof index.defaultVersion !== 'string' || !Array.isArray(index.documents) || !Array.isArray(index.versions)) {
-            throw new Error('Documentation index is invalid.');
-          }
-          return index;
-        } catch (error) {
-          throw new Error('Documentation index is unavailable.', {cause: error});
+      const loadIndex = () => {
+        let index = indexes.get(env.ASSETS);
+        if (!index) {
+          index = readDocumentationAsset(env.ASSETS, url, '/agents/documents.json').then((data) => {
+            if (!Array.isArray(data.documents) || !Array.isArray(data.versions)) {
+              throw new Error('Documentation index is invalid.');
+            }
+            return data;
+          }).catch((error) => {
+            indexes.delete(env.ASSETS);
+            throw error;
+          });
+          indexes.set(env.ASSETS, index);
         }
+        return index;
       };
       const isApi = url.pathname === '/api/docs' || url.pathname.startsWith('/api/docs/');
       if (url.pathname === '/mcp' || isApi) {
+        const apiHeaders = {corsMethods: isApi ? 'GET, HEAD, OPTIONS' : 'POST, OPTIONS', noStore: true};
         try {
           let response;
           if (url.pathname === '/mcp') {
@@ -97,7 +118,10 @@ export function createWorker({markdownRoutes}) {
             response = new Response(null, {status: 204});
           } else if (!['GET', 'HEAD'].includes(request.method)) {
             response = Response.json({error: 'Method not allowed.'}, {status: 405, headers: {Allow: 'GET, HEAD, OPTIONS'}});
-          } else {
+          } else if (url.pathname === '/api/docs/status') {
+            const {defaultVersion, sourceRevision} = await readDocumentationAsset(env.ASSETS, url, '/agents/documents-status.json');
+            response = Response.json({status: 'ok', defaultVersion, sourceRevision});
+          } else if (['/api/docs', '/api/docs/search', '/api/docs/read'].includes(url.pathname)) {
             const index = await loadIndex();
             const filters = Object.fromEntries(['module', 'version'].filter((key) => url.searchParams.has(key)).map((key) => [key, url.searchParams.get(key)]));
             switch (url.pathname) {
@@ -112,17 +136,14 @@ export function createWorker({markdownRoutes}) {
                 response = document ? Response.json(document) : Response.json({error: 'Document not found.'}, {status: 404});
                 break;
               }
-              case '/api/docs/status': response = Response.json({status: 'ok', defaultVersion: index.defaultVersion, sourceRevision: index.sourceRevision}); break;
-              default: response = Response.json({error: 'Endpoint not found.'}, {status: 404});
             }
+          } else {
+            response = Response.json({error: 'Endpoint not found.'}, {status: 404});
           }
-          if (request.method === 'HEAD') {
-            response = new Response(null, {status: response.status, headers: response.headers});
-          }
-          return withHeaders(response, {cors: true, noStore: true});
+          return withHeaders(response, apiHeaders);
         } catch (error) {
           const status = error instanceof TypeError ? 400 : 503;
-          return withHeaders(Response.json({error: status === 400 ? error.message : 'Documentation is temporarily unavailable.'}, {status}), {cors: true, noStore: true});
+          return withHeaders(Response.json({error: status === 400 ? error.message : 'Documentation is temporarily unavailable.'}, {status}), apiHeaders);
         }
       }
       const route = url.pathname.replace(/\/$/, '') || '/';
@@ -137,14 +158,19 @@ export function createWorker({markdownRoutes}) {
           }
           return result;
         }
-        return withHeaders(await env.ASSETS.fetch(withoutConditionalHeaders(request)), {markdownPath, varyAccept: true});
+        return withHeaders(await env.ASSETS.fetch(forRewrittenHtml(request)), {markdownPath, varyAccept: true});
       }
       const html = ['GET', 'HEAD'].includes(request.method) &&
         (url.pathname.endsWith('.html') || request.headers.get('Accept')?.includes('text/html'));
-      return env.ASSETS.fetch(html ? withoutConditionalHeaders(request) : request);
+      return env.ASSETS.fetch(html ? forRewrittenHtml(request) : request);
     },
   };
   return {async fetch(request, env) {
-    return withSecurityHeaders(await worker.fetch(request, env));
+    const response = await worker.fetch(request, env);
+    if (request.method === 'HEAD' && response.body) {
+      await response.body.cancel();
+      return withSecurityHeaders(new Response(null, response));
+    }
+    return withSecurityHeaders(response);
   }};
 }

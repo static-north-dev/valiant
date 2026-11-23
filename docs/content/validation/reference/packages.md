@@ -17,17 +17,15 @@ Install the most specific package for each integration you use. Integration pack
 
 ## Build SDK and target frameworks
 
-**The Next Valiant packages require the .NET 11.0.100 SDK or newer to run their source generators.** You can use that SDK to build applications targeting `net8.0` with the packages that list a .NET 8 asset. Valiant 1.2.1 supports building with the .NET 10.0.400 SDK or newer.
+The Valiant source generators support the **.NET 10.0.400 SDK or newer**. You can build applications targeting `net8.0` with packages that list a .NET 8 asset. Use a .NET 11 SDK to target `net11.0` and access target-specific integrations such as asynchronous Options validation.
 
 Run `dotnet --version` in the project directory. If you see `CS9057` or generated methods are missing, check whether a `global.json` is selecting an older SDK.
-
-When upgrading from 1.2.1, update the SDK selection in local builds and CI before updating the package references.
 
 ## Endpoints, Mapping, and Settings
 
 | Package | Use it for | Included framework assets |
 | --- | --- | --- |
-| `StaticNorth.Valiant.Endpoints.AspNetCore` | Endpoint classes, groups, and query binding | .NET 8 |
+| `StaticNorth.Valiant.Endpoints.AspNetCore` | Endpoint classes, groups, and query binding | .NET 8 and .NET 11 |
 | `StaticNorth.Valiant.Mapping` | Generated object mapping | .NET 8 and .NET Standard 2.0 |
 | `StaticNorth.Valiant.Settings` | Generated settings schemas and optional Options registration | .NET 8 and .NET Standard 2.0 |
 | `StaticNorth.Valiant.Settings.AspNetCore` | Settings explorer and JSON endpoint | .NET 8 |
