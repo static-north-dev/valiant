@@ -1465,7 +1465,7 @@ public sealed partial class LabeledLoopValidator : ValidatorDefinition<LoopModel
 {
     public override void Configure(ValidationContext<LoopModel> context)
     {
-        outer: for (var round = 0; round < 2; round++)
+    outer: for (var round = 0; round < 2; round++)
         {
             foreach (var value in context.Instance.Values)
             {
@@ -1495,7 +1495,7 @@ public sealed partial class AsyncLabeledLoopValidator : ValidatorDefinition<Loop
     public override void Configure(ValidationContext<LoopModel> context)
     {
         {
-            @target: foreach (var value in context.Instance.Values)
+        @target: foreach (var value in context.Instance.Values)
             {
                 for (var step = 0; step < 2; step++)
                 {
@@ -1512,7 +1512,7 @@ public sealed partial class AsyncLabeledLoopValidator : ValidatorDefinition<Loop
         }
 
         {
-            target: switch (context.Instance.RunWhile)
+        target: switch (context.Instance.RunWhile)
             {
                 case true:
                     foreach (var value in context.Instance.Values)

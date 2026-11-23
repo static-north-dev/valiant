@@ -595,15 +595,25 @@ public sealed class FluentRuleTests
     }
 
     [Test]
-    public async Task Failure_Behavior_Changes_Apply_To_Following_Rules()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Failure_Behavior_Changes_Apply_To_Following_Rules(bool asynchronous)
     {
         var context = new ValidationContext<FailureBehaviorModel>(new FailureBehaviorModel());
         context.Property(model => model.Name).Required(code: "Before");
         context.FailFast();
+        const int warningCount = 256;
+        for (var index = 0; index < warningCount; index++)
+        {
+            context.Property(model => model.Name).Required(severity: ValiantSeverity.Warning);
+        }
+
         context.Property(model => model.Description).Required(code: "After");
         context.Property(model => model.Name).Required(code: "Skipped");
 
-        await Assert.That(string.Join(",", context.ToResult().Errors.Select(static error => error.ErrorCode)))
+        var result = asynchronous ? await context.ToResultAsync() : context.ToResult();
+        await Assert.That(result.Warnings.Count).IsEqualTo(warningCount);
+        await Assert.That(string.Join(",", result.Errors.Select(static error => error.ErrorCode)))
             .IsEqualTo("Before,After");
     }
 

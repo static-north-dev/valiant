@@ -5,12 +5,19 @@ description: Bind complex query objects through generated requests, AsParameters
 
 # Request binding
 
-Valiant query binding is disabled by default, leaving request parameters to native ASP.NET Core binding. Enable generated binding in the same project as the endpoint declarations with a direct assignment:
+Valiant query binding is disabled by default, leaving request parameters to native ASP.NET Core binding. Add this assembly attribute in the project that declares the endpoints.
+
+```csharp
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+[assembly: ValiantGenerateQueryBinding]
+```
+
+Register the endpoint assembly with `AddValiantEndpoints`. The host can configure the parsing formats for whole-request and `[AsParameters]` binding.
 
 ```csharp
 builder.Services.AddValiantEndpoints(options =>
 {
-    options.QueryParameters.EnableBinding = true;
     options.QueryParameters.Parsing = new QueryParsingOptions
     {
         SupportedObjectFormats = [QueryObjectFormat.Flat, QueryObjectFormat.DotNotation]
@@ -18,11 +25,11 @@ builder.Services.AddValiantEndpoints(options =>
 });
 ```
 
-Changing the literal between `true` and `false` adds or removes generated query binding during the normal rebuild. Helper methods, runtime variables, and a host configuration in another assembly are not compile-time opt-ins.
+Existing projects can still opt into generation with a direct literal `true` assignment in the `AddValiantEndpoints` setup lambda in the endpoint assembly. The assembly attribute also works when registration lives in a helper or a different assembly.
 
 :::caution Compile-time boundary
 
-`EnableBinding` is not a fully dynamic runtime switch. Whole-request `BindAsync` and `[AsParameters]` processing can read runtime options, but a generated direct `TryParse(string, out T)` has no `HttpContext`. If the endpoint compilation contains a recognized literal `true`, another host or later runtime override to `false` cannot remove or neutralize that direct parser. Compile the endpoint project with no recognized `true` assignment when `[ValiantQueryParsing]` must be ignored.
+The endpoint assembly's opt-in enables all three generated binding forms. Changing `EnableBinding` in the host leaves generated binding enabled. To disable it, remove the assembly attribute and any recognized literal `true` assignment, then rebuild. Whole-request and `[AsParameters]` binding read runtime parsing options. Direct `TryParse` uses the JSON policy compiled into the generated parser.
 
 :::
 
@@ -57,12 +64,12 @@ public sealed record CarFilter
 }
 ```
 
-Valiant emits `BindAsync(HttpContext, ParameterInfo)` on `ListCarsRequest` and parses the full query through the configured policy.
+Valiant emits `BindAsync(HttpContext, ParameterInfo)` on `ListCarsRequest`. Only root properties marked `[FromQuery]` with public setters participate, including public `init` accessors. Set `[FromQuery(Name = "filter")]` to use a query key different from the CLR property name. Nested filter members use their public property names.
 If the request is nested inside an endpoint or another type, every containing declaration must also be `partial` so generated code can reopen the complete declaration chain.
 
 ## `[AsParameters]`
 
-ASP.NET Core first constructs the request; a Valiant endpoint filter then reparses the full query and copies `[FromQuery]` values back:
+ASP.NET Core first constructs the request. A Valiant endpoint filter then applies the supplied `[FromQuery]` values using the configured formats and aliases. Properties with no matching query key keep their existing values.
 
 ```csharp
 return builder.MapGet("/cars", static ([AsParameters] ListCarsRequest request) =>
@@ -109,7 +116,7 @@ public sealed class CarsEndpoint : IEndpoint
 }
 ```
 
-The policy is compiled into the generated method, so direct binding does not use an endpoint filter. When the endpoint project is compiled with `options.QueryParameters.EnableBinding = false`, the attribute is ignored and no Valiant query parser is emitted. A later runtime-only override cannot change an already-generated direct parser; see the compile-time boundary above. When binding is enabled, JSON remains enabled when the attribute is absent or parameterless. Explicit `Disabled` returns HTTP 400. `SupportedArrayFormats` and `SupportedObjectFormats` on the attribute do not affect direct parameters. The attribute does not change a user-authored `TryParse`. Conflicting policies for the same generated parser type report `VLE011`.
+The policy is compiled into the generated method. JSON is enabled when the policy attribute is absent or parameterless. Explicit `Disabled` returns HTTP 400. The array and object formats apply to full-query binding only. User-authored `TryParse` methods keep their own behavior. Conflicting policies for the same generated parser type report `VLE011`.
 
 ## Failure response
 
@@ -120,7 +127,6 @@ For example, `/cars?filter.year=abc` produces HTTP 400 in both full-query exampl
 ```csharp
 builder.Services.AddValiantEndpoints(options =>
 {
-    options.QueryParameters.EnableBinding = true;
     options.QueryParameters.Parsing = new QueryParsingOptions
     {
         SupportedArrayFormats =

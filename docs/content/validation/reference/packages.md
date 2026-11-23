@@ -17,9 +17,11 @@ Install the most specific package for each integration you use. Integration pack
 
 ## Build SDK and target frameworks
 
-The current development branch uses the .NET 11.0.100 SDK. The published Valiant 1.2.1 generators require the .NET 10.0.400 SDK or newer. You can use either SDK to compile an application targeting `net8.0` with the matching Valiant packages. The tables list the framework assets on the development branch.
+**The Next Valiant packages require the .NET 11.0.100 SDK or newer to run their source generators.** You can use that SDK to build applications targeting `net8.0` with the packages that list a .NET 8 asset. Valiant 1.2.1 supports building with the .NET 10.0.400 SDK or newer.
 
 Run `dotnet --version` in the project directory. If you see `CS9057` or generated methods are missing, check whether a `global.json` is selecting an older SDK.
+
+When upgrading from 1.2.1, update the SDK selection in local builds and CI before updating the package references.
 
 ## Endpoints, Mapping, and Settings
 

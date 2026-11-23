@@ -27,6 +27,48 @@ public sealed class QueryStringParserTests
     }
 
     [Test]
+    [Arguments("128")]
+    [Arguments("-129")]
+    public async Task Parser_Returns_Validation_Error_For_Enum_Overflow(string value)
+    {
+        var result = QueryStringParser.Parse<EnumQuery>("?value=" + value);
+
+        await Assert.That(result.IsSuccess).IsFalse();
+        var error = result.Errors.Single();
+        await Assert.That(error.Code).IsEqualTo("InvalidQueryValue");
+        await Assert.That(error.Kind).IsEqualTo(QueryErrorKind.Validation);
+        await Assert.That(error.Path).IsEqualTo(nameof(EnumQuery.Value));
+    }
+
+    [Test]
+    public async Task Parser_Reports_Incompatible_Collection_Shapes()
+    {
+        var result = QueryStringParser.Parse<SetQuery>("?tags=one&tags=two");
+
+        await Assert.That(result.IsSuccess).IsFalse();
+        var error = result.Errors.Single();
+        await Assert.That(error.Code).IsEqualTo("UnsupportedQueryType");
+        await Assert.That(error.Kind).IsEqualTo(QueryErrorKind.Validation);
+        await Assert.That(error.Path).IsEqualTo(nameof(SetQuery.Tags));
+
+        var json = QueryStringParser.Parse<SetQuery>(
+            "?tags=%5B%22one%22%2C%22two%22%5D",
+            AllParsingFormats(enableJson: true));
+        await Assert.That(json.IsSuccess).IsTrue();
+        await Assert.That(json.Value!.Tags).IsEquivalentTo(["one", "two"]);
+    }
+
+    [Test]
+    public async Task Parser_Only_Binds_Public_Setters()
+    {
+        var result = QueryStringParser.Parse<SetterQuery>("?page=2&label=selected");
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(result.Value!.Page).IsEqualTo(2);
+        await Assert.That(result.Value!.Label).IsEqualTo("default");
+    }
+
+    [Test]
     public void Query_Parser_Performance_Sample()
     {
         const string query = "?ids=1&ids=2&brand=tesla";
@@ -387,6 +429,24 @@ public sealed class QueryStringParserTests
     }
 
     [Test]
+    [Arguments(QueryArrayFormat.RepeatedKeys)]
+    [Arguments(QueryArrayFormat.CommaSeparated)]
+    [Arguments(QueryArrayFormat.Brackets)]
+    [Arguments(QueryArrayFormat.IndexedBrackets)]
+    public async Task Serializer_Omits_Empty_Collections(QueryArrayFormat format)
+    {
+        var encoded = QueryStringSerializer.Serialize(
+            new { ids = Array.Empty<int>(), page = 2 },
+            SerializationOptions(format, QueryObjectFormat.Flat));
+        var decoded = QueryStringParser.Parse<ArrayQuery>(encoded.QueryString, AllParsingFormats());
+
+        await Assert.That(encoded.IsSuccess).IsTrue();
+        await Assert.That(encoded.QueryString).IsEqualTo("?page=2");
+        await Assert.That(decoded.IsSuccess).IsTrue();
+        await Assert.That(decoded.Value!.Ids).IsNull();
+    }
+
+    [Test]
     public async Task Serializer_Rejects_Invalid_Array_Format()
     {
         var result = QueryStringSerializer.Serialize(
@@ -451,6 +511,28 @@ public sealed class QueryStringParserTests
     private sealed class ArrayQuery
     {
         public int[]? Ids { get; set; }
+    }
+
+    private sealed class SetterQuery
+    {
+        public int Page { get; init; }
+
+        public string Label { get; private set; } = "default";
+    }
+
+    private sealed class SetQuery
+    {
+        public HashSet<string>? Tags { get; init; }
+    }
+
+    private sealed class EnumQuery
+    {
+        public QueryChoice Value { get; init; }
+    }
+
+    private enum QueryChoice : sbyte
+    {
+        Default
     }
 
     private sealed class StringArrayQuery

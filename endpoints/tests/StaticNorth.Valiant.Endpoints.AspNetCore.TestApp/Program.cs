@@ -2,6 +2,8 @@ using StaticNorth.Valiant.Endpoints.AspNetCore;
 using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 using StaticNorth.Valiant.Endpoints.AspNetCore.TestApp;
 
+[assembly: ValiantGenerateQueryBinding]
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<BindingSourceService>();

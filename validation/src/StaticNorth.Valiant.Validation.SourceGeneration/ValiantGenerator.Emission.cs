@@ -218,7 +218,7 @@ public sealed partial class ValiantGenerator
             }
 
             var parameter = constructor.Parameters[index];
-            builder.Append(parameter.Type).Append(' ').Append(parameter.Name);
+            builder.Append(parameter.Type).Append(' ').Append(EscapeConstructorParameter(parameter.Name));
         }
 
         if (constructor.Parameters.Length > 0)
@@ -234,7 +234,7 @@ public sealed partial class ValiantGenerator
                 builder.Append(", ");
             }
 
-            builder.Append(constructor.Parameters[index].Name);
+            builder.Append(EscapeConstructorParameter(constructor.Parameters[index].Name));
         }
 
         builder.AppendLine(")");
@@ -245,6 +245,11 @@ public sealed partial class ValiantGenerator
         AppendIndent(builder, 1, namespaceName);
         builder.AppendLine("}");
         builder.AppendLine();
+    }
+
+    private static string EscapeConstructorParameter(string name)
+    {
+        return SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None ? "@" + name : name;
     }
 
     private static void AppendValidatorDefinitionImplementation(
@@ -462,10 +467,12 @@ public sealed partial class ValiantGenerator
     private static string GetMetadataProviderTypeName(string validatorType)
     {
         return "__Valiant" +
+            StaticNorth.Valiant.SourceGeneration.ValiantHintNames.GetIdentityPrefix(validatorType, "_") +
             validatorType
                 .Replace("global::", string.Empty)
                 .Replace('.', '_')
                 .Replace('+', '_')
+                .Replace('@', '_')
             + "MetadataProvider";
     }
 

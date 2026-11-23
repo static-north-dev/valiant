@@ -13,7 +13,7 @@ public sealed class ValidationContext<T>
     private readonly string _propertyPathPrefix;
     private ValiantFailureBehavior _failureBehavior;
     private ValiantFailureBehavior _executionFailureBehavior;
-    private int _failureCountAtBehaviorChange;
+    private int _nextFailureToCheck;
 
     /// <summary>
     /// Initializes a validation context for an instance.
@@ -60,9 +60,9 @@ public sealed class ValidationContext<T>
                 return false;
             }
 
-            for (var index = _failureCountAtBehaviorChange; index < _failures.Count; index++)
+            for (; _nextFailureToCheck < _failures.Count; _nextFailureToCheck++)
             {
-                if (_failures[index].Severity == ValiantSeverity.Error)
+                if (_failures[_nextFailureToCheck].Severity == ValiantSeverity.Error)
                 {
                     return true;
                 }
@@ -126,7 +126,7 @@ public sealed class ValidationContext<T>
         void ApplyBehavior()
         {
             _executionFailureBehavior = behavior;
-            _failureCountAtBehaviorChange = _failures.Count;
+            _nextFailureToCheck = _failures.Count;
         }
     }
 

@@ -2077,6 +2077,91 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
+    public async Task Convention_Mapper_Assigns_Required_Init_Member_Without_Nullability_Errors()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using StaticNorth.Valiant.Mapping;
+
+            public sealed record Customer(string Name);
+            public sealed class CustomerView
+            {
+                public required string Name { get; init; }
+            }
+
+            [ValiantMapper]
+            public sealed partial class CustomerMapper : MapperDefinition<Customer, CustomerView>;
+
+            public static class TestRunner
+            {
+                public static string Run() => new CustomerMapper().Map(new Customer("Ada")).Name;
+            }
+            """,
+            rejectNullableDiagnostics: true);
+
+        var result = assembly.GetType("TestRunner", throwOnError: true)!.GetMethod("Run")!.Invoke(null, []);
+        await Assert.That(result).IsEqualTo("Ada");
+    }
+
+    [Test]
+    public async Task Generated_Facade_And_Factory_Use_The_Current_Scope()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using Microsoft.Extensions.DependencyInjection;
+            using StaticNorth.Valiant.Mapping;
+
+            public sealed record Person(string Name);
+            public sealed record PersonDto(string Name);
+            public sealed class Marker
+            {
+                public string Value { get; set; } = "";
+            }
+
+            [ValiantMapper]
+            public sealed partial class PersonMapper(Marker marker) : MapperDefinition<Person, PersonDto>
+            {
+                public override void Configure(MappingContext<Person, PersonDto> context)
+                {
+                    context.Map(person => marker.Value + person.Name, dto => dto.Name);
+                }
+            }
+
+            public static class TestRunner
+            {
+                public static string[] Run()
+                {
+                    var services = new ServiceCollection();
+                    services.AddScoped<Marker>();
+                    services.AddValiantMappers(options => options.UseScopedMapperLookup = true);
+                    services.AddValiantMappers();
+                    using var provider = services.BuildServiceProvider(validateScopes: true);
+                    return [.. Resolve(provider, "first:"), .. Resolve(provider, "second:")];
+                }
+
+                private static string[] Resolve(ServiceProvider provider, string prefix)
+                {
+                    using var scope = provider.CreateScope();
+                    var services = scope.ServiceProvider;
+                    services.GetRequiredService<Marker>().Value = prefix;
+                    var person = new Person("Ada");
+                    return
+                    [
+                        services.GetRequiredService<IMapper>().Map<PersonDto>(person).Name,
+                        services.GetRequiredService<IMapperFactory>().CreateMapper<Person, PersonDto>().Map(person).Name
+                    ];
+                }
+            }
+            """,
+            rejectNullableDiagnostics: true);
+
+        var actual = (string[])assembly.GetType("TestRunner", throwOnError: true)!
+            .GetMethod("Run")!
+            .Invoke(null, [])!;
+        await Assert.That(actual).IsEquivalentTo(["first:Ada", "first:Ada", "second:Ada", "second:Ada"]);
+    }
+
+    [Test]
     public async Task Generated_Nested_Mapper_Lookup_Uses_Cache_And_Depth_Guard()
     {
         var result = RunGenerator(
@@ -2141,11 +2226,19 @@ public sealed class SourceGenerationTests
                 {
                 }
 
+                public enum ServiceLifetime
+                {
+                    Singleton,
+                    Scoped
+                }
+
                 public sealed class ServiceDescriptor
                 {
                     public static ServiceDescriptor Singleton(System.Type serviceType, object implementationInstance) => new();
 
                     public static ServiceDescriptor Singleton(System.Type serviceType, System.Type implementationType) => new();
+
+                    public static ServiceDescriptor Describe(System.Type serviceType, System.Type implementationType, ServiceLifetime lifetime) => new();
 
                     public static ServiceDescriptor Transient(System.Type serviceType, System.Type implementationType) => new();
                 }
@@ -2520,11 +2613,19 @@ public sealed class SourceGenerationTests
                 {
                 }
 
+                public enum ServiceLifetime
+                {
+                    Singleton,
+                    Scoped
+                }
+
                 public sealed class ServiceDescriptor
                 {
                     public static ServiceDescriptor Singleton(System.Type serviceType, object implementationInstance) => new();
 
                     public static ServiceDescriptor Singleton(System.Type serviceType, System.Type implementationType) => new();
+
+                    public static ServiceDescriptor Describe(System.Type serviceType, System.Type implementationType, ServiceLifetime lifetime) => new();
 
                     public static ServiceDescriptor Transient(System.Type serviceType, System.Type implementationType) => new();
                 }
@@ -2856,9 +2957,13 @@ public sealed class SourceGenerationTests
         RegisterMappers(registerLargeAssemblyFirst ? smallAssembly : largeAssembly, services);
         RegisterMappers(smallAssembly, services);
 
-        using var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider(validateScopes: true);
         var facade = provider.GetRequiredService<IMapper>();
         var factory = provider.GetRequiredService<IMapperFactory>();
+        using var scope = provider.CreateScope();
+
+        await Assert.That(ReferenceEquals(facade, scope.ServiceProvider.GetRequiredService<IMapper>())).IsTrue();
+        await Assert.That(ReferenceEquals(factory, scope.ServiceProvider.GetRequiredService<IMapperFactory>())).IsTrue();
 
         foreach (var (assembly, sourceName, targetName) in new[]
         {
@@ -3039,7 +3144,7 @@ public sealed class SourceGenerationTests
             .ToImmutableArray();
     }
 
-    private static System.Reflection.Assembly CompileAndLoad(string source)
+    private static System.Reflection.Assembly CompileAndLoad(string source, bool rejectNullableDiagnostics = false)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var syntaxTree = CSharpSyntaxTree.ParseText(
@@ -3055,7 +3160,14 @@ public sealed class SourceGenerationTests
             "StaticNorth.Valiant.Mapping.GeneratedMapper.Tests",
             [syntaxTree],
             references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+            new CSharpCompilationOptions(
+                OutputKind.DynamicallyLinkedLibrary,
+                nullableContextOptions: NullableContextOptions.Enable,
+                specificDiagnosticOptions: rejectNullableDiagnostics
+                    ? ImmutableDictionary<string, ReportDiagnostic>.Empty
+                        .Add("CS8601", ReportDiagnostic.Error)
+                        .Add("CS8604", ReportDiagnostic.Error)
+                    : null));
 
         var driver = CSharpGeneratorDriver.Create(new ValiantMappingGenerator())
             .WithUpdatedParseOptions(parseOptions);

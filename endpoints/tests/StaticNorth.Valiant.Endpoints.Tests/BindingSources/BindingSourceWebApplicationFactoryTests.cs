@@ -40,7 +40,7 @@ public sealed class BindingSourceEnabledWebApplicationFactoryTests(
 
         await BindingSourceAssertions.AssertValueAsync(
             await client.GetAsync(
-                "/integration/binding-sources/as-parameters?id=42&name=tesla"),
+                "/integration/binding-sources/as-parameters?id=42&display-name=tesla"),
             "42:tesla");
     }
 
@@ -152,7 +152,7 @@ public sealed class BindingSourceDisabledWebApplicationFactoryTests(
 
         await BindingSourceAssertions.AssertValueAsync(
             await client.GetAsync(
-                "/integration/binding-sources/as-parameters?id=42&name=tesla"),
+                "/integration/binding-sources/as-parameters?id=42&display-name=tesla"),
             "42:tesla");
     }
 

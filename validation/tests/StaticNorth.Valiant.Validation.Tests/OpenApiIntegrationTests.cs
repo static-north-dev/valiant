@@ -124,7 +124,13 @@ public sealed class OpenApiIntegrationTests
                         "Name is required.",
                         "Error",
                         false,
-                        false),
+                        false)
+                ]),
+            new ValiantPropertyValidationMetadata(
+                "userName",
+                typeof(string),
+                false,
+                [
                     new ValiantValidationCheckMetadata(
                         "MaxLength",
                         ["64"],

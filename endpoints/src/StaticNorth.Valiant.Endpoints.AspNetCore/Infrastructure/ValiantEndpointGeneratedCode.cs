@@ -186,4 +186,16 @@ public static class ValiantEndpointGeneratedCode
     public static QueryParsingOptions ResolveQueryParsingOptions(HttpContext context) =>
         QueryParsingOptionsResolver.Resolve(context);
 
+    /// <summary>
+    /// Binds the explicitly declared query members of a generated endpoint request.
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static T BindQueryRequest<T>(HttpContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var query = new QueryStringParser.QueryInput(context.Request.QueryString.Value, ResolveQueryParsingOptions(context));
+        var value = query.BindEndpointRequest(typeof(T), instance: null, out var errors);
+        return errors.Count == 0 ? (T)value! : throw CreateQueryBindingException(errors);
+    }
+
 }

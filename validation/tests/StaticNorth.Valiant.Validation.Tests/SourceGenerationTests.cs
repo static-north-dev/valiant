@@ -9,6 +9,69 @@ namespace StaticNorth.Valiant.Validation.Tests;
 public sealed class SourceGenerationTests
 {
     [Test]
+    public async Task Distinct_Validator_Declarations_Keep_Unique_Hint_And_Metadata_Names()
+    {
+        const string source = """
+            using StaticNorth.Valiant.Validation;
+
+            namespace Catalog
+            {
+                public sealed class GlobalRequest
+                {
+                    [Required] public string? Name { get; init; }
+                }
+
+                public sealed class FeatureRequest
+                {
+                    [Required] public string? Name { get; init; }
+                }
+
+                [ValiantValidator]
+                public sealed partial class Feature_SearchValidator : ValidatorDefinition<GlobalRequest>;
+
+                public partial class Feature
+                {
+                    [ValiantValidator]
+                    public sealed partial class SearchValidator : ValidatorDefinition<FeatureRequest>;
+                }
+            }
+            """;
+
+        var generated = RunGenerator(source).GeneratedSources;
+        var validatorFiles = generated
+            .Where(static item => item.HintName.EndsWith(".Validator.g.cs", StringComparison.Ordinal))
+            .Select(static item => item.HintName);
+        await Assert.That(validatorFiles.Distinct()).Count().IsEqualTo(2);
+        await Assert.That(RunCompilation(source).Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Generated_Options_Constructor_Preserves_Escaped_Parameter_Names()
+    {
+        const string source = """
+            using StaticNorth.Valiant.Validation;
+
+            public sealed record Request(string Name);
+
+            [ValiantValidator]
+            public sealed partial class RequestValidator(string @event) : ValidatorDefinition<Request>
+            {
+                public override void Configure(ValidationContext<Request> context)
+                {
+                    context.Property(request => request.Name).Equal(@event);
+                }
+            }
+
+            public static class Example
+            {
+                public static RequestValidator Create() => new("test", new ValiantValidationOptions());
+            }
+            """;
+
+        await Assert.That(RunCompilation(source).Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+    }
+
+    [Test]
     [Arguments("context.Property(x => x.Name).Required().MinLength(3);", true)]
     [Arguments("context.Property(x => x.Name).Required(); return;", false)]
     [Arguments("context.Property(x => x.Name).Required(message: BuildMessage());", false)]

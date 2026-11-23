@@ -68,17 +68,18 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
         }
 
         var jsonProperties = CreateJsonPropertyMap(jsonTypeInfo);
-        foreach (var property in properties)
+        var propertyGroups = properties
+            .Where(property => property.PropertyName.IndexOfAny(['.', '[']) < 0 && jsonProperties.ContainsKey(property.PropertyName))
+            .GroupBy(property => jsonProperties[property.PropertyName], StringComparer.Ordinal);
+        foreach (var propertyGroup in propertyGroups)
         {
-            if (property.PropertyName.IndexOfAny(['.', '[']) >= 0 ||
-                !jsonProperties.TryGetValue(property.PropertyName, out var jsonPropertyName) ||
-                !schema.Properties.TryGetValue(jsonPropertyName, out var propertySchema) ||
+            if (!schema.Properties.TryGetValue(propertyGroup.Key, out var propertySchema) ||
                 propertySchema is not OpenApiSchema openApiPropertySchema)
             {
                 continue;
             }
 
-            ApplyMetadata(schema, jsonPropertyName, openApiPropertySchema, property);
+            ApplyMetadata(schema, propertyGroup.Key, openApiPropertySchema, propertyGroup);
         }
     }
 
@@ -102,17 +103,20 @@ public sealed class ValiantValidationSchemaTransformer : IOpenApiSchemaTransform
         OpenApiSchema parentSchema,
         string jsonPropertyName,
         OpenApiSchema propertySchema,
-        ValiantPropertyValidationMetadata property)
+        IEnumerable<ValiantPropertyValidationMetadata> properties)
     {
         var rules = new JsonArray();
-        foreach (var check in property.Checks)
+        foreach (var property in properties)
         {
-            rules.Add(CreateRuleExtension(check));
-
-            if (!property.IsConditional && !check.IsConditional &&
-                check.Severity is null or nameof(ValiantSeverity.Error))
+            foreach (var check in property.Checks)
             {
-                ApplySchemaConstraint(parentSchema, jsonPropertyName, propertySchema, check);
+                rules.Add(CreateRuleExtension(check));
+
+                if (!property.IsConditional && !check.IsConditional &&
+                    check.Severity is null or nameof(ValiantSeverity.Error))
+                {
+                    ApplySchemaConstraint(parentSchema, jsonPropertyName, propertySchema, check);
+                }
             }
         }
 

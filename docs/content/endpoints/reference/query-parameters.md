@@ -7,18 +7,15 @@ description: Complete parsing and serialization formats, options, supported valu
 
 Inbound parsing and outbound serialization use separate options. An API can accept several client conventions while emitting one stable format.
 
-Generated endpoint binding is opt-in and disabled by default:
+Opt into generated endpoint binding in the project that declares the endpoints.
 
 ```csharp
-builder.Services.AddValiantEndpoints(options =>
-{
-    options.QueryParameters.EnableBinding = true;
-});
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+[assembly: ValiantGenerateQueryBinding]
 ```
 
-The direct literal assignment must be in the same compilation as the endpoints so the source generator can add the binding members. Direct calls to `QueryStringParser` and `QueryStringSerializer` do not require endpoint binding to be enabled.
-
-`EnableBinding` is a compile-time opt-in, not a fully dynamic runtime switch. Whole-request `BindAsync` and `[AsParameters]` processing can resolve runtime options, but a generated direct `TryParse(string, out T)` has no `HttpContext`. Once a recognized literal `true` causes that parser to be compiled, another host or runtime override to `false` cannot remove or neutralize it. Compile the endpoint project with no recognized `true` assignment when `[ValiantQueryParsing]` must be ignored.
+The assembly opt-in enables whole-request, `[AsParameters]`, and direct query binding. A direct literal `EnableBinding = true` assignment in the endpoint assembly remains a compatibility opt-in. Standalone calls to `QueryStringParser` and `QueryStringSerializer` are available by default. See [request binding setup](../guides/request-binding.md).
 
 ## Defaults
 
@@ -130,7 +127,7 @@ public sealed class SearchEndpoint : IEndpoint
 }
 ```
 
-When the endpoint project is compiled with `options.QueryParameters.EnableBinding = false`, the whole attribute is ignored and no Valiant query parser is generated. A later runtime-only override cannot change an already-generated direct parser. When binding is enabled, no attribute and `[ValiantQueryParsing]` both leave JSON enabled for the generated direct parser. Explicit `Disabled` returns HTTP 400 without a Valiant direct-query filter. Array and object format properties do not affect direct parameters. User-authored `TryParse` methods remain user-controlled, and conflicting policies for the same generated parser type report `VLE011`.
+Generated direct parsers keep their compiled JSON policy regardless of the host's runtime setting. JSON is enabled when the policy attribute is absent or parameterless. Explicit `Disabled` returns HTTP 400 through ASP.NET Core. The array and object formats apply to full-query binding only. User-authored `TryParse` methods retain their own behavior. Conflicting policies for the same generated parser type report `VLE011`.
 
 ```http
 ?filter=%7B%22brand%22%3A%22tesla%22%2C%22year%22%3A2025%7D
@@ -166,6 +163,10 @@ if (!result.IsSuccess)
 
 Primitive arrays and `List<T>` support `string`, `int`, `long`, `Guid`, `bool`, `decimal`, and `DateTime`; nullable primitive scalars are supported. Nested object binding supports at least one level.
 
+Valiant's field-by-field object binding writes only to properties with public setters, including public `init` accessors. On endpoint requests, root properties also need `[FromQuery]`, and any `Name` alias supplies the query key. Standalone parsing uses CLR property names.
+
+Repeated and delimited values require a one-dimensional array or a type assignable from `List<T>`. An incompatible collection type returns `UnsupportedQueryType`. With JSON query values enabled, collections can also use any shape supported by the JSON serializer.
+
 ## Direct serialization
 
 ```csharp
@@ -184,7 +185,7 @@ var result = QueryStringSerializer.Serialize(
 // ?ids=1,2,3&filter.brand=tesla&filter.year=2025
 ```
 
-The serializer URL-encodes keys and values, preserves array order, and skips null values. It never negotiates an output format: one array and one object format are selected explicitly.
+The serializer URL-encodes keys and values, preserves array order, and skips null values. It omits empty collections in every array format. When a key is absent, parsing keeps the target property's initialized or default value. To round-trip an empty collection as empty, initialize that property to an empty collection. Serialization uses one explicitly selected array format and one object format.
 
 ## Structured errors
 

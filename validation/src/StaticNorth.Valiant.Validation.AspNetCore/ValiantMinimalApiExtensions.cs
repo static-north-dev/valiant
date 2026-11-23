@@ -150,6 +150,7 @@ public static class ValiantMinimalApiExtensions
         var typePlans = new List<ValidationTypePlan>();
         var typePlanIndices = new Dictionary<Type, int>();
         var generatedPlans = GeneratedPlansByHost.GetValue(applicationServices, CreateGeneratedPlans);
+        var serviceInspector = applicationServices.GetService<IServiceProviderIsService>();
 
         for (var index = 0; index < parameters.Length; index++)
         {
@@ -158,7 +159,7 @@ public static class ValiantMinimalApiExtensions
             {
                 if (!generatedPlans.TryGetValue(type, out var typePlan))
                 {
-                    typePlan = CreateDynamicValidationTypePlanIfSupported(type);
+                    typePlan = CreateDynamicValidationTypePlanIfSupported(type, serviceInspector);
                 }
 
                 if (typePlan is null)
@@ -197,17 +198,22 @@ public static class ValiantMinimalApiExtensions
         "Trimming",
         "IL2026",
         Justification = "The reflection fallback is called only on JIT runtimes for compatibility with manually registered validators.")]
-    private static ValidationTypePlan? CreateDynamicValidationTypePlanIfSupported(Type modelType)
+    private static ValidationTypePlan? CreateDynamicValidationTypePlanIfSupported(Type modelType, IServiceProviderIsService? serviceInspector)
     {
         return RuntimeFeature.IsDynamicCodeSupported
-            ? CreateDynamicValidationTypePlan(modelType)
+            ? CreateDynamicValidationTypePlan(modelType, serviceInspector)
             : null;
     }
 
     [RequiresDynamicCode("Constructing a validator plan for an arbitrary runtime type requires dynamic generic code.")]
     [RequiresUnreferencedCode("The manually registered validator compatibility path uses reflection over a generic helper.")]
-    private static ValidationTypePlan CreateDynamicValidationTypePlan(Type modelType)
+    private static ValidationTypePlan? CreateDynamicValidationTypePlan(Type modelType, IServiceProviderIsService? serviceInspector)
     {
+        if (serviceInspector?.IsService(typeof(IValidator<>).MakeGenericType(modelType)) == false)
+        {
+            return null;
+        }
+
         var method = typeof(ValiantMinimalApiExtensions)
             .GetMethod(nameof(CreateValidationTypePlanCore), BindingFlags.NonPublic | BindingFlags.Static)!;
 

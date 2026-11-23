@@ -369,7 +369,7 @@ public sealed partial class RuntimeEndpointTests
         await Assert.That(observed.Order).IsEqualTo(0);
         await Assert.That(observed.Group.Order).IsEqualTo(0);
         await Assert.That(observed.QueryParameters.IsBindingGenerated).IsTrue();
-        await Assert.That(observed.QueryParameters.IsRuntimeBindingEnabled).IsFalse();
+        await Assert.That(observed.QueryParameters.IsRuntimeBindingEnabled).IsTrue();
 
         var firstSnapshot = observed.QueryParameters.PreMappingParsingOptions;
         firstSnapshot.SupportedArrayFormats[0] = QueryArrayFormat.CommaSeparated;

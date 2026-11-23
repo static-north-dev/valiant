@@ -104,7 +104,7 @@ public sealed partial class ValiantGenerator
                 typeArguments = ImmutableArray<TypeSyntax>.Empty;
                 return identifier.Identifier.ValueText;
             case GenericNameSyntax generic:
-                typeArguments = [..generic.TypeArgumentList.Arguments];
+                typeArguments = [.. generic.TypeArgumentList.Arguments];
                 return generic.Identifier.ValueText;
             default:
                 typeArguments = ImmutableArray<TypeSyntax>.Empty;

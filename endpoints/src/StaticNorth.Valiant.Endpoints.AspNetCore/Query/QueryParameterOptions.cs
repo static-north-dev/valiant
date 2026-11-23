@@ -6,13 +6,13 @@ namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 public sealed class QueryParameterOptions
 {
     /// <summary>
-    /// Gets or sets whether Valiant generates and applies custom query parameter binding.
+    /// Gets or sets the compatibility opt-in for custom query parameter binding.
     /// </summary>
     /// <remarks>
-    /// The default is <see langword="false" />, which leaves query parameter binding to ASP.NET Core.
-    /// Set this directly to <see langword="true" /> in the <c>AddValiantEndpoints</c> setup lambda to opt the current compilation into generated query binding.
-    /// Generated direct <c>TryParse</c> methods cannot observe a later runtime change to this option because they do not receive an <c>HttpContext</c>.
-    /// Avoid compiling the same endpoint assembly with a recognized <see langword="true" /> assignment and then running it with this option overridden to <see langword="false" />.
+    /// Use <see cref="ValiantGenerateQueryBindingAttribute" /> on the endpoint assembly to opt into generation.
+    /// A literal <see langword="true" /> assignment in the <c>AddValiantEndpoints</c> setup lambda also opts into generation for compatibility.
+    /// For generated registrations, the compile-time opt-in controls all forms of generated query binding.
+    /// Older registration entry points without compile-time binding metadata continue to read this option.
     /// </remarks>
     public bool EnableBinding { get; set; }
 

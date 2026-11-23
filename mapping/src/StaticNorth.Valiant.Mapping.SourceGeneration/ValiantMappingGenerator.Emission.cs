@@ -44,7 +44,7 @@ public sealed partial class ValiantMappingGenerator
 
         context.AddSource(
             "StaticNorth.Valiant.Mapping.DependencyInjection.g.cs",
-            SourceText.From(GenerateDependencyInjection([..mappers.Distinct().OrderBy(static mapper => mapper.MapperType, StringComparer.Ordinal)]), Encoding.UTF8));
+            SourceText.From(GenerateDependencyInjection([.. mappers.Distinct().OrderBy(static mapper => mapper.MapperType, StringComparer.Ordinal)]), Encoding.UTF8));
     }
 
     private static void ExecuteMapperPairRegistrationSource(
@@ -58,7 +58,7 @@ public sealed partial class ValiantMappingGenerator
 
         context.AddSource(
             "StaticNorth.Valiant.Mapping.MapperRegistrations.g.cs",
-            SourceText.From(GenerateMapperPairRegistrations([..mapperPairs.Distinct().OrderBy(static mapper => mapper.SourceType, StringComparer.Ordinal).ThenBy(static mapper => mapper.TargetType, StringComparer.Ordinal)]), Encoding.UTF8));
+            SourceText.From(GenerateMapperPairRegistrations([.. mapperPairs.Distinct().OrderBy(static mapper => mapper.SourceType, StringComparer.Ordinal).ThenBy(static mapper => mapper.TargetType, StringComparer.Ordinal)]), Encoding.UTF8));
     }
 
     private static bool IsValidMapper(MapperModel mapper)
@@ -189,6 +189,7 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine("        /// Registers source-generated Valiant mappers.");
         builder.AppendLine("        /// </summary>");
         builder.AppendLine("        /// <param name=\"services\">The service collection.</param>");
+        builder.AppendLine("        /// <param name=\"configure\">Configures the shared options on the first registration call.</param>");
         builder.AppendLine("        /// <returns>The service collection.</returns>");
         builder.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddValiantMappers(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::System.Action<global::StaticNorth.Valiant.Mapping.ValiantMappingOptions>? configure = null)");
         builder.AppendLine("        {");
@@ -199,9 +200,12 @@ public sealed partial class ValiantMappingGenerator
         builder.AppendLine();
         builder.AppendLine("            var valiantMappingOptions = new global::StaticNorth.Valiant.Mapping.ValiantMappingOptions();");
         builder.AppendLine("            configure?.Invoke(valiantMappingOptions);");
+        builder.AppendLine("            var lookupLifetime = valiantMappingOptions.UseScopedMapperLookup");
+        builder.AppendLine("                ? global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Scoped");
+        builder.AppendLine("                : global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton;");
         builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Mapping.ValiantMappingOptions), valiantMappingOptions));");
-        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Mapping.IMapper), typeof(global::StaticNorth.Valiant.Mapping.Infrastructure.ValiantMapperLookup)));");
-        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Singleton(typeof(global::StaticNorth.Valiant.Mapping.IMapperFactory), typeof(global::StaticNorth.Valiant.Mapping.Infrastructure.ValiantMapperLookup)));");
+        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Describe(typeof(global::StaticNorth.Valiant.Mapping.IMapper), typeof(global::StaticNorth.Valiant.Mapping.Infrastructure.ValiantMapperLookup), lookupLifetime));");
+        builder.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Describe(typeof(global::StaticNorth.Valiant.Mapping.IMapperFactory), typeof(global::StaticNorth.Valiant.Mapping.Infrastructure.ValiantMapperLookup), lookupLifetime));");
         builder.AppendLine();
 
         foreach (var mapper in mappers)

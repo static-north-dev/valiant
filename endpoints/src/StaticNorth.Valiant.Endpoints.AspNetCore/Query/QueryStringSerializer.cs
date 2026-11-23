@@ -143,6 +143,11 @@ public static class QueryStringSerializer
             .Select(static item => FormatSimpleValue(item!))
             .ToArray();
 
+        if (items.Length == 0)
+        {
+            return;
+        }
+
         switch (arrayFormat)
         {
             case QueryArrayFormat.RepeatedKeys:

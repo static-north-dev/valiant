@@ -9,11 +9,9 @@ public sealed class EndpointQueryParameterRegistration
 
     internal EndpointQueryParameterRegistration(
         bool isBindingGenerated,
-        bool isRuntimeBindingEnabled,
         QueryParsingOptions preMappingParsingOptions)
     {
         IsBindingGenerated = isBindingGenerated;
-        IsRuntimeBindingEnabled = isRuntimeBindingEnabled;
         _preMappingParsingOptions = QueryParsingOptionsSnapshot.Clone(preMappingParsingOptions);
     }
 
@@ -25,10 +23,7 @@ public sealed class EndpointQueryParameterRegistration
     /// <summary>
     /// Gets whether runtime query binding filters are enabled for this registration.
     /// </summary>
-    /// <remarks>
-    /// Generated direct <c>TryParse</c> members are controlled by <see cref="IsBindingGenerated" /> and cannot be disabled at runtime.
-    /// </remarks>
-    public bool IsRuntimeBindingEnabled { get; }
+    public bool IsRuntimeBindingEnabled => IsBindingGenerated;
 
     /// <summary>
     /// Gets a defensive copy of the parsing options known before <c>IEndpoint.Map</c> executes.

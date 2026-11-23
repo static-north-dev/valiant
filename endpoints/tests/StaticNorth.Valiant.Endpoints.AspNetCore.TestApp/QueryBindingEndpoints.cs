@@ -53,6 +53,11 @@ public sealed partial record GeneratedObjectRequest
 
     [FromQuery]
     public QueryFilter? Filter { get; init; }
+
+    [FromQuery(Name = "page-size")]
+    public int? Limit { get; init; }
+
+    public string Label { get; init; } = "default";
 }
 
 public sealed record AsParametersObjectRequest

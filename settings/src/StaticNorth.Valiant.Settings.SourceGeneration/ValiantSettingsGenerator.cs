@@ -14,6 +14,7 @@ namespace StaticNorth.Valiant.Settings.SourceGeneration;
 public sealed class ValiantSettingsGenerator : IIncrementalGenerator
 {
     private const int DictionaryLookupThreshold = 8;
+    private const int MaxSchemaNestingDepth = 32;
     private const string SettingsAttributeMetadataName = "StaticNorth.Valiant.Settings.ValiantSettingsAttribute";
     private const string SecretAttributeMetadataName = "StaticNorth.Valiant.Settings.ValiantSecretAttribute";
     private const string ConfigurationKeyNameAttribute = "Microsoft.Extensions.Configuration.ConfigurationKeyNameAttribute";
@@ -31,7 +32,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor GenericSettingsModelNotSupported = new(
         "VLS001",
         "Settings model must not be generic",
-        "Settings model '{0}' must not be generic because Valiant generates concrete schema provider types",
+        "Settings model '{0}' and its containing types must be non-generic because Valiant generates concrete schema providers",
         "StaticNorth.Valiant.Settings",
         DiagnosticSeverity.Error,
         true);
@@ -40,6 +41,14 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         "VLS002",
         "Settings model section path is required",
         "Settings model '{0}' must provide a non-empty configuration section path",
+        "StaticNorth.Valiant.Settings",
+        DiagnosticSeverity.Error,
+        true);
+
+    private static readonly DiagnosticDescriptor InaccessibleSettingsModel = new(
+        "VLS003",
+        "Settings model must be accessible to its generated schema provider",
+        "Settings model '{0}' must be accessible from another source file in the same assembly",
         "StaticNorth.Valiant.Settings",
         DiagnosticSeverity.Error,
         true);
@@ -99,10 +108,20 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
 
         var typeSyntax = (TypeDeclarationSyntax)context.TargetNode;
         var fullTypeName = settingsType.ToDisplayString(SourceTypeDisplayFormat);
-        if (settingsType.TypeParameters.Length > 0)
+        if (settingsType.IsGenericType)
         {
             return SettingsModel.Invalid(
                 GenericSettingsModelNotSupported,
+                settingsType.Name,
+                fullTypeName,
+                typeSyntax.Identifier.GetLocation());
+        }
+
+        var compilation = context.SemanticModel.Compilation;
+        if (!compilation.IsSymbolAccessibleWithin(settingsType, compilation.Assembly) || HasFileLocalType(settingsType))
+        {
+            return SettingsModel.Invalid(
+                InaccessibleSettingsModel,
                 settingsType.Name,
                 fullTypeName,
                 typeSyntax.Identifier.GetLocation());
@@ -119,7 +138,7 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         }
 
         var properties = CreatePropertyModels(
-            settingsType, context.SemanticModel.Compilation,
+            settingsType, compilation,
             new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), includeDefaults: true, cancellationToken);
 
         return SettingsModel.Valid(
@@ -129,6 +148,19 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             settingsType.IsReferenceType && attribute.Configure,
             CreateProviderTypeName(fullTypeName),
             properties);
+    }
+
+    private static bool HasFileLocalType(INamedTypeSymbol settingsType)
+    {
+        for (var type = settingsType; type is not null; type = type.ContainingType)
+        {
+            if (type.IsFileLocal)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void ExecuteDiagnostics(SourceProductionContext context, SettingsModel model)
@@ -591,19 +623,29 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
         CancellationToken cancellationToken)
     {
         var effectiveType = UnwrapNullable(type);
-        var kind = GetPropertyKind(effectiveType);
         var itemType = GetCollectionItemType(effectiveType);
-        var item = itemType is null
-            ? null
-            : CreateItemModel(itemType, compilation, visitedTypes, includeDefaults, cancellationToken);
+        var kind = itemType is null ? GetPropertyKind(effectiveType) : SettingsPropertyKind.Array;
+        SettingsPropertyModel? item = null;
         var nestedProperties = ImmutableArray<SettingsPropertyModel>.Empty;
 
-        if (kind == SettingsPropertyKind.Object &&
-            effectiveType is INamedTypeSymbol namedType &&
-            visitedTypes.Add(namedType))
+        // Recursive generic types can produce a different constructed type on every level.
+        if ((itemType is not null || kind == SettingsPropertyKind.Object) &&
+            visitedTypes.Count < MaxSchemaNestingDepth &&
+            visitedTypes.Add(effectiveType))
         {
-            nestedProperties = CreatePropertyModels(namedType, compilation, visitedTypes, includeDefaults, cancellationToken);
-            visitedTypes.Remove(namedType);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (itemType is not null)
+            {
+                item = CreatePropertyModel(
+                    itemType, "$item", "$item", false, false, null,
+                    compilation, visitedTypes, includeDefaults, cancellationToken);
+            }
+            else if (effectiveType is INamedTypeSymbol namedType)
+            {
+                nestedProperties = CreatePropertyModels(namedType, compilation, visitedTypes, includeDefaults, cancellationToken);
+            }
+
+            visitedTypes.Remove(effectiveType);
         }
 
         return new SettingsPropertyModel(
@@ -616,37 +658,6 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             isSecret,
             defaultValue,
             item,
-            nestedProperties);
-    }
-
-    private static SettingsPropertyModel CreateItemModel(
-        ITypeSymbol type,
-        Compilation compilation,
-        HashSet<ITypeSymbol> visitedTypes,
-        bool includeDefaults,
-        CancellationToken cancellationToken)
-    {
-        var effectiveType = UnwrapNullable(type);
-        var kind = GetPropertyKind(effectiveType);
-        var nestedProperties = ImmutableArray<SettingsPropertyModel>.Empty;
-        if (kind == SettingsPropertyKind.Object &&
-            effectiveType is INamedTypeSymbol namedType &&
-            visitedTypes.Add(namedType))
-        {
-            nestedProperties = CreatePropertyModels(namedType, compilation, visitedTypes, includeDefaults, cancellationToken);
-            visitedTypes.Remove(namedType);
-        }
-
-        return new SettingsPropertyModel(
-            "$item",
-            "$item",
-            effectiveType.ToDisplayString(SchemaTypeDisplayFormat),
-            kind,
-            false,
-            IsNullable(type),
-            false,
-            null,
-            null,
             nestedProperties);
     }
 
@@ -697,6 +708,11 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
             return null;
         }
 
+        if (namedType.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
+        {
+            return namedType.TypeArguments[0];
+        }
+
         foreach (var interfaceType in namedType.AllInterfaces)
         {
             if (interfaceType.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T &&
@@ -711,11 +727,6 @@ public sealed class ValiantSettingsGenerator : IIncrementalGenerator
 
     private static SettingsPropertyKind GetPropertyKind(ITypeSymbol type)
     {
-        if (GetCollectionItemType(type) is not null)
-        {
-            return SettingsPropertyKind.Array;
-        }
-
         if (type.TypeKind == TypeKind.Enum)
         {
             return SettingsPropertyKind.Enum;

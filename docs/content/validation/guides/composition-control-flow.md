@@ -49,7 +49,7 @@ context.Property(order => order.Customer)
 
 ## Collections
 
-Use `ForEach` for element rules. `context.Item` is the current item inside the nested validation context:
+Use `ForEach` for element rules. Inside the callback below, `line.Instance` is the current item.
 
 ```csharp
 context.Property(order => order.Lines)

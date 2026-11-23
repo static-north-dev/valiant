@@ -1078,7 +1078,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             {
                 continue;
             }
-            
+
             sourceType = interfaceType.TypeArguments[0];
             targetType = interfaceType.TypeArguments[1];
             return true;
@@ -1290,7 +1290,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             {
                 assignments.Add(new MemberAssignmentModel(
                     targetMember.Name,
-                    guardCondition is null ? sourceExpression : "(" + guardCondition + ") ? " + sourceExpression + " : default",
+                    guardCondition is null ? sourceExpression : "(" + guardCondition + ") ? " + sourceExpression + " : default!",
                     null));
             }
             else
@@ -1397,6 +1397,10 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             var runtimeParameterType = parameter.Type.TypeKind == TypeKind.Dynamic
                 ? "object"
                 : parameter.Type.ToDisplayString(ValiantGeneratorTypeDisplayFormats.MetadataTypeDisplayFormat);
+            // A skipped constructor input uses the CLR default in both mapping modes.
+            var skippedArgument = parameter.Type.IsReferenceType && parameter.NullableAnnotation == NullableAnnotation.NotAnnotated
+                ? "default!"
+                : "default";
             ConstructorArgumentModel CreateArgument(string expression) => new(parameter.Name, parameterType, runtimeParameterType, expression);
             if (TryGetIgnore(configure.IgnoredMappings, parameter.Name, out var ignoredMapping))
             {
@@ -1410,14 +1414,14 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     return false;
                 }
 
-                arguments.Add(CreateArgument("default"));
+                arguments.Add(CreateArgument(skippedArgument));
                 continue;
             }
 
             var explicitMappings = GetExplicitMappings(configure.ExplicitMappings, parameter.Name);
             if (explicitMappings.Length > 0)
             {
-                var explicitSourceExpression = "default";
+                var explicitSourceExpression = skippedArgument;
                 for (var index = explicitMappings.Length - 1; index >= 0; index--)
                 {
                     var explicitMapping = explicitMappings[index];
@@ -1482,7 +1486,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                 arguments.Add(CreateArgument(
                     nullGuardCondition is null
                         ? sourceExpression
-                        : "(" + nullGuardCondition + ") ? " + sourceExpression + " : default"));
+                        : "(" + nullGuardCondition + ") ? " + sourceExpression + " : " + skippedArgument));
                 collectionMappings.AddRange(mappedSourceExpression.CollectionMappings);
                 continue;
             }

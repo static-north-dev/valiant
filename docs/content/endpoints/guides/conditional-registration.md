@@ -113,7 +113,7 @@ All rule predicates observe the same initial pre-mapping snapshot. Matching acti
 3. Conditional registration configuration.
 4. Global `ValiantEndpointOptions.QueryParameters.Parsing`.
 
-`EnableBinding` remains a compilation-wide generator decision. Set `options.QueryParameters.EnableBinding = true` directly in the `AddValiantEndpoints` setup lambda when generated binding is required. Conditional parsing rules cannot generate or remove `BindAsync` and direct `TryParse` members.
+Use `[assembly: ValiantGenerateQueryBinding]` in the endpoint project to enable all three generated binding forms. Conditional parsing rules configure the generated whole-request and `[AsParameters]` paths.
 
 :::warning Startup decision, not request routing
 The predicates are evaluated once when endpoints are mapped. They do not change routes after startup and are not a substitute for authorization or per-request feature evaluation.

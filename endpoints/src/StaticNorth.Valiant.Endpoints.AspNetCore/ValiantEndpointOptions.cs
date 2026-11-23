@@ -127,7 +127,7 @@ public sealed class ValiantEndpointOptions
         set => field = value ?? throw new ArgumentNullException(nameof(value));
     } = new();
 
-    private EndpointRegistration CreateEndpointRegistration(
+    private static EndpointRegistration CreateEndpointRegistration(
         Type endpointType,
         EndpointGroupRegistration? group,
         int order,
@@ -144,7 +144,6 @@ public sealed class ValiantEndpointOptions
             enableJsonQueryValues);
         var queryParameters = new EndpointQueryParameterRegistration(
             isBindingGenerated,
-            isBindingGenerated && QueryParameters.EnableBinding,
             preMappingParsingOptions);
         return new EndpointRegistration(
             endpointType,

@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,6 +49,61 @@ public sealed class AspNetCoreIntegrationTests
         var options = provider.GetRequiredService<IOptions<MvcOptions>>().Value;
 
         await Assert.That(options.ModelValidatorProviders.Any(static x => x.GetType().Name == "ValiantModelValidatorProvider")).IsTrue();
+    }
+
+    [Test]
+    public async Task Mvc_Invokes_Registered_Value_Type_Validators()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddControllers().AddValiantValidation();
+        services.AddSingleton<OrderedValidationProbe>();
+        services.AddTransient<IValidator<int>, OrderedIntValidator>();
+
+        using var provider = services.BuildServiceProvider();
+        var context = new ActionContext(new DefaultHttpContext { RequestServices = provider }, new RouteData(), new ActionDescriptor());
+        provider.GetRequiredService<IObjectModelValidator>().Validate(context, null, "input", 5);
+
+        await Assert.That(context.ModelState.IsValid).IsFalse();
+        await Assert.That(context.ModelState["input.Value"]!.Errors.Single().ErrorMessage).IsEqualTo("int:5");
+    }
+
+    [Test]
+    public async Task Minimal_Api_Skips_Validator_Lookups_For_Unregistered_Parameter_Types()
+    {
+        var builder = WebApplication.CreateSlimBuilder();
+        await using var app = builder.Build();
+        app.MapGet("/health", static (HttpContext httpContext, CancellationToken cancellationToken) => Results.NoContent())
+            .WithValiantValidation();
+
+        var endpoint = (RouteEndpoint)((IEndpointRouteBuilder)app).DataSources
+            .SelectMany(static source => source.Endpoints)
+            .Single();
+        using var scope = app.Services.CreateScope();
+        var requestServices = new ValidatorLookupProbe(scope.ServiceProvider);
+        var context = new DefaultHttpContext { RequestServices = requestServices };
+        await endpoint.RequestDelegate!(context);
+
+        await Assert.That(context.Response.StatusCode).IsEqualTo(StatusCodes.Status204NoContent);
+        await Assert.That(requestServices.ValidatorLookupCount).IsEqualTo(0);
+    }
+
+    private sealed class ValidatorLookupProbe(IServiceProvider services) : IServiceProvider
+    {
+        public int ValidatorLookupCount { get; private set; }
+
+        public object? GetService(Type serviceType)
+        {
+            if (serviceType.IsConstructedGenericType &&
+                serviceType.GetGenericTypeDefinition() == typeof(IEnumerable<>) &&
+                serviceType.GenericTypeArguments[0] is { IsConstructedGenericType: true } elementType &&
+                elementType.GetGenericTypeDefinition() == typeof(IValidator<>))
+            {
+                ValidatorLookupCount++;
+            }
+
+            return services.GetService(serviceType);
+        }
     }
 
     [Test]

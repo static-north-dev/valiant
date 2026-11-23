@@ -200,6 +200,19 @@ public sealed class QueryBindingWebApplicationFactoryTests(
     QueryBindingTestApplicationFactory factory)
 {
     [Test]
+    public async Task Generated_Whole_Request_Binding_Uses_Only_Declared_Query_Members()
+    {
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync(
+            "/integration/generated/object/local?page-size=5&label=custom");
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        using var document = await ReadJson(response);
+        await Assert.That(document.RootElement.GetProperty("limit").GetInt32()).IsEqualTo(5);
+        await Assert.That(document.RootElement.GetProperty("label").GetString()).IsEqualTo("default");
+    }
+
+    [Test]
     public async Task Query_Filter_Preserves_AspNetCore_Binding_Failure()
     {
         using var client = factory.CreateClient();
@@ -415,43 +428,28 @@ public sealed class QueryBindingDisabledWebApplicationFactoryTests(
     QueryBindingDisabledTestApplicationFactory factory)
 {
     [Test]
-    public async Task Runtime_DisableBinding_Skips_AsParameters_Query_Filter()
+    [Arguments("/integration/generated/object/global")]
+    [Arguments("/integration/as-parameters/object/global")]
+    public async Task Compiled_Query_Binding_Remains_Enabled_With_A_Runtime_Override(string route)
     {
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync(
-            "/integration/as-parameters/array/local?ids=1&ids=2&ids=3");
+        using var response = await client.GetAsync(route + "?filter.id=7");
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
-        using var document = await ReadJson(response);
-        await Assert.That(ReadIntArray(document.RootElement, "ids"))
-            .IsEquivalentTo([1, 2, 3]);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        await Assert.That(document.RootElement.GetProperty("filter").GetProperty("id").GetInt32()).IsEqualTo(7);
     }
 
     [Test]
-    public async Task Runtime_DisableBinding_Ignores_Endpoint_Query_Parsing_Attribute()
+    public async Task Compiled_Query_Binding_Preserves_Endpoint_Policy_With_A_Runtime_Override()
     {
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync(
+        using var response = await client.GetAsync(
             "/integration/as-parameters/array/attribute?ids=1&ids=2&ids=3");
 
-        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
-        using var document = await ReadJson(response);
-        await Assert.That(ReadIntArray(document.RootElement, "ids"))
-            .IsEquivalentTo([1, 2, 3]);
-    }
-
-    private static async Task<JsonDocument> ReadJson(HttpResponseMessage response)
-    {
-        return JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-    }
-
-    private static int[] ReadIntArray(JsonElement root, string propertyName)
-    {
-        return root.GetProperty(propertyName)
-            .EnumerateArray()
-            .Select(static value => value.GetInt32())
-            .ToArray();
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(await response.Content.ReadAsStringAsync()).Contains("DisabledQueryArrayFormat");
     }
 }

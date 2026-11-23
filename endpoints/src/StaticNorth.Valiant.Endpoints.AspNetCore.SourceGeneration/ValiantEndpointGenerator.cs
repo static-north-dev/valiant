@@ -21,6 +21,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
     private const string EndpointGroupAttributeMetadataName = "StaticNorth.Valiant.Endpoints.ValiantEndpointGroupAttribute";
     private const string EndpointServiceCollectionExtensionsMetadataName = "StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection.ValiantEndpointServiceCollectionExtensions";
     private const string QueryParameterOptionsMetadataName = "StaticNorth.Valiant.Endpoints.AspNetCore.QueryParameterOptions";
+    private const string GenerateQueryBindingAttributeMetadataName = "StaticNorth.Valiant.Endpoints.AspNetCore.ValiantGenerateQueryBindingAttribute";
     private const string QueryParsingAttributeMetadataName = "StaticNorth.Valiant.Endpoints.AspNetCore.ValiantQueryParsingAttribute";
     private const string FromQueryAttributeMetadataName = "Microsoft.AspNetCore.Mvc.FromQueryAttribute";
     private const string AsParametersAttributeMetadataName = "Microsoft.AspNetCore.Http.AsParametersAttribute";
@@ -124,16 +125,21 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             .CreateSyntaxProvider(
                 static (node, _) => IsPotentialQueryBindingOptIn(node),
                 static (context, cancellationToken) => IsQueryBindingOptIn(context, cancellationToken));
-        var queryBindingEnabled = context.ParseOptionsProvider
-            .Combine(queryBindingOptIns.Collect())
-            .Select(static (configuration, _) => configuration.Right.Any(static enabled => enabled))
+        var explicitQueryBinding = context.CompilationProvider
+            .Select(static (compilation, _) => HasAttribute(compilation.Assembly, GenerateQueryBindingAttributeMetadataName));
+        var legacyQueryBinding = queryBindingOptIns.Collect()
+            .Combine(explicitQueryBinding)
+            .Select(static (input, _) => !input.Right && input.Left.Any(static enabled => enabled));
+        var queryBindingEnabled = explicitQueryBinding.Combine(legacyQueryBinding)
+            .Select(static (input, _) => input.Left || input.Right)
             .WithTrackingName("Endpoints.QueryBindingEnabled");
 
-        var queryBindingCompilation = queryBindingEnabled
+        // Only the legacy setup syntax requires joining candidates to a compilation-wide option.
+        var legacyQueryBindingCompilation = legacyQueryBinding
             .Combine(context.CompilationProvider)
             .Select(static (input, _) => input.Left ? input.Right : null);
-        var endpoints = CreateEndpointProvider(context.SyntaxProvider, EndpointAttributeMetadataName, queryBindingCompilation);
-        var genericEndpoints = CreateEndpointProvider(context.SyntaxProvider, GenericEndpointAttributeMetadataName, queryBindingCompilation);
+        var endpoints = CreateEndpointProvider(context.SyntaxProvider, EndpointAttributeMetadataName, legacyQueryBindingCompilation);
+        var genericEndpoints = CreateEndpointProvider(context.SyntaxProvider, GenericEndpointAttributeMetadataName, legacyQueryBindingCompilation);
 
         var endpointGroups = context.SyntaxProvider
             .ForAttributeWithMetadataName(
@@ -230,17 +236,37 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
     private static IncrementalValuesProvider<EndpointCandidateModel> CreateEndpointProvider(
         SyntaxValueProvider syntaxProvider,
         string attributeMetadataName,
-        IncrementalValueProvider<Compilation?> queryBindingCompilation)
+        IncrementalValueProvider<Compilation?> legacyQueryBindingCompilation)
     {
         return syntaxProvider
             .ForAttributeWithMetadataName(
                 attributeMetadataName,
                 static (node, _) => node is ClassDeclarationSyntax { AttributeLists.Count: > 0 },
-                static (context, _) => (Candidate: CreateEndpointCandidate(context), MetadataName: GetTypeMetadataName((INamedTypeSymbol)context.TargetSymbol)))
-            .Combine(queryBindingCompilation)
-            .Select(static (input, cancellationToken) => input.Right is { } compilation
-                ? AnalyzeQueryBinding(input.Left.Candidate, input.Left.MetadataName, compilation, cancellationToken)
-                : input.Left.Candidate);
+                static (context, cancellationToken) => CreateEndpointQueryCandidate(context, cancellationToken))
+            .WithTrackingName("Endpoints.QueryCandidates")
+            .Combine(legacyQueryBindingCompilation)
+            .Select(static (input, cancellationToken) =>
+                input.Right is { } compilation && input.Left.LegacyMetadataName is { } metadataName &&
+                compilation.Assembly.GetTypeByMetadataName(metadataName) is { } type
+                    ? AnalyzeQueryBinding(input.Left.Candidate, type, compilation, cancellationToken)
+                    : input.Left.Candidate)
+            .WithTrackingName("Endpoints.AnalyzedQueryCandidates");
+    }
+
+    private static (EndpointCandidateModel Candidate, string? LegacyMetadataName) CreateEndpointQueryCandidate(
+        GeneratorAttributeSyntaxContext context,
+        CancellationToken cancellationToken)
+    {
+        var candidate = CreateEndpointCandidate(context);
+        if (candidate.Endpoint is null || context.TargetSymbol is not INamedTypeSymbol type)
+        {
+            return (candidate, null);
+        }
+
+        var compilation = context.SemanticModel.Compilation;
+        return HasAttribute(compilation.Assembly, GenerateQueryBindingAttributeMetadataName)
+            ? (AnalyzeQueryBinding(candidate, type, compilation, cancellationToken), null)
+            : (candidate, GetTypeMetadataName(type));
     }
 
     private static string GetTypeMetadataName(INamedTypeSymbol type)
@@ -366,12 +392,11 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
 
     private static EndpointCandidateModel AnalyzeQueryBinding(
         EndpointCandidateModel candidate,
-        string metadataName,
+        INamedTypeSymbol typeSymbol,
         Compilation compilation,
         CancellationToken cancellationToken)
     {
-        if (candidate.Endpoint is not { } endpoint ||
-            compilation.Assembly.GetTypeByMetadataName(metadataName) is not { } typeSymbol)
+        if (candidate.Endpoint is not { } endpoint)
         {
             return candidate;
         }
@@ -658,7 +683,9 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
                 {
                     IsStatic: false,
                     IsIndexer: false,
-                    DeclaredAccessibility: Accessibility.Public
+                    DeclaredAccessibility: Accessibility.Public,
+                    GetMethod: not null,
+                    SetMethod.DeclaredAccessibility: Accessibility.Public
                 } property &&
                 HasAttribute(property, FromQueryAttributeMetadataName))
             {
@@ -2047,25 +2074,9 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 1, binding.NamespaceName);
         builder.AppendLine("{");
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("global::System.ArgumentNullException.ThrowIfNull(context);");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("var parsingOptions = global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ResolveQueryParsingOptions(context);");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.Append("var result = global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryStringParser.Parse<")
+        builder.Append("return global::System.Threading.Tasks.ValueTask.FromResult(global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.BindQueryRequest<")
             .Append(binding.Type)
-            .AppendLine(">(context.Request.QueryString.Value, parsingOptions);");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("if (!result.IsSuccess)");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("{");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 3, binding.NamespaceName);
-        builder.AppendLine("throw global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.CreateQueryBindingException(result.Errors);");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("}");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.Append("return global::System.Threading.Tasks.ValueTask.FromResult<")
-            .Append(binding.Type)
-            .AppendLine(">(result.Value!);");
+            .AppendLine(">(context));");
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 1, binding.NamespaceName);
         builder.AppendLine("}");
 

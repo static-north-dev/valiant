@@ -691,8 +691,7 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated).Contains("public static global::System.Threading.Tasks.ValueTask<global::SearchEndpoint.SearchRequest> BindAsync(global::Microsoft.AspNetCore.Http.HttpContext context, global::System.Reflection.ParameterInfo parameter)");
-        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ResolveQueryParsingOptions(context)");
-        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryStringParser.Parse<global::SearchEndpoint.SearchRequest>");
+        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.BindQueryRequest<global::SearchEndpoint.SearchRequest>");
     }
 
     [Test]
@@ -1008,7 +1007,7 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated).Contains("public static global::System.Threading.Tasks.ValueTask<global::ListCarsEndpoint.Request> BindAsync(global::Microsoft.AspNetCore.Http.HttpContext context, global::System.Reflection.ParameterInfo parameter)");
-        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryStringParser.Parse<global::ListCarsEndpoint.Request>");
+        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.BindQueryRequest<global::ListCarsEndpoint.Request>");
     }
 
     [Test]
@@ -1659,7 +1658,9 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
-    public async Task Query_Binding_Toggle_Reanalyzes_Named_Handlers_Using_The_Same_Driver()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Query_Binding_Toggle_Reanalyzes_Named_Handlers_Using_The_Same_Driver(bool useAssemblyAttribute)
     {
         const string source = """
             using Microsoft.AspNetCore.Builder;
@@ -1710,11 +1711,19 @@ public sealed class SourceGenerationTests
             .Add(MetadataReference.CreateFromFile(typeof(ValiantEndpointAttribute).Assembly.Location))
             .Add(MetadataReference.CreateFromFile(typeof(IEndpoint).Assembly.Location));
         var disabled = CSharpSyntaxTree.ParseText(source, parseOptions, "Endpoints.cs");
-        var enabled = CSharpSyntaxTree.ParseText(source.Replace("EnableBinding = false", "EnableBinding = true", StringComparison.Ordinal), parseOptions, "Endpoints.cs");
+        var enabled = CSharpSyntaxTree.ParseText(
+            useAssemblyAttribute
+                ? source.Replace("public static class EndpointConfiguration", "[assembly: ValiantGenerateQueryBinding]\npublic static class EndpointConfiguration", StringComparison.Ordinal)
+                : source.Replace("EnableBinding = false", "EnableBinding = true", StringComparison.Ordinal),
+            parseOptions,
+            "Endpoints.cs");
         var handlerTree = CSharpSyntaxTree.ParseText(handler, parseOptions, "NamedHandlers.cs");
         var compilation = CSharpCompilation.Create("QueryBindingToggle", [disabled, handlerTree], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-        GeneratorDriver driver = CSharpGeneratorDriver.Create([new ValiantEndpointGenerator().AsSourceGenerator()], parseOptions: parseOptions);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            [new ValiantEndpointGenerator().AsSourceGenerator()],
+            parseOptions: parseOptions,
+            driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
 
         foreach (var enabledForBuild in new[] { false, true, false, true })
         {
@@ -1727,6 +1736,28 @@ public sealed class SourceGenerationTests
             await Assert.That(generated.Any(static file => file.HintName == "WholeRequest.QueryRequest.g.cs")).IsEqualTo(enabledForBuild);
             await Assert.That(generated.Any(static file => file.HintName == "ParameterFilter.QueryObject.g.cs")).IsEqualTo(enabledForBuild);
             await Assert.That(generated.Any(static file => file.HintName.StartsWith("StaticNorth.Valiant.Endpoints.AspNetCore.", StringComparison.Ordinal))).IsTrue();
+        }
+
+        if (useAssemblyAttribute)
+        {
+            var unrelated = CSharpSyntaxTree.ParseText("public class Unrelated { }", parseOptions, "Unrelated.cs");
+            compilation = compilation.AddSyntaxTrees(unrelated);
+            driver = driver.RunGenerators(compilation);
+            var reasons = driver.GetRunResult().Results.Single().TrackedSteps["Endpoints.AnalyzedQueryCandidates"]
+                .SelectMany(static step => step.Outputs)
+                .Select(static output => output.Reason)
+                .ToArray();
+            await Assert.That(reasons).IsNotEmpty();
+            await Assert.That(reasons.All(static reason => reason == IncrementalStepRunReason.Cached)).IsTrue();
+
+            var updatedHandler = CSharpSyntaxTree.ParseText(
+                handler.Replace("Handle([FromQuery] Filter filter) => filter.Id;", "Handle() => 1;", StringComparison.Ordinal),
+                parseOptions,
+                "NamedHandlers.cs");
+            driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(handlerTree, updatedHandler));
+            var generated = driver.GetRunResult().Results.Single().GeneratedSources;
+            await Assert.That(generated.Any(static file => file.HintName == "Filter.QueryObject.g.cs")).IsFalse();
+            await Assert.That(generated.Any(static file => file.HintName == "WholeRequest.QueryRequest.g.cs")).IsTrue();
         }
     }
 

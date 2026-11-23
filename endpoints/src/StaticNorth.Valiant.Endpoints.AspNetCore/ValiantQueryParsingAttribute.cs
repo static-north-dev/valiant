@@ -5,7 +5,7 @@ namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 /// </summary>
 /// <remarks>
 /// This attribute is ignored when query binding is disabled at source-generation time.
-/// A generated direct <c>TryParse</c> method cannot observe a later runtime-only change to <see cref="QueryParameterOptions.EnableBinding" />.
+/// Changing <see cref="QueryParameterOptions.EnableBinding" /> after compilation leaves the generated binding policy enabled.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class ValiantQueryParsingAttribute : Attribute

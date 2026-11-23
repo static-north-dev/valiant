@@ -120,6 +120,61 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
+    public async Task Settings_Model_Describes_Interface_Nested_And_Recursive_Collections()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using System.Collections.Generic;
+            using StaticNorth.Valiant.Settings;
+
+            [ValiantSettings("Collections")]
+            public sealed class CollectionSettings
+            {
+                public IEnumerable<int> Values { get; init; } = [];
+                public int[][] Groups { get; init; } = [];
+                public IEnumerable<Detail[]> Details { get; init; } = [];
+                public RecursiveItems Repeated { get; init; } = [];
+                public ExpandingItems<int> Expanding { get; init; } = [];
+            }
+
+            public sealed class Detail
+            {
+                [ValiantSecret]
+                public string? Code { get; init; }
+            }
+
+            public sealed class RecursiveItems : List<RecursiveItems>;
+            public sealed class ExpandingItems<T> : List<ExpandingItems<List<T>>>;
+            """);
+
+        var registry = assembly.GetType("StaticNorth.Valiant.Settings.ValiantSettingsSchemas", throwOnError: true)!;
+        var provider = ((IReadOnlyList<IValiantSettingsSchemaProvider>)registry.GetProperty("All")!.GetValue(null)!).Single();
+        var properties = provider.Schema.Properties.ToDictionary(static property => property.Name);
+        var values = properties["Values"];
+        var groups = properties["Groups"];
+        var details = properties["Details"];
+        var repeated = properties["Repeated"];
+
+        await Assert.That(values.Kind).IsEqualTo(ValiantSettingsPropertyKind.Array);
+        await Assert.That(values.Item!.Kind).IsEqualTo(ValiantSettingsPropertyKind.Integer);
+        await Assert.That(groups.Item!.Kind).IsEqualTo(ValiantSettingsPropertyKind.Array);
+        await Assert.That(groups.Item!.Item!.Kind).IsEqualTo(ValiantSettingsPropertyKind.Integer);
+        await Assert.That(details.Item!.Item!.Properties.Single().IsSecret).IsTrue();
+        await Assert.That(repeated.Item!.Kind).IsEqualTo(ValiantSettingsPropertyKind.Array);
+        await Assert.That(repeated.Item!.Item).IsNull();
+
+        var nested = properties["Expanding"];
+        var depth = 0;
+        while (nested.Item is { } child)
+        {
+            nested = child;
+            depth++;
+        }
+
+        await Assert.That(depth).IsEqualTo(32);
+    }
+
+    [Test]
     public async Task Configured_Settings_Model_With_Section_Path_Generates_Options_Registration()
     {
         var assembly = CompileAndLoad(
@@ -688,6 +743,21 @@ public sealed class SourceGenerationTests
             """);
 
         await Assert.That(result.Diagnostics.Any(static diagnostic => diagnostic.Id == "VLS001" && diagnostic.Severity == DiagnosticSeverity.Error)).IsTrue();
+    }
+
+    [Test]
+    [Arguments("public sealed class Parent<T> { [ValiantSettings(\"Nested\")] public sealed class Nested; }", "VLS001")]
+    [Arguments("public sealed class Parent { [ValiantSettings(\"Nested\")] private sealed class Nested; }", "VLS003")]
+    [Arguments("[ValiantSettings(\"Local\")] file sealed class LocalSettings;", "VLS003")]
+    public async Task Settings_Model_That_Cannot_Be_Referenced_Reports_A_Diagnostic(string declaration, string diagnosticId)
+    {
+        var result = RunGenerator("using StaticNorth.Valiant.Settings;\n" + declaration);
+
+        var diagnostic = result.Diagnostics.Single();
+        await Assert.That(diagnostic.Id).IsEqualTo(diagnosticId);
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(result.GeneratedSources.Any(static source =>
+            source.HintName.EndsWith(".ValiantSettingsSchema.g.cs", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]

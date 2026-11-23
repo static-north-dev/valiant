@@ -46,6 +46,8 @@ Public instance properties with public getters are included, including inherited
 | `Array` | Array or collection with an item schema |
 | `Unknown` | A type without a more specific schema classification |
 
+Arrays and generic collections, including properties declared as `IEnumerable<T>`, have item schemas. Nested collections retain each layer's item schema. Schema expansion stops at repeated types along the same path or after 32 nested levels.
+
 ## Schema-only or configured
 
 Schema generation always occurs. Binding is opt-in:

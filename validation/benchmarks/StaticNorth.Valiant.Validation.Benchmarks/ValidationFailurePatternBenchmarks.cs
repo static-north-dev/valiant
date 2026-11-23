@@ -30,11 +30,19 @@ public class ValidationFailurePatternBenchmarks
             var nickname = (mask & 16) != 0 ? "" : "Ada";
             _valiantModels[index] = new ValiantValidationModel
             {
-                DisplayName = name, Username = username, CountryCode = country, Age = age, Nickname = nickname
+                DisplayName = name,
+                Username = username,
+                CountryCode = country,
+                Age = age,
+                Nickname = nickname
             };
             _validlyModels[index] = new ValidlyValidationModel
             {
-                DisplayName = name, Username = username, CountryCode = country, Age = age, Nickname = nickname
+                DisplayName = name,
+                Username = username,
+                CountryCode = country,
+                Age = age,
+                Nickname = nickname
             };
 
             var valiant = _validator.Validate(_valiantModels[index]);

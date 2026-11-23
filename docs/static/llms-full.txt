@@ -344,7 +344,7 @@ context.Property(order => order.Customer)
 
 #### Collections
 
-Use `ForEach` for element rules. `context.Item` is the current item inside the nested validation context:
+Use `ForEach` for element rules. Inside the callback below, `line.Instance` is the current item.
 
 ```csharp
 context.Property(order => order.Lines)
@@ -696,9 +696,11 @@ Install the most specific package for each integration you use. Integration pack
 
 #### Build SDK and target frameworks
 
-The current development branch uses the .NET 11.0.100 SDK. The published Valiant 1.2.1 generators require the .NET 10.0.400 SDK or newer. You can use either SDK to compile an application targeting `net8.0` with the matching Valiant packages. The tables list the framework assets on the development branch.
+**The Next Valiant packages require the .NET 11.0.100 SDK or newer to run their source generators.** You can use that SDK to build applications targeting `net8.0` with the packages that list a .NET 8 asset. Valiant 1.2.1 supports building with the .NET 10.0.400 SDK or newer.
 
 Run `dotnet --version` in the project directory. If you see `CS9057` or generated methods are missing, check whether a `global.json` is selecting an older SDK.
+
+When upgrading from 1.2.1, update the SDK selection in local builds and CI before updating the package references.
 
 #### Endpoints, Mapping, and Settings
 
@@ -941,13 +943,10 @@ details and precedence.
 
 #### Query binding
 
-The query-binding startup opts the compilation into generated binding:
+The query-binding sample uses `[assembly: ValiantGenerateQueryBinding]` to enable generated binding. Its startup registers the assembly's endpoints.
 
 ```csharp
-services.AddValiantEndpoints(options =>
-{
-    options.QueryParameters.EnableBinding = true;
-});
+services.AddValiantEndpoints();
 ```
 
 Its `/query/*` routes cover array and object formats, direct JSON query values,
@@ -1131,7 +1130,7 @@ All rule predicates observe the same initial pre-mapping snapshot. Matching acti
 3. Conditional registration configuration.
 4. Global `ValiantEndpointOptions.QueryParameters.Parsing`.
 
-`EnableBinding` remains a compilation-wide generator decision. Set `options.QueryParameters.EnableBinding = true` directly in the `AddValiantEndpoints` setup lambda when generated binding is required. Conditional parsing rules cannot generate or remove `BindAsync` and direct `TryParse` members.
+Use `[assembly: ValiantGenerateQueryBinding]` in the endpoint project to enable all three generated binding forms. Conditional parsing rules configure the generated whole-request and `[AsParameters]` paths.
 
 :::warning Startup decision, not request routing
 The predicates are evaluated once when endpoints are mapped. They do not change routes after startup and are not a substitute for authorization or per-request feature evaluation.
@@ -1144,12 +1143,19 @@ Routes mapped directly with ASP.NET Core are outside Valiant's generated mapping
 See [Upgrading Endpoints from preview](https://valiant.staticnorth.dev/endpoints/guides/upgrading-from-preview/#migrate-from-shouldmap) for the earlier shared predicate.
 ### Request binding
 
-Valiant query binding is disabled by default, leaving request parameters to native ASP.NET Core binding. Enable generated binding in the same project as the endpoint declarations with a direct assignment:
+Valiant query binding is disabled by default, leaving request parameters to native ASP.NET Core binding. Add this assembly attribute in the project that declares the endpoints.
+
+```csharp
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+[assembly: ValiantGenerateQueryBinding]
+```
+
+Register the endpoint assembly with `AddValiantEndpoints`. The host can configure the parsing formats for whole-request and `[AsParameters]` binding.
 
 ```csharp
 builder.Services.AddValiantEndpoints(options =>
 {
-    options.QueryParameters.EnableBinding = true;
     options.QueryParameters.Parsing = new QueryParsingOptions
     {
         SupportedObjectFormats = [QueryObjectFormat.Flat, QueryObjectFormat.DotNotation]
@@ -1157,11 +1163,11 @@ builder.Services.AddValiantEndpoints(options =>
 });
 ```
 
-Changing the literal between `true` and `false` adds or removes generated query binding during the normal rebuild. Helper methods, runtime variables, and a host configuration in another assembly are not compile-time opt-ins.
+Existing projects can still opt into generation with a direct literal `true` assignment in the `AddValiantEndpoints` setup lambda in the endpoint assembly. The assembly attribute also works when registration lives in a helper or a different assembly.
 
 :::caution Compile-time boundary
 
-`EnableBinding` is not a fully dynamic runtime switch. Whole-request `BindAsync` and `[AsParameters]` processing can read runtime options, but a generated direct `TryParse(string, out T)` has no `HttpContext`. If the endpoint compilation contains a recognized literal `true`, another host or later runtime override to `false` cannot remove or neutralize that direct parser. Compile the endpoint project with no recognized `true` assignment when `[ValiantQueryParsing]` must be ignored.
+The endpoint assembly's opt-in enables all three generated binding forms. Changing `EnableBinding` in the host leaves generated binding enabled. To disable it, remove the assembly attribute and any recognized literal `true` assignment, then rebuild. Whole-request and `[AsParameters]` binding read runtime parsing options. Direct `TryParse` uses the JSON policy compiled into the generated parser.
 
 :::
 
@@ -1196,12 +1202,12 @@ public sealed record CarFilter
 }
 ```
 
-Valiant emits `BindAsync(HttpContext, ParameterInfo)` on `ListCarsRequest` and parses the full query through the configured policy.
+Valiant emits `BindAsync(HttpContext, ParameterInfo)` on `ListCarsRequest`. Only root properties marked `[FromQuery]` with public setters participate, including public `init` accessors. Set `[FromQuery(Name = "filter")]` to use a query key different from the CLR property name. Nested filter members use their public property names.
 If the request is nested inside an endpoint or another type, every containing declaration must also be `partial` so generated code can reopen the complete declaration chain.
 
 #### `[AsParameters]`
 
-ASP.NET Core first constructs the request; a Valiant endpoint filter then reparses the full query and copies `[FromQuery]` values back:
+ASP.NET Core first constructs the request. A Valiant endpoint filter then applies the supplied `[FromQuery]` values using the configured formats and aliases. Properties with no matching query key keep their existing values.
 
 ```csharp
 return builder.MapGet("/cars", static ([AsParameters] ListCarsRequest request) =>
@@ -1248,7 +1254,7 @@ public sealed class CarsEndpoint : IEndpoint
 }
 ```
 
-The policy is compiled into the generated method, so direct binding does not use an endpoint filter. When the endpoint project is compiled with `options.QueryParameters.EnableBinding = false`, the attribute is ignored and no Valiant query parser is emitted. A later runtime-only override cannot change an already-generated direct parser; see the compile-time boundary above. When binding is enabled, JSON remains enabled when the attribute is absent or parameterless. Explicit `Disabled` returns HTTP 400. `SupportedArrayFormats` and `SupportedObjectFormats` on the attribute do not affect direct parameters. The attribute does not change a user-authored `TryParse`. Conflicting policies for the same generated parser type report `VLE011`.
+The policy is compiled into the generated method. JSON is enabled when the policy attribute is absent or parameterless. Explicit `Disabled` returns HTTP 400. The array and object formats apply to full-query binding only. User-authored `TryParse` methods keep their own behavior. Conflicting policies for the same generated parser type report `VLE011`.
 
 #### Failure response
 
@@ -1259,7 +1265,6 @@ For example, `/cars?filter.year=abc` produces HTTP 400 in both full-query exampl
 ```csharp
 builder.Services.AddValiantEndpoints(options =>
 {
-    options.QueryParameters.EnableBinding = true;
     options.QueryParameters.Parsing = new QueryParsingOptions
     {
         SupportedArrayFormats =
@@ -1449,18 +1454,15 @@ options.MapEndpointWhen = endpoint => !disabled.Contains(endpoint.EndpointType);
 
 Inbound parsing and outbound serialization use separate options. An API can accept several client conventions while emitting one stable format.
 
-Generated endpoint binding is opt-in and disabled by default:
+Opt into generated endpoint binding in the project that declares the endpoints.
 
 ```csharp
-builder.Services.AddValiantEndpoints(options =>
-{
-    options.QueryParameters.EnableBinding = true;
-});
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+[assembly: ValiantGenerateQueryBinding]
 ```
 
-The direct literal assignment must be in the same compilation as the endpoints so the source generator can add the binding members. Direct calls to `QueryStringParser` and `QueryStringSerializer` do not require endpoint binding to be enabled.
-
-`EnableBinding` is a compile-time opt-in, not a fully dynamic runtime switch. Whole-request `BindAsync` and `[AsParameters]` processing can resolve runtime options, but a generated direct `TryParse(string, out T)` has no `HttpContext`. Once a recognized literal `true` causes that parser to be compiled, another host or runtime override to `false` cannot remove or neutralize it. Compile the endpoint project with no recognized `true` assignment when `[ValiantQueryParsing]` must be ignored.
+The assembly opt-in enables whole-request, `[AsParameters]`, and direct query binding. A direct literal `EnableBinding = true` assignment in the endpoint assembly remains a compatibility opt-in. Standalone calls to `QueryStringParser` and `QueryStringSerializer` are available by default. See [request binding setup](https://valiant.staticnorth.dev/endpoints/guides/request-binding/).
 
 #### Defaults
 
@@ -1572,7 +1574,7 @@ public sealed class SearchEndpoint : IEndpoint
 }
 ```
 
-When the endpoint project is compiled with `options.QueryParameters.EnableBinding = false`, the whole attribute is ignored and no Valiant query parser is generated. A later runtime-only override cannot change an already-generated direct parser. When binding is enabled, no attribute and `[ValiantQueryParsing]` both leave JSON enabled for the generated direct parser. Explicit `Disabled` returns HTTP 400 without a Valiant direct-query filter. Array and object format properties do not affect direct parameters. User-authored `TryParse` methods remain user-controlled, and conflicting policies for the same generated parser type report `VLE011`.
+Generated direct parsers keep their compiled JSON policy regardless of the host's runtime setting. JSON is enabled when the policy attribute is absent or parameterless. Explicit `Disabled` returns HTTP 400 through ASP.NET Core. The array and object formats apply to full-query binding only. User-authored `TryParse` methods retain their own behavior. Conflicting policies for the same generated parser type report `VLE011`.
 
 ```http
 ?filter=%7B%22brand%22%3A%22tesla%22%2C%22year%22%3A2025%7D
@@ -1608,6 +1610,10 @@ if (!result.IsSuccess)
 
 Primitive arrays and `List<T>` support `string`, `int`, `long`, `Guid`, `bool`, `decimal`, and `DateTime`; nullable primitive scalars are supported. Nested object binding supports at least one level.
 
+Valiant's field-by-field object binding writes only to properties with public setters, including public `init` accessors. On endpoint requests, root properties also need `[FromQuery]`, and any `Name` alias supplies the query key. Standalone parsing uses CLR property names.
+
+Repeated and delimited values require a one-dimensional array or a type assignable from `List<T>`. An incompatible collection type returns `UnsupportedQueryType`. With JSON query values enabled, collections can also use any shape supported by the JSON serializer.
+
 #### Direct serialization
 
 ```csharp
@@ -1626,7 +1632,7 @@ var result = QueryStringSerializer.Serialize(
 // ?ids=1,2,3&filter.brand=tesla&filter.year=2025
 ```
 
-The serializer URL-encodes keys and values, preserves array order, and skips null values. It never negotiates an output format: one array and one object format are selected explicitly.
+The serializer URL-encodes keys and values, preserves array order, and skips null values. It omits empty collections in every array format. When a key is absent, parsing keeps the target property's initialized or default value. To round-trip an empty collection as empty, initialize that property to an empty collection. Serialization uses one explicitly selected array format and one object format.
 
 #### Structured errors
 
@@ -2043,9 +2049,17 @@ using StaticNorth.Valiant.Mapping;
 builder.Services.AddValiantMappers();
 ```
 
-Valiant registers each mapper as its concrete type and as `IMapper<TSource, TTarget>`. It also registers `IMapper` and `IMapperFactory`. Mapper registrations are transient; the facade, factory, and options are singleton services.
+Valiant registers each mapper as a transient service under its concrete type and `IMapper<TSource, TTarget>`. The `IMapper` facade and `IMapperFactory` default to singleton. Options are registered as a singleton.
 
-Call the generated registration from each project that declares mappers. The facade and factory then see all registered pairs, in either registration order.
+If you use the facade or factory with mappers that have scoped dependencies, opt into scoped lookup during startup.
+
+```csharp
+builder.Services.AddValiantMappers(options => options.UseScopedMapperLookup = true);
+```
+
+With scoped lookup enabled, resolve the facade and factory from the current request or a service scope you create.
+
+Call the generated registration from each project that declares mappers. Supply shared options on the first call. The facade and factory can resolve mapper pairs from every registered assembly.
 
 #### Choose an API
 
@@ -2103,14 +2117,13 @@ services.AddValiantMappers(options =>
 | --- | --- | --- |
 | `Mode` | `Auto`, `Debuggable`, `Fast` | `Auto` |
 | `NullHandling` | `MapNulls`, `IgnoreSourceNulls` | `MapNulls` |
+| `UseScopedMapperLookup` | `true` registers `IMapper` and `IMapperFactory` as scoped | `false` (singleton) |
 
 `Auto` and `Fast` use direct generated mapping in Debug and Release builds. Both modes support trimming and Native AOT. Select `Debuggable` to execute your `Configure` method at runtime and use breakpoints. This path uses expression compilation and reflection.
 
 #### Constructor arguments and nulls
 
 A skipped constructor mapping uses the configured fallback or the parameter type's default value. For a reference type, that default is `null`. Use a nullable parameter when absence is valid. For a required value, use an explicit mapping with a non-null fallback or `MapNull()` when the source already guarantees a non-null value and you want to bypass the null-skip rule.
-
-In 1.2.1, convention mapping to a non-nullable reference constructor parameter can emit `CS8604` because the generated branch for `IgnoreSourceNulls` passes `default`. The [explicit mapping guide](https://valiant.staticnorth.dev/mapping/guides/explicit-mapping/#null-handling) shows how to select a policy for that member.
 
 #### Generator scope
 
@@ -2370,6 +2383,8 @@ Public instance properties with public getters are included, including inherited
 | `Object` | Nested settings object |
 | `Array` | Array or collection with an item schema |
 | `Unknown` | A type without a more specific schema classification |
+
+Arrays and generic collections, including properties declared as `IEnumerable<T>`, have item schemas. Nested collections retain each layer's item schema. Schema expansion stops at repeated types along the same path or after 32 nested levels.
 
 #### Schema-only or configured
 
@@ -2639,7 +2654,8 @@ Only types marked with `[ValiantSettings]` enter the incremental generator pipel
 
 | ID | Meaning |
 | --- | --- |
-| `VLS001` | Generic settings model types are not supported |
+| `VLS001` | The settings model or one of its containing types is generic |
 | `VLS002` | The settings section path is empty |
+| `VLS003` | The settings model is inaccessible from another file in the same assembly |
 
 The section path is deliberately required so generated binding and external tooling share one unambiguous configuration identity.

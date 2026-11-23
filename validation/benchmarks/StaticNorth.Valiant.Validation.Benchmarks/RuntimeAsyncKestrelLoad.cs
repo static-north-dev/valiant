@@ -17,21 +17,21 @@ internal static class RuntimeAsyncKestrelLoad
         Console.WriteLine("concurrency,nested,suspend,trial,runtime_async,requests,requests_per_second,p95_us,allocated_bytes_per_request");
 
         foreach (var concurrency in new[] { 8, 32 })
-        foreach (var nested in new[] { false, true })
-        foreach (var suspend in new[] { false, true })
-        {
-            for (var trial = 0; trial < Trials; trial++)
-            {
-                for (var variant = 0; variant < 2; variant++)
+            foreach (var nested in new[] { false, true })
+                foreach (var suspend in new[] { false, true })
                 {
-                    // Alternate which build runs first in each pair.
-                    var runtimeAsync = (trial + variant) % 2 != 0;
-                    var assembly = runtimeAsync ? runtimeAsyncAssembly : classicAssembly;
-                    await RunTrialAsync(assembly, concurrency, nested, suspend, trial + 1, runtimeAsync)
-                        .ConfigureAwait(false);
+                    for (var trial = 0; trial < Trials; trial++)
+                    {
+                        for (var variant = 0; variant < 2; variant++)
+                        {
+                            // Alternate which build runs first in each pair.
+                            var runtimeAsync = (trial + variant) % 2 != 0;
+                            var assembly = runtimeAsync ? runtimeAsyncAssembly : classicAssembly;
+                            await RunTrialAsync(assembly, concurrency, nested, suspend, trial + 1, runtimeAsync)
+                                .ConfigureAwait(false);
+                        }
+                    }
                 }
-            }
-        }
     }
 
     internal static async Task ServeAsync(bool nested, bool suspend, bool runtimeAsync)

@@ -184,7 +184,7 @@ public sealed class MappingSampleTests
             options.Mode = ValiantMappingMode.Fast;
             options.NullHandling = ValiantNullHandling.MapNulls;
         });
-        using var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider(validateScopes: true);
         var source = new DependencyPerson("Grace", 40);
         var typed = provider.GetRequiredService<IMapper<DependencyPerson, DependencyPersonDto>>();
         var facade = provider.GetRequiredService<IMapper>();

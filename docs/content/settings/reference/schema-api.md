@@ -80,8 +80,9 @@ Only types marked with `[ValiantSettings]` enter the incremental generator pipel
 
 | ID | Meaning |
 | --- | --- |
-| `VLS001` | Generic settings model types are not supported |
+| `VLS001` | The settings model or one of its containing types is generic |
 | `VLS002` | The settings section path is empty |
+| `VLS003` | The settings model is inaccessible from another file in the same assembly |
 
 The section path is deliberately required so generated binding and external tooling share one unambiguous configuration identity.
 

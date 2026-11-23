@@ -4,6 +4,7 @@ using System.Net;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
 
 namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 
@@ -52,6 +53,10 @@ public static class QueryStringParser
         return new QueryInput(queryString, options).Bind(targetType, out errors);
     }
 
+    internal static bool HasEndpointQueryMembers(Type type) => GetQueryType(type).EndpointProperties.Length != 0;
+
+    private static QueryType GetQueryType(Type type) => QueryTypes.GetValue(type, static type => new QueryType(type));
+
     internal sealed class QueryInput
     {
         private readonly QueryNode _root = new();
@@ -75,6 +80,22 @@ public static class QueryStringParser
 
             errors = _errors.Count == 0 ? Array.Empty<QueryError>() : _errors;
             return _errors.Count == 0 ? value : null;
+        }
+
+        internal object? BindEndpointRequest(Type targetType, object? instance, out IReadOnlyList<QueryError> errors)
+        {
+            if (_errors.Count == 0)
+            {
+                var shape = GetQueryType(targetType);
+                var rebind = instance is not null;
+                if (instance is not null || TryCreateObject(shape, string.Empty, _errors, out instance))
+                {
+                    BindProperties(instance, shape.EndpointProperties, _root, string.Empty, _options, _errors, rebind);
+                }
+            }
+
+            errors = _errors.Count == 0 ? Array.Empty<QueryError>() : _errors;
+            return _errors.Count == 0 ? instance : null;
         }
     }
 
@@ -358,7 +379,7 @@ public static class QueryStringParser
     {
         value = null;
 
-        var shape = QueryTypes.GetValue(targetType, static type => new QueryType(type));
+        var shape = GetQueryType(targetType);
         if (shape.ElementType is { } elementType)
         {
             return TryBindCollection(targetType, elementType, shape.ListType, node, path, options, errors, out value);
@@ -417,6 +438,15 @@ public static class QueryStringParser
                 path,
                 "DisabledJsonQueryValues",
                 $"Query path '{path}' uses a JSON query value, but JSON query values are disabled."));
+            return false;
+        }
+
+        if (!targetType.IsSZArray && (listType is null || !targetType.IsAssignableFrom(listType)))
+        {
+            errors.Add(ValidationError(
+                path,
+                "UnsupportedQueryType",
+                $"Query path '{path}' cannot bind repeated or delimited values to collection type '{targetType.Name}'."));
             return false;
         }
 
@@ -574,24 +604,51 @@ public static class QueryStringParser
             return false;
         }
 
-        foreach (var property in shape.Properties)
+        BindProperties(instance, shape.Properties, node, path, options, errors);
+        value = instance;
+        return errors.Count == 0;
+    }
+
+    private static void BindProperties(
+        object instance,
+        QueryProperty[] properties,
+        QueryNode node,
+        string path,
+        QueryParsingOptions options,
+        List<QueryError> errors,
+        bool rebind = false)
+    {
+        List<(PropertyInfo Property, object? Value)>? assignments = null;
+        foreach (var (property, name) in properties)
         {
-            if (node.GetChild(property.Name) is not { } child)
+            if (node.GetChild(name) is not { } child)
             {
                 continue;
             }
 
-            var childPath = CombinePath(path, property.Name);
+            var childPath = CombinePath(path, name);
             if (!TryBindValue(property.PropertyType, child, childPath, options, errors, out var propertyValue))
             {
                 continue;
             }
 
-            property.SetValue(instance, propertyValue);
+            if (rebind)
+            {
+                (assignments ??= []).Add((property, propertyValue));
+            }
+            else
+            {
+                property.SetValue(instance, propertyValue);
+            }
         }
 
-        value = instance;
-        return errors.Count == 0;
+        if (assignments is not null && errors.Count == 0)
+        {
+            foreach (var (property, value) in assignments)
+            {
+                property.SetValue(instance, value);
+            }
+        }
     }
 
     private static bool TryDeserializeJson(Type targetType, string json, string path, List<QueryError> errors, out object? value)
@@ -644,7 +701,7 @@ public static class QueryStringParser
     {
         return type.GetProperties(BindingFlags.Instance | BindingFlags.Public)
             .Where(static property => property.GetMethod is not null &&
-                property.SetMethod is not null &&
+                property.SetMethod is { IsPublic: true } &&
                 property.GetIndexParameters().Length == 0);
     }
 
@@ -725,16 +782,10 @@ public static class QueryStringParser
             return true;
         }
 
-        if (nonNullableType.IsEnum)
+        if (nonNullableType.IsEnum && Enum.TryParse(nonNullableType, input, ignoreCase: true, out var enumValue))
         {
-            try
-            {
-                value = Enum.Parse(nonNullableType, input, ignoreCase: true);
-                return true;
-            }
-            catch (ArgumentException)
-            {
-            }
+            value = enumValue;
+            return true;
         }
 
         path = arrayIndex is { } invalidIndex ? CombineArrayPath(path, invalidIndex) : path;
@@ -838,7 +889,14 @@ public static class QueryStringParser
             else if (!IsSimple)
             {
                 Constructor = Type.GetConstructor(System.Type.EmptyTypes);
-                Properties = GetBindableProperties(Type).ToArray();
+                Properties = GetBindableProperties(Type)
+                    .Select(static property => new QueryProperty(property, property.Name))
+                    .ToArray();
+                EndpointProperties = Properties
+                    .Select(static property => (property.Property, Attribute: property.Property.GetCustomAttribute<FromQueryAttribute>()))
+                    .Where(static property => property.Attribute is not null)
+                    .Select(static property => new QueryProperty(property.Property, property.Attribute!.Name ?? property.Property.Name))
+                    .ToArray();
             }
         }
 
@@ -847,8 +905,11 @@ public static class QueryStringParser
         public Type? ElementType { get; }
         public Type? ListType { get; }
         public ConstructorInfo? Constructor { get; }
-        public PropertyInfo[] Properties { get; } = [];
+        public QueryProperty[] Properties { get; } = [];
+        public QueryProperty[] EndpointProperties { get; } = [];
     }
+
+    private readonly record struct QueryProperty(PropertyInfo Property, string Name);
 
     private sealed class QueryNode
     {
