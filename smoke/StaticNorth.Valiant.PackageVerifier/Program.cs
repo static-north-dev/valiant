@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Xml.Linq;
 
 if (args.Length != 2)
@@ -11,28 +12,28 @@ var version = args[1];
 var packages = new Dictionary<string, PackageExpectation>(StringComparer.Ordinal)
 {
     ["StaticNorth.Valiant.Endpoints.AspNetCore"] = new(
-        ["lib/net8.0/StaticNorth.Valiant.Endpoints.AspNetCore.dll", "lib/net8.0/StaticNorth.Valiant.Endpoints.dll", "analyzers/dotnet/cs/StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration.dll"],
+        ["lib/net8.0/StaticNorth.Valiant.Endpoints.AspNetCore.dll", "lib/net8.0/StaticNorth.Valiant.Endpoints.dll", "lib/net11.0/StaticNorth.Valiant.Endpoints.AspNetCore.dll", "lib/net11.0/StaticNorth.Valiant.Endpoints.dll", "analyzers/dotnet/cs/StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration.dll", "buildTransitive/StaticNorth.Valiant.Endpoints.AspNetCore.targets"],
         []),
     ["StaticNorth.Valiant.Mapping"] = new(
-        ["lib/net8.0/StaticNorth.Valiant.Mapping.dll", "lib/netstandard2.0/StaticNorth.Valiant.Mapping.dll", "analyzers/dotnet/cs/StaticNorth.Valiant.Mapping.SourceGeneration.dll", "buildTransitive/StaticNorth.Valiant.Mapping.props"],
+        ["lib/net8.0/StaticNorth.Valiant.Mapping.dll", "lib/netstandard2.0/StaticNorth.Valiant.Mapping.dll", "analyzers/dotnet/cs/StaticNorth.Valiant.Mapping.SourceGeneration.dll", "buildTransitive/StaticNorth.Valiant.Mapping.props", "buildTransitive/StaticNorth.Valiant.Mapping.targets"],
         []),
     ["StaticNorth.Valiant.Settings"] = new(
-        ["lib/net8.0/StaticNorth.Valiant.Settings.dll", "lib/netstandard2.0/StaticNorth.Valiant.Settings.dll", "analyzers/dotnet/cs/StaticNorth.Valiant.Settings.SourceGeneration.dll", "buildTransitive/StaticNorth.Valiant.Settings.props"],
+        ["lib/net8.0/StaticNorth.Valiant.Settings.dll", "lib/netstandard2.0/StaticNorth.Valiant.Settings.dll", "analyzers/dotnet/cs/StaticNorth.Valiant.Settings.SourceGeneration.dll", "buildTransitive/StaticNorth.Valiant.Settings.props", "buildTransitive/StaticNorth.Valiant.Settings.targets"],
         []),
     ["StaticNorth.Valiant.Settings.AspNetCore"] = new(
         ["lib/net8.0/StaticNorth.Valiant.Settings.AspNetCore.dll"],
         ["StaticNorth.Valiant.Settings"]),
     ["StaticNorth.Valiant.Settings.Validation"] = new(
-        ["lib/net8.0/StaticNorth.Valiant.Settings.Validation.dll"],
+        ["lib/net8.0/StaticNorth.Valiant.Settings.Validation.dll", "lib/net11.0/StaticNorth.Valiant.Settings.Validation.dll"],
         ["StaticNorth.Valiant.Settings", "StaticNorth.Valiant.Validation"]),
     ["StaticNorth.Valiant.Validation"] = new(
-        ["lib/net8.0/StaticNorth.Valiant.Validation.dll", "lib/netstandard2.0/StaticNorth.Valiant.Validation.dll", "analyzers/dotnet/cs/StaticNorth.Valiant.Validation.SourceGeneration.dll", "buildTransitive/StaticNorth.Valiant.Validation.props"],
+        ["lib/net8.0/StaticNorth.Valiant.Validation.dll", "lib/netstandard2.0/StaticNorth.Valiant.Validation.dll", "analyzers/dotnet/cs/StaticNorth.Valiant.Validation.SourceGeneration.dll", "buildTransitive/StaticNorth.Valiant.Validation.props", "buildTransitive/StaticNorth.Valiant.Validation.targets"],
         []),
     ["StaticNorth.Valiant.Validation.AspNetCore"] = new(
         ["lib/net8.0/StaticNorth.Valiant.Validation.AspNetCore.dll"],
         ["StaticNorth.Valiant.Validation"]),
     ["StaticNorth.Valiant.Validation.AspNetCore.OpenApi"] = new(
-        ["lib/net10.0/StaticNorth.Valiant.Validation.AspNetCore.OpenApi.dll"],
+        ["lib/net10.0/StaticNorth.Valiant.Validation.AspNetCore.OpenApi.dll", "lib/net11.0/StaticNorth.Valiant.Validation.AspNetCore.OpenApi.dll"],
         ["Microsoft.AspNetCore.OpenApi", "Microsoft.OpenApi", "StaticNorth.Valiant.Validation"]),
     ["StaticNorth.Valiant.Validation.MediatR"] = new(
         ["lib/net8.0/StaticNorth.Valiant.Validation.MediatR.dll", "buildTransitive/StaticNorth.Valiant.Validation.MediatR.props", "contentFiles/cs/any/ValiantMediatRExtensions.cs"],
@@ -43,11 +44,11 @@ var packages = new Dictionary<string, PackageExpectation>(StringComparer.Ordinal
 };
 
 var actualPackages = Directory
-    .EnumerateFiles(packageDirectory, $"StaticNorth.Valiant.*.{version}.nupkg", SearchOption.TopDirectoryOnly)
+    .EnumerateFiles(packageDirectory, "*.nupkg", SearchOption.TopDirectoryOnly)
     .Where(static path => !path.EndsWith(".snupkg", StringComparison.OrdinalIgnoreCase))
     .ToArray();
 var actualSymbols = Directory
-    .EnumerateFiles(packageDirectory, $"StaticNorth.Valiant.*.{version}.snupkg", SearchOption.TopDirectoryOnly)
+    .EnumerateFiles(packageDirectory, "*.snupkg", SearchOption.TopDirectoryOnly)
     .ToArray();
 
 if (actualPackages.Length != packages.Count || actualSymbols.Length != packages.Count)
@@ -64,10 +65,12 @@ foreach (var (packageId, expectation) in packages)
     VerifySymbols(symbolPath, packageId);
 }
 
-if (File.Exists(Path.Combine(packageDirectory, $"StaticNorth.Valiant.Endpoints.{version}.nupkg")))
+var manifest = actualPackages.Concat(actualSymbols).Order(StringComparer.Ordinal).Select(static path =>
 {
-    throw new InvalidOperationException("StaticNorth.Valiant.Endpoints must remain bundled, not published as a standalone package.");
-}
+    using var package = File.OpenRead(path);
+    return Convert.ToHexStringLower(SHA256.HashData(package)) + "  " + Path.GetFileName(path);
+});
+File.WriteAllLines(Path.Combine(packageDirectory, "verified-packages.sha256"), manifest);
 
 Console.WriteLine($"Verified {packages.Count} StaticNorth.Valiant packages and symbol packages for {version}.");
 
@@ -117,6 +120,7 @@ static void VerifyPackage(string path, string packageId, string version, Package
         {
             Id = element.Attribute("id")?.Value,
             Version = element.Attribute("version")?.Value,
+            TargetFramework = element.Parent?.Attribute("targetFramework")?.Value,
         })
         .ToArray();
 
@@ -129,10 +133,10 @@ static void VerifyPackage(string path, string packageId, string version, Package
     }
 
     if (dependencies.Any(static dependency =>
-            dependency.Id is "Microsoft.Net.Compilers.Toolset" ||
+            dependency.Id is "Microsoft.Net.Compilers.Toolset" or "Microsoft.NET.ILLink.Tasks" ||
             dependency.Id?.Contains("SourceGeneration", StringComparison.Ordinal) == true))
     {
-        throw new InvalidOperationException($"{packageId} leaks a compiler or source-generator implementation dependency.");
+        throw new InvalidOperationException($"{packageId} leaks a build tool or source-generator implementation dependency.");
     }
 
     if (packageId == "StaticNorth.Valiant.Validation.MediatR")
@@ -146,11 +150,19 @@ static void VerifyPackage(string path, string packageId, string version, Package
 
     if (packageId == "StaticNorth.Valiant.Validation.AspNetCore.OpenApi")
     {
-        var openApi = dependencies.Single(static dependency => dependency.Id == "Microsoft.OpenApi");
-        if (openApi.Version != "[2.7.5, 3.0.0)")
+        foreach (var (targetFramework, versionRange) in new[]
         {
-            throw new InvalidOperationException(
-                $"Microsoft.OpenApi must remain on the patched 2.x line [2.7.5, 3.0.0), found '{openApi.Version}'.");
+            ("net10.0", "[2.7.5, 3.0.0)"),
+            ("net11.0", "[3.11.0, 4.0.0)"),
+        })
+        {
+            var openApi = dependencies.SingleOrDefault(dependency =>
+                dependency.Id == "Microsoft.OpenApi" && dependency.TargetFramework == targetFramework);
+            if (openApi?.Version != versionRange)
+            {
+                throw new InvalidOperationException(
+                    $"Microsoft.OpenApi for {targetFramework} must use {versionRange}, found '{openApi?.Version}'.");
+            }
         }
     }
 }

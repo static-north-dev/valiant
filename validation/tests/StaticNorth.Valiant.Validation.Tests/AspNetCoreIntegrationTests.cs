@@ -5,11 +5,14 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using StaticNorth.Valiant.Validation.AspNetCore;
+using StaticNorth.Valiant.Validation.Infrastructure;
 
 namespace StaticNorth.Valiant.Validation.Tests;
 
@@ -49,6 +52,61 @@ public sealed class AspNetCoreIntegrationTests
     }
 
     [Test]
+    public async Task Mvc_Invokes_Registered_Value_Type_Validators()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddControllers().AddValiantValidation();
+        services.AddSingleton<OrderedValidationProbe>();
+        services.AddTransient<IValidator<int>, OrderedIntValidator>();
+
+        using var provider = services.BuildServiceProvider();
+        var context = new ActionContext(new DefaultHttpContext { RequestServices = provider }, new RouteData(), new ActionDescriptor());
+        provider.GetRequiredService<IObjectModelValidator>().Validate(context, null, "input", 5);
+
+        await Assert.That(context.ModelState.IsValid).IsFalse();
+        await Assert.That(context.ModelState["input.Value"]!.Errors.Single().ErrorMessage).IsEqualTo("int:5");
+    }
+
+    [Test]
+    public async Task Minimal_Api_Skips_Validator_Lookups_For_Unregistered_Parameter_Types()
+    {
+        var builder = WebApplication.CreateSlimBuilder();
+        await using var app = builder.Build();
+        app.MapGet("/health", static (HttpContext httpContext, CancellationToken cancellationToken) => Results.NoContent())
+            .WithValiantValidation();
+
+        var endpoint = (RouteEndpoint)((IEndpointRouteBuilder)app).DataSources
+            .SelectMany(static source => source.Endpoints)
+            .Single();
+        using var scope = app.Services.CreateScope();
+        var requestServices = new ValidatorLookupProbe(scope.ServiceProvider);
+        var context = new DefaultHttpContext { RequestServices = requestServices };
+        await endpoint.RequestDelegate!(context);
+
+        await Assert.That(context.Response.StatusCode).IsEqualTo(StatusCodes.Status204NoContent);
+        await Assert.That(requestServices.ValidatorLookupCount).IsEqualTo(0);
+    }
+
+    private sealed class ValidatorLookupProbe(IServiceProvider services) : IServiceProvider
+    {
+        public int ValidatorLookupCount { get; private set; }
+
+        public object? GetService(Type serviceType)
+        {
+            if (serviceType.IsConstructedGenericType &&
+                serviceType.GetGenericTypeDefinition() == typeof(IEnumerable<>) &&
+                serviceType.GenericTypeArguments[0] is { IsConstructedGenericType: true } elementType &&
+                elementType.GetGenericTypeDefinition() == typeof(IValidator<>))
+            {
+                ValidatorLookupCount++;
+            }
+
+            return services.GetService(serviceType);
+        }
+    }
+
+    [Test]
     public async Task Minimal_Api_Validation_Extensions_Can_Be_Applied_To_Routes()
     {
         var builder = WebApplication.CreateBuilder();
@@ -61,6 +119,30 @@ public sealed class AspNetCoreIntegrationTests
             .WithValiantValidation();
 
         await Assert.That(app).IsNotNull();
+    }
+
+    [Test]
+    public async Task Generated_Validation_Plans_Are_Shared_Only_Within_The_Same_Host()
+    {
+        var resolutions = 0;
+        for (var host = 1; host <= 2; host++)
+        {
+            var builder = WebApplication.CreateBuilder();
+            builder.Services.AddTransient<IValiantValidatorInvoker>(_ =>
+            {
+                resolutions++;
+                return new ValiantValidatorInvoker<string>();
+            });
+
+            await using var app = builder.Build();
+            app.MapGet("/first", (string value) => value).WithValiantValidation();
+            app.MapGet("/second", (string value) => value).WithValiantValidation();
+
+            var endpoints = ((IEndpointRouteBuilder)app).DataSources
+                .SelectMany(static source => source.Endpoints).ToArray();
+            await Assert.That(endpoints.Length).IsEqualTo(2);
+            await Assert.That(resolutions).IsEqualTo(host);
+        }
     }
 
     [Test]
@@ -88,6 +170,52 @@ public sealed class AspNetCoreIntegrationTests
                 metadata.Type == typeof(HttpValidationProblemDetails))).IsTrue();
         }
 
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Minimal_Api_Validation_Skips_Validators_When_Parameter_Binding_Fails(bool useTypedOverload)
+    {
+        var probe = new OrderedValidationProbe();
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.Configure<RouteHandlerOptions>(static options => options.ThrowOnBadRequest = false);
+        builder.Services.AddSingleton(probe);
+        builder.Services.AddTransient<IValidator<string>, FirstOrderedStringValidator>();
+
+        await using var app = builder.Build();
+        var route = app.MapGet(
+            "/binding",
+            static (string value, int count, HttpContext context) =>
+            {
+                context.Response.Headers["X-Handler-Reached"] = "true";
+                return Results.Ok();
+            });
+        var validatedRoute = useTypedOverload
+            ? route.WithValiantValidation<string>()
+            : route.WithValiantValidation();
+        validatedRoute.AddEndpointFilter(static (context, next) =>
+        {
+            context.HttpContext.Response.Headers["X-Next-Filter-Reached"] = "true";
+            return next(context);
+        });
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+
+        using var bindingFailure = await client.GetAsync("/binding?value=example&count=invalid");
+
+        await Assert.That(bindingFailure.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(probe.FirstStringValidatorConstructions).IsEqualTo(0);
+        await Assert.That(probe.Events).IsEmpty();
+        await Assert.That(bindingFailure.Headers.Contains("X-Next-Filter-Reached")).IsTrue();
+        await Assert.That(bindingFailure.Headers.Contains("X-Handler-Reached")).IsFalse();
+
+        using var validationFailure = await client.GetAsync("/binding?value=example&count=1");
+
+        await Assert.That(validationFailure.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(probe.FirstStringValidatorConstructions).IsEqualTo(1);
+        await AssertOrderedEvents(probe.Events, "string-first:example");
     }
 
     [Test]
@@ -243,6 +371,27 @@ public sealed class AspNetCoreIntegrationTests
         var response = await client.PostAsync("/nullable", content: null);
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+    }
+
+    [Test]
+    public async Task Typed_Minimal_Api_Validation_Does_Not_Resolve_Validators_For_An_Absent_Argument()
+    {
+        var probe = new OrderedValidationProbe();
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton(probe);
+        builder.Services.AddTransient<IValidator<string>, FirstOrderedStringValidator>();
+
+        await using var app = builder.Build();
+        app.MapGet("/nullable", static (string? value) => Results.Ok(value))
+            .WithValiantValidation<string>();
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+
+        using var response = await client.GetAsync("/nullable");
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        await Assert.That(probe.FirstStringValidatorConstructions).IsEqualTo(0);
     }
 
     [Test]

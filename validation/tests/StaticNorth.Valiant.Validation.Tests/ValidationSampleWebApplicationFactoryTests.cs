@@ -1,9 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using StaticNorth.Valiant.Validation.AspNetCore.Samples.Orders;
 using StaticNorth.Valiant.Validation.Infrastructure;
 
@@ -11,6 +14,34 @@ namespace StaticNorth.Valiant.Validation.Tests;
 
 public sealed class ValidationSampleWebApplicationFactoryTests
 {
+    [Test]
+    [Arguments("/orders/typed", HttpStatusCode.Created)]
+    [Arguments("/orders/all", HttpStatusCode.OK)]
+    public async Task MinimalApi_Responses_Have_Mode_Parity(string path, HttpStatusCode expectedStatus)
+    {
+        await AssertHttpParity<global::StaticNorth.Valiant.Validation.AspNetCore.Samples.MinimalApi.Startup>(path, expectedStatus);
+    }
+
+    [Test]
+    public async Task Mvc_Responses_Have_Mode_Parity()
+    {
+        await AssertHttpParity<global::StaticNorth.Valiant.Validation.AspNetCore.Samples.Mvc.Startup>("/mvc/orders", HttpStatusCode.Created);
+    }
+
+    [Test]
+    public async Task OpenApi_Document_Has_Mode_Parity()
+    {
+        await using var fast = CreateModeFactory<global::StaticNorth.Valiant.Validation.AspNetCore.Samples.OpenApi.Startup>(ValiantValidationMode.Fast);
+        await using var debuggable = CreateModeFactory<global::StaticNorth.Valiant.Validation.AspNetCore.Samples.OpenApi.Startup>(ValiantValidationMode.Debuggable);
+        using var fastClient = fast.CreateClient();
+        using var debuggableClient = debuggable.CreateClient();
+        var fastDocument = await fastClient.GetFromJsonAsync<JsonObject>("/openapi/v1.json");
+        var debuggableDocument = await debuggableClient.GetFromJsonAsync<JsonObject>("/openapi/v1.json");
+
+        await Assert.That(fastDocument).IsNotNull();
+        await Assert.That(JsonNode.DeepEquals(fastDocument, debuggableDocument)).IsTrue();
+    }
+
     [Test]
     public async Task MinimalApi_Sample_Registers_A_Generated_Invoker_For_The_Route_Model()
     {
@@ -169,6 +200,53 @@ public sealed class ValidationSampleWebApplicationFactoryTests
         await Assert.That(lines.GetProperty("maxItems").GetInt32()).IsEqualTo(20);
         await Assert.That(total.GetProperty("minimum").GetDecimal()).IsEqualTo(0.01m);
         await Assert.That(total.GetProperty("maximum").GetDecimal()).IsEqualTo(100000m);
+    }
+
+    private static async Task AssertHttpParity<TStartup>(string path, HttpStatusCode expectedStatus)
+        where TStartup : class
+    {
+        await using var fast = CreateModeFactory<TStartup>(ValiantValidationMode.Fast);
+        await using var debuggable = CreateModeFactory<TStartup>(ValiantValidationMode.Debuggable);
+        using var fastClient = fast.CreateClient();
+        using var debuggableClient = debuggable.CreateClient();
+
+        foreach (var status in new[] { expectedStatus, HttpStatusCode.BadRequest })
+        {
+            using var fastResponse = await fastClient.PostAsJsonAsync(path, CreateOrderForStatus(status));
+            using var debuggableResponse = await debuggableClient.PostAsJsonAsync(path, CreateOrderForStatus(status));
+            await Assert.That(fastResponse.StatusCode).IsEqualTo(status);
+            await Assert.That(debuggableResponse.StatusCode).IsEqualTo(status);
+            await Assert.That(fastResponse.Headers.Location).IsEqualTo(debuggableResponse.Headers.Location);
+            await Assert.That(fastResponse.Content.Headers.ContentType?.ToString())
+                .IsEqualTo(debuggableResponse.Content.Headers.ContentType?.ToString());
+
+            var fastBody = await fastResponse.Content.ReadFromJsonAsync<JsonObject>();
+            var debuggableBody = await debuggableResponse.Content.ReadFromJsonAsync<JsonObject>();
+            // MVC's trace ID belongs to the individual request.
+            fastBody!.Remove("traceId");
+            debuggableBody!.Remove("traceId");
+            if (status == HttpStatusCode.BadRequest)
+            {
+                await Assert.That(fastBody["errors"]?["Lines[0].Sku"]?.AsArray().Count ?? 0).IsGreaterThan(0);
+            }
+
+            await Assert.That(JsonNode.DeepEquals(fastBody, debuggableBody)).IsTrue();
+        }
+    }
+
+    private static CreateOrder CreateOrderForStatus(HttpStatusCode status)
+    {
+        return status == HttpStatusCode.BadRequest
+            ? InvalidOrder() with { IsVip = true, Lines = [new CreateOrderLine { Sku = "", Quantity = 0 }] }
+            : ValidOrder();
+    }
+
+    private static WebApplicationFactory<TStartup> CreateModeFactory<TStartup>(ValiantValidationMode mode)
+        where TStartup : class
+    {
+        return new SampleApplicationFactory<TStartup>().WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => services.Replace(ServiceDescriptor.Singleton(
+                new ValiantValidationOptions { Mode = mode, FailureBehavior = ValiantFailureBehavior.ValidateAll }))));
     }
 
     private static CreateOrder InvalidOrder()

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
+import {transformMarkdown} from './markdown-content.mjs';
 
 const require = createRequire(import.meta.url);
 const sidebars = require('../sidebars.js');
@@ -101,17 +102,11 @@ function stripFrontmatter(markdown, documentId) {
     return markdown;
   }
 
-  const closingIndex = markdown.indexOf('\n---', 4);
-  if (closingIndex === -1) {
+  const match = /^---\r?\n(?:[\s\S]*?\r?\n)?---(?:\r?\n|$)/.exec(markdown);
+  if (!match) {
     fail(`${documentId}.md has an unterminated frontmatter block.`);
   }
-
-  const bodyStart = markdown.indexOf('\n', closingIndex + 1);
-  if (bodyStart === -1) {
-    return '';
-  }
-
-  return markdown.slice(bodyStart + 1);
+  return markdown.slice(match[0].length);
 }
 
 function documentUrl(documentId) {
@@ -121,41 +116,6 @@ function documentUrl(documentId) {
   return `${siteUrl}/${route}${route ? '/' : ''}`;
 }
 
-function canonicalizeDocLinks(markdown, documentId) {
-  return markdown.replace(/\]\(([^)\s]+)\)/g, (match, target) => {
-    if (!target.endsWith('.md') && !target.includes('.md#')) {
-      return match;
-    }
-
-    const [filePath, fragment] = target.split('#', 2);
-    if (!filePath.endsWith('.md')) {
-      return match;
-    }
-
-    const resolvedId = path.posix
-      .normalize(path.posix.join(path.posix.dirname(documentId), filePath))
-      .replace(/\.md$/, '');
-
-    return `](${documentUrl(resolvedId)}${fragment ? `#${fragment}` : ''})`;
-  });
-}
-
-function promoteHeadings(markdown) {
-  let inFence = false;
-
-  return markdown
-    .split(/\r?\n/)
-    .map((line) => {
-      if (/^\s*(```|~~~)/.test(line)) {
-        inFence = !inFence;
-        return line;
-      }
-
-      return !inFence && /^#{1,4}\s/.test(line) ? `##${line}` : line;
-    })
-    .join('\n');
-}
-
 function readDocument(documentId) {
   const filePath = path.join(contentRoot, `${documentId}.md`);
   if (!fs.existsSync(filePath)) {
@@ -163,7 +123,13 @@ function readDocument(documentId) {
   }
 
   const markdown = fs.readFileSync(filePath, 'utf8');
-  return promoteHeadings(canonicalizeDocLinks(stripFrontmatter(markdown, documentId), documentId)).trim();
+  return transformMarkdown(stripFrontmatter(markdown, documentId), (file, suffix) => {
+    const target = path.posix.join(path.posix.dirname(documentId), file);
+    if (!fs.existsSync(path.join(contentRoot, target))) {
+      fail(`Markdown link '${file}${suffix}' in '${documentId}.md' does not reference a current document.`);
+    }
+    return documentUrl(target.replace(/\.md$/i, '')) + suffix;
+  }, 2).trim();
 }
 
 export function generate() {

@@ -29,7 +29,8 @@ internal sealed class EndpointQueryParsingOverridesMetadata
         {
             SupportedArrayFormats = Clone(SupportedArrayFormats ?? options.SupportedArrayFormats),
             SupportedObjectFormats = Clone(SupportedObjectFormats ?? options.SupportedObjectFormats),
-            EnableJsonQueryValues = EnableJsonQueryValues ?? options.EnableJsonQueryValues
+            EnableJsonQueryValues = EnableJsonQueryValues ?? options.EnableJsonQueryValues,
+            UseStrictBinding = options.UseStrictBinding
         };
     }
 

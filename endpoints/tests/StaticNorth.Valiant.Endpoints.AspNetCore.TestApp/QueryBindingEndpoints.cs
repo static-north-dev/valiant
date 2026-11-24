@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
 namespace StaticNorth.Valiant.Endpoints.AspNetCore.TestApp;
@@ -52,6 +53,11 @@ public sealed partial record GeneratedObjectRequest
 
     [FromQuery]
     public QueryFilter? Filter { get; init; }
+
+    [FromQuery(Name = "page-size")]
+    public int? Limit { get; init; }
+
+    public string Label { get; init; } = "default";
 }
 
 public sealed record AsParametersObjectRequest
@@ -66,6 +72,64 @@ public sealed record AsParametersObjectRequest
 public sealed partial record QueryFilter
 {
     public int? Id { get; init; }
+}
+
+public class PagingQuery
+{
+    [FromQuery(Name = "page.size")]
+    public int? Limit { get; init; }
+}
+
+public sealed partial class InheritedPagingQuery : PagingQuery
+{
+    [FromQuery(Name = "term")]
+    public required string Search { get; init; }
+}
+
+[ValiantEndpoint]
+public sealed class InheritedPagingEndpoint : IEndpoint
+{
+    public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) =>
+        builder.MapGet("/integration/query/inherited", (InheritedPagingQuery query) => TypedResults.Ok(query))
+            .WithQueryParsingOptions(new QueryParsingOptions());
+}
+
+public sealed class FilterObservationRequest
+{
+    [FromQuery]
+    public QueryFilter? Filter { get; init; }
+
+    [FromQuery]
+    public DateOnly? Day { get; init; }
+}
+
+[ValiantEndpointGroup]
+public sealed class FilterObservationGroup : IEndpointGroup
+{
+    public static RouteGroupBuilder CreateGroup(IEndpointRouteBuilder builder) =>
+        builder.MapGroup("/integration/filter-observation").AddEndpointFilter(static (context, next) =>
+        {
+            context.HttpContext.Response.Headers["X-Group-Observed-Filter"] =
+                context.GetArgument<FilterObservationRequest>(0).Filter?.Id?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+            return next(context);
+        });
+}
+
+[ValiantEndpoint<FilterObservationGroup>]
+public sealed class FilterObservationEndpoint : IEndpoint
+{
+    public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) =>
+        builder.MapGet("/observe", ([AsParameters] FilterObservationRequest request) => TypedResults.Ok(request))
+            .AddEndpointFilter(static (context, next) =>
+            {
+                context.HttpContext.Response.Headers["X-Route-Observed-Filter"] =
+                    context.GetArgument<FilterObservationRequest>(0).Filter?.Id?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+                return next(context);
+            })
+            .WithQueryParsingOptions(new QueryParsingOptions
+            {
+                SupportedObjectFormats = [QueryObjectFormat.Flat, QueryObjectFormat.DotNotation]
+            });
 }
 
 public sealed partial record GeneratedArrayRequest
@@ -142,8 +206,19 @@ public sealed class AsParametersGlobalObjectEndpoint : IEndpoint
     {
         return builder.MapGet(
             "/integration/as-parameters/object/global",
-            ([AsParameters] AsParametersObjectRequest request) => TypedResults.Ok(request));
+            Handle);
     }
+
+    private static Ok<AsParametersObjectRequest> Handle([AsParameters] AsParametersObjectRequest request)
+        => TypedResults.Ok(request);
+}
+
+[ValiantEndpoint]
+public sealed class QueryBindingFailureEndpoint : IEndpoint
+{
+    public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder)
+        => builder.MapGet("/integration/as-parameters/binding-failure/{id}",
+            static (int id, [AsParameters] AsParametersObjectRequest request) => TypedResults.Ok(id));
 }
 
 [ValiantEndpoint]
@@ -265,8 +340,11 @@ public sealed class DirectJsonEnabledEndpoint : IEndpoint
     {
         return builder.MapGet(
             "/integration/direct/enabled",
-            ([FromQuery(Name = "payload")] DirectJsonEnabledRequest request) => TypedResults.Ok(request));
+            Handle);
     }
+
+    private static Ok<DirectJsonEnabledRequest> Handle([FromQuery(Name = "payload")] DirectJsonEnabledRequest request)
+        => TypedResults.Ok(request);
 }
 
 [ValiantEndpoint]

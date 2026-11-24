@@ -93,7 +93,13 @@ public sealed record AotSource(string Value);
 public sealed record AotTarget(string? Value);
 
 [ValiantMapper]
-public sealed partial class AotMapper : MapperDefinition<AotSource, AotTarget>;
+public sealed partial class AotMapper : MapperDefinition<AotSource, AotTarget>
+{
+    public override void Configure(MappingContext<AotSource, AotTarget> context)
+    {
+        context.Map(source => source.Value, target => target.Value);
+    }
+}
 
 public sealed record AotRequest(string? Name);
 

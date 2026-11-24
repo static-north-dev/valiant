@@ -20,6 +20,39 @@ public sealed class ValiantValidatorInvokerTests
     }
 
     [Test]
+    public async Task ResolveValidators_Reuses_The_Array_Returned_By_The_Provider()
+    {
+        IValidator<InvokerModel>[] registeredValidators = [new FixedResultValidator(ValidationResult.Valid)];
+        var services = new ServiceCollection();
+        services.AddSingleton<IEnumerable<IValidator<InvokerModel>>>(registeredValidators);
+        using var provider = services.BuildServiceProvider();
+        var invoker = new ValiantValidatorInvoker<InvokerModel>();
+
+        var validators = invoker.ResolveValidators(provider);
+
+        await Assert.That(validators).IsSameReferenceAs(registeredValidators);
+    }
+
+    [Test]
+    public async Task ResolveValidators_Copies_NonArray_Registrations_In_Order()
+    {
+        var first = new FixedResultValidator(ValidationResult.Valid);
+        var second = new FixedResultValidator(ValidationResult.Valid);
+        var registeredValidators = new List<IValidator<InvokerModel>> { first, second };
+        var services = new ServiceCollection();
+        services.AddSingleton<IEnumerable<IValidator<InvokerModel>>>(registeredValidators);
+        using var provider = services.BuildServiceProvider();
+        var invoker = new ValiantValidatorInvoker<InvokerModel>();
+
+        var validators = (IValidator<InvokerModel>[])invoker.ResolveValidators(provider);
+        registeredValidators.Clear();
+
+        await Assert.That(validators.Length).IsEqualTo(2);
+        await Assert.That(validators[0]).IsSameReferenceAs(first);
+        await Assert.That(validators[1]).IsSameReferenceAs(second);
+    }
+
+    [Test]
     public async Task ValidateAsync_Combines_All_Severities_In_Registration_Order_And_Forwards_Cancellation()
     {
         using var cancellation = new CancellationTokenSource();

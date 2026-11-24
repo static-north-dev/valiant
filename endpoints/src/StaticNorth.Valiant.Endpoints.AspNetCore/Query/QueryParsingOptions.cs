@@ -6,6 +6,12 @@ namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 public sealed class QueryParsingOptions
 {
     /// <summary>
+    /// Gets whether to reject conflicting query shapes and missing required members, and enable extended query binding.
+    /// Defaults to <see langword="true" /> when targeting .NET 11 or later.
+    /// </summary>
+    public bool UseStrictBinding { get; init; } = ValiantEndpointOptions.UseNet11Defaults;
+
+    /// <summary>
     /// Gets the array formats accepted by the parser. By default only repeated keys are accepted.
     /// </summary>
     public QueryArrayFormat[] SupportedArrayFormats { get; init; } = [QueryArrayFormat.RepeatedKeys];

@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using Microsoft.CodeAnalysis;
+using StaticNorth.Valiant.SourceGeneration;
 
 namespace StaticNorth.Valiant.Validation.SourceGeneration;
 
@@ -46,7 +47,7 @@ public sealed partial class ValiantGenerator
     {
         foreach (var member in EnumerateAttributeValidationMembers(modelType))
         {
-            foreach (var attribute in member.GetAttributes())
+            foreach (var attribute in EnumerateValidationAttributes(member))
             {
                 if (IsSupportedValidationAttribute(attribute))
                 {
@@ -98,7 +99,7 @@ public sealed partial class ValiantGenerator
             return;
         }
 
-        foreach (var attribute in member.GetAttributes())
+        foreach (var attribute in EnumerateValidationAttributes(member))
         {
             if (TryCreateAttributeRule(modelType, member, memberType, attribute, out var rule, out var diagnostic))
             {
@@ -107,6 +108,17 @@ public sealed partial class ValiantGenerator
             else if (diagnostic is not null)
             {
                 diagnostics.Add(diagnostic);
+            }
+        }
+    }
+
+    private static IEnumerable<AttributeData> EnumerateValidationAttributes(ISymbol member)
+    {
+        for (ISymbol? current = member; current is not null; current = (current as IPropertySymbol)?.OverriddenProperty)
+        {
+            foreach (var attribute in current.GetAttributes())
+            {
+                yield return attribute;
             }
         }
     }
@@ -129,7 +141,7 @@ public sealed partial class ValiantGenerator
         rule = new RuleModel(
             member.Name,
             ToLiteral(member.Name),
-            member.Name,
+            ValiantTypeDeclarations.EscapeIdentifier(member.Name),
             ImmutableArray<string>.Empty,
             RuleInstanceExpression,
             propertyType,
@@ -193,6 +205,16 @@ public sealed partial class ValiantGenerator
             return false;
         }
 
+        if (kind is AttributeKinds.EnumName or AttributeKinds.EnumValue &&
+            attribute.ConstructorArguments[0].Value is not ITypeSymbol { TypeKind: TypeKind.Enum })
+        {
+            diagnostic = new DiagnosticInfo(
+                UnsupportedValidationDeclaration,
+                GetAttributeDiagnosticLocation(attribute, member),
+                $"The {kind} attribute requires an enum type argument.");
+            return false;
+        }
+
         if (kind == AttributeKinds.UseValidator)
         {
             if (!TryCreateAttributeValidatorReuseCheck(attribute, member, memberType, out check, out diagnostic))
@@ -216,8 +238,8 @@ public sealed partial class ValiantGenerator
         }
 
         var code = GetAttributeStringMetadata(attribute, AttributeCodePropertyName, ruleArgumentCount);
-        var message = GetAttributeStringMetadata(attribute, AttributeMessagePropertyName, ruleArgumentCount + (code is null ? 0 : 1));
-        var severity = GetAttributeSeverityExpression(attribute, ruleArgumentCount + (code is null ? 0 : 1) + (message is null ? 0 : 1));
+        var message = GetAttributeStringMetadata(attribute, AttributeMessagePropertyName, ruleArgumentCount + 1);
+        var severity = GetAttributeSeverityExpression(attribute, ruleArgumentCount + 2);
         AddAttributeCondition(attribute, modelType, out conditionExpression, out conditionDelegateType);
 
         check = CreateAttributeRuleCheck(kind, arguments.ToImmutable(), code, message, severity, member);
@@ -274,14 +296,15 @@ public sealed partial class ValiantGenerator
         out string? conditionDelegateType)
     {
         var conditionMethod = GetAttributeStringMetadata(attribute, AttributeConditionMethodPropertyName, -1);
-        if (conditionMethod is null)
+        if (conditionMethod is null || !TryGetStringLiteralValue(conditionMethod, out var methodName) ||
+            string.IsNullOrWhiteSpace(methodName))
         {
             conditionExpression = null;
             conditionDelegateType = null;
             return;
         }
 
-        conditionExpression = GetAttributeConditionExpression(attribute, modelType, conditionMethod);
+        conditionExpression = GetAttributeConditionExpression(attribute, modelType, methodName);
         conditionDelegateType = "global::System.Func<" + modelType.ToDisplayString(TypeDisplayFormat) + ", bool>";
     }
 
@@ -434,6 +457,9 @@ public sealed partial class ValiantGenerator
 
         switch (constant.Value)
         {
+            case null when constant.Type?.SpecialType == SpecialType.System_String:
+                expression = "(string?)null";
+                return true;
             case string text:
                 expression = ToLiteral(text);
                 return true;
@@ -483,18 +509,15 @@ public sealed partial class ValiantGenerator
     {
         foreach (var namedArgument in attribute.NamedArguments)
         {
-            if (namedArgument is { Key: var key, Value.Value: string value } &&
-                key == propertyName &&
-                !string.IsNullOrEmpty(value))
+            if (namedArgument.Key == propertyName)
             {
-                return ToLiteral(value);
+                return namedArgument.Value.Value is string value ? ToLiteral(value) : null;
             }
         }
 
         if (constructorArgumentIndex >= 0 &&
             attribute.ConstructorArguments.Length > constructorArgumentIndex &&
-            attribute.ConstructorArguments[constructorArgumentIndex].Value is string constructorValue &&
-            !string.IsNullOrEmpty(constructorValue))
+            attribute.ConstructorArguments[constructorArgumentIndex].Value is string constructorValue)
         {
             return ToLiteral(constructorValue);
         }
@@ -525,32 +548,29 @@ public sealed partial class ValiantGenerator
 
     private static bool TryGetSeverityExpression(TypedConstant constant, out string expression)
     {
-        if (constant.Type?.ToDisplayString() == ValiantSeverityMetadataName &&
-            constant.Value is int value &&
-            value is >= 0 and <= 2)
+        if (constant.Type?.ToDisplayString() == ValiantSeverityMetadataName && constant.Value is int value)
         {
-            switch (value)
-            {
-                case 0:
-                    expression = "global::StaticNorth.Valiant.Validation.ValiantSeverity.Error";
-                    return true;
-                case 1:
-                    expression = "global::StaticNorth.Valiant.Validation.ValiantSeverity.Warning";
-                    return true;
-                case 2:
-                    expression = "global::StaticNorth.Valiant.Validation.ValiantSeverity.Info";
-                    return true;
-            }
+            expression = GetKnownSeverityExpression(value) ??
+                "(global::" + ValiantSeverityMetadataName + ")" + value.ToString(CultureInfo.InvariantCulture);
+            return true;
         }
 
         expression = string.Empty;
         return false;
     }
 
-    private static string GetAttributeConditionExpression(AttributeData attribute, ITypeSymbol modelType, string conditionMethodExpression)
+    private static string? GetKnownSeverityExpression(int value) => value switch
+    {
+        0 => "global::StaticNorth.Valiant.Validation.ValiantSeverity.Error",
+        1 => "global::StaticNorth.Valiant.Validation.ValiantSeverity.Warning",
+        2 => "global::StaticNorth.Valiant.Validation.ValiantSeverity.Info",
+        _ => null
+    };
+
+    private static string GetAttributeConditionExpression(AttributeData attribute, ITypeSymbol modelType, string methodName)
     {
         var conditionType = GetAttributeConditionType(attribute);
-        var methodName = conditionMethodExpression.Substring(1, conditionMethodExpression.Length - 2);
+        methodName = ValiantTypeDeclarations.EscapeIdentifier(methodName);
         return conditionType is null
             ? modelType.ToDisplayString(TypeDisplayFormat) + "." + methodName
             : conditionType + "." + methodName;
@@ -587,12 +607,8 @@ public sealed partial class ValiantGenerator
         return type.TypeKind == TypeKind.Enum;
     }
 
-    private static bool IsCountCompatibleType(ITypeSymbol type)
-    {
-        return type.SpecialType == SpecialType.System_String ||
-            type.TypeKind == TypeKind.Array ||
-            ImplementsInterface(type, SystemCollectionsICollectionMetadataName);
-    }
+    private static bool IsCountCompatibleType(ITypeSymbol type) =>
+        type.SpecialType == SpecialType.System_String || IsCollectionCompatibleType(type);
 
     private static bool IsCollectionCompatibleType(ITypeSymbol type)
     {

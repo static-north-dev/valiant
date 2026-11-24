@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="StaticNorth.Valiant.Mapping" Version="$(StaticNorthValiantPackageVersion)" />
+    <PackageReference Include="StaticNorth.Valiant.Validation" Version="$(StaticNorthValiantPackageVersion)" />
+    <PackageReference Include="StaticNorth.Valiant.Settings" Version="$(StaticNorthValiantPackageVersion)" />
+  </ItemGroup>
+</Project>

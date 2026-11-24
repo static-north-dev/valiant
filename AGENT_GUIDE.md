@@ -4,14 +4,16 @@ This file is the working guide for coding agents. It summarizes project structur
 
 ## Project Summary
 
-Valiant is an experimental .NET validation library. Users author validators as partial classes marked with `[ValiantValidator]` and either deriving from `ValidatorDefinition<T>` for attribute-based validation or implementing `IValidatorDefinition<T>` for fluent rules. The source generator emits fast `IValidator<T>` implementations, validation metadata providers, and a DI extension when `Microsoft.Extensions.DependencyInjection` is available.
+Valiant is a family of source-generated .NET libraries for Validation, Endpoints, Mapping, and Settings. Each module starts from explicit C# declarations and generates typed code, metadata, or registration. Validation and Mapping support debuggable authoring and generated fast paths. Endpoints generates ASP.NET Core Minimal API registration, and Settings generates configuration schemas with optional Options registration.
+
+The [public docs](https://valiant.staticnorth.dev/) cover installation, integration, and deployment compatibility. Author them in `docs/content`. The package READMEs are introductions and link to those guides.
 
 Design goals:
 - Small property-focused validation API.
 - Source-generated validation without reflection scanning.
 - Trim and Native AOT friendliness.
 - DI registration generated at compile time.
-- Debuggable fallback mode that executes user-authored `Configure` methods.
+- Shared validation behavior across modes, with generated checks for eligible declarations.
 
 ## Repository Layout
 
@@ -33,6 +35,9 @@ Design goals:
 - `validation/samples/StaticNorth.Valiant.Validation.Samples`: selectable console/core validation samples.
 - `validation/samples/StaticNorth.Valiant.Validation.AspNetCore.Samples`: selectable ASP.NET Core validation samples.
 - `mapping/samples/StaticNorth.Valiant.Mapping.Samples`: selectable mapping samples for conventions, explicit rules, conditions, null handling, composition, and generated DI.
+- `endpoints/src/StaticNorth.Valiant.Endpoints.AspNetCore`: Minimal API registration, conventions, and query binding.
+- `mapping/src/StaticNorth.Valiant.Mapping`: mapping contracts and runtime support.
+- `docs/`: Docusaurus site, versioned snapshots, and agent access.
 - `assets/logo.png`: NuGet package icon, expected to be 128x128 PNG.
 
 ## Common Commands
@@ -162,7 +167,7 @@ The generator supports:
 - Public `Configure` with exactly one `ValidationContext<T>` parameter.
 - Static and instance `Configure` methods.
 - Constructor chaining for validators with public constructors plus generated `ValiantValidationOptions` constructor overloads.
-- Debuggable runtime fallback when validators declare `Configure`.
+- Generated checks for attributes and eligible straight-line fluent validators in Auto and Fast. Explicit Debuggable executes Configure. Other fluent validators always use the shared runtime.
 - Generated DI extension `AddValiantValidators` when DI symbols exist in the compilation.
 
 Generated DI registers:
@@ -189,9 +194,9 @@ Core concepts:
 - Typed extension files add type-constrained checks.
 - `ValidationResult` separates `Failures`, `Errors`, `Warnings`, and `Infos`.
 - `ValiantFailureBehavior` controls fail-fast versus validate-all behavior.
-- `ValiantValidationMode` controls generated fast mode versus debuggable runtime mode.
+- `ValiantValidationMode.Auto` and `Fast` use the same dispatch in Debug and Release. Explicit `Debuggable` must preserve the behavior of generated fluent checks.
 
-Supported checks are documented in `README.md`; keep the README in sync when adding new public checks.
+Update `docs/content/validation/reference/validation-checks.md` when adding public checks.
 
 ## Test Guidance
 
@@ -213,7 +218,7 @@ When changing fluent runtime behavior:
 - Add or update `ValidationModeParityTests.cs` for every rule family or composition path whose generated and runtime implementations can diverge.
 - Create separate validators and model instances for fast and debuggable executions, assert the intended semantics independently, and compare the complete ordered `Failures` sequence (property, code, message, and severity) plus the `Errors`, `Warnings`, and `Infos` partitions.
 - Cover synchronous and asynchronous APIs, failure behavior, cancellation, and `ValiantValidationMode.Auto` when the changed path affects them.
-- Run the validation tests in both Debug and Release. `Auto` selects Debuggable in Debug builds and Fast in Release builds:
+- Run the validation tests in both Debug and Release to verify identical behavior for all mode settings:
 
 ```bash
 dotnet test --project validation/tests/StaticNorth.Valiant.Validation.Tests/StaticNorth.Valiant.Validation.Tests.csproj --configuration Debug
@@ -225,7 +230,7 @@ When changing Mapping samples or mapper behavior:
 - Mirror every demonstrated behavior in `MappingSampleTests.cs`.
 - Add or update `MappingModeParityTests.cs` for every `Configure`-based path, create independent mapper/source instances, assert the expected target independently in each mode, and then compare complete target snapshots.
 - Add focused generated-source assertions when dispatch shape changes.
-- Run the Mapping tests in both Debug and Release. `Auto` selects Debuggable in Debug builds and Fast in Release builds:
+- Run the Mapping tests in both Debug and Release. `Auto` and `Fast` use generated mapping in both builds. Select `Debuggable` to run the original `Configure` method:
 
 ```bash
 dotnet test --project mapping/tests/StaticNorth.Valiant.Mapping.Tests/StaticNorth.Valiant.Mapping.Tests.csproj --configuration Debug
@@ -258,13 +263,22 @@ in the owning project.
 `StaticNorth.Valiant.Pack.proj` is the authoritative publish manifest. Its verifier asserts
 the ten expected NuGet and symbol packages, package metadata, dependencies,
 analyzers, `buildTransitive`/content assets, and the bundled endpoint contracts.
-Leaf-only consumer applications verify transitive package and analyzer delivery.
+Leaf-only consumer applications verify transitive package and analyzer delivery. A
+.NET Standard 2.0 consumer checks source generation at C# 9 for the three core packages.
+Package validation compares against the latest released package baseline declared in
+`Directory.Build.props`. Update that version after a release and record any approved
+compatibility exceptions in the affected project's `CompatibilitySuppressions.xml`.
 
 CI runs for pushes and pull requests targeting `main`. Publishing is owned by
 `.github/workflows/release.yml`, which runs when a GitHub Release is published.
 Release tags must be SemVer with an optional leading `v`; the normalized tag
 version is applied to compiled assemblies and NuGet packages. Releases verify
 and publish NuGet packages only; documentation publication is independent.
+The workflow packages into a fresh directory, uploads the files named in the
+verifier's SHA-256 manifest, and validates the manifest before publication.
+Publication fails if any package already exists at the target version. After a
+partial publication, inspect the completed uploads and recover with the original
+verified artifact under the production environment's controls.
 Release restore, build, test, and audit commands use `StaticNorth.Valiant.Release.slnf`.
 Keep that filter synchronized with every `.csproj` in `StaticNorth.Valiant.sln` and exclude
 the documentation `.esproj`, so releases cannot invoke npm or deploy the site.

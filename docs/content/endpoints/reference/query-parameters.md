@@ -7,18 +7,17 @@ description: Complete parsing and serialization formats, options, supported valu
 
 Inbound parsing and outbound serialization use separate options. An API can accept several client conventions while emitting one stable format.
 
-Generated endpoint binding is opt-in and disabled by default:
+Opt into generated endpoint binding in the project that declares the endpoints.
 
 ```csharp
-builder.Services.AddValiantEndpoints(options =>
-{
-    options.QueryParameters.EnableBinding = true;
-});
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+[assembly: ValiantGenerateQueryBinding]
 ```
 
-The direct literal assignment must be in the same compilation as the endpoints so the source generator can add the binding members. Direct calls to `QueryStringParser` and `QueryStringSerializer` do not require endpoint binding to be enabled.
+The assembly opt-in enables whole-request, `[AsParameters]`, and direct query binding. A direct literal `EnableBinding = true` assignment in the endpoint assembly remains supported. Standalone calls to `QueryStringParser` and `QueryStringSerializer` are available by default. See [request binding setup](../guides/request-binding.md).
 
-`EnableBinding` is a compile-time opt-in, not a fully dynamic runtime switch. Whole-request `BindAsync` and `[AsParameters]` processing can resolve runtime options, but a generated direct `TryParse(string, out T)` has no `HttpContext`. Once a recognized literal `true` causes that parser to be compiled, another host or runtime override to `false` cannot remove or neutralize it. Compile the endpoint project with no recognized `true` assignment when `[ValiantQueryParsing]` must be ignored.
+Apps targeting .NET 11 or later default to strict parsing. Earlier targets keep 1.2.1 behavior, even when built with the .NET 11 SDK. Override `QueryParsingOptions.UseStrictBinding` when calling `QueryStringParser`, in `AddValiantEndpoints` via `options.QueryParameters.Parsing`, or in `WithQueryParsingOptions` on a route. Strict parsing rejects conflicting shapes and missing required members, supports combined object and array path formats, and uses `[FromQuery]` aliases for generated request objects.
 
 ## Defaults
 
@@ -61,7 +60,7 @@ new QueryParsingOptions
 };
 ```
 
-Repeated and bracket values preserve query order; indexed brackets sort by numeric index. Empty items and disabled formats return structured errors.
+Repeated and bracket values preserve query order. Indexed brackets sort by numeric index. Empty string items are valid in string collections. Empty items for other element types and disabled formats return structured errors.
 
 ## Object formats
 
@@ -71,7 +70,9 @@ Repeated and bracket values preserve query order; indexed brackets sort by numer
 | `DotNotation` | `?filter.brand=tesla&filter.year=2025` |
 | `DeepObject` | `?filter[brand]=tesla&filter[year]=2025` |
 
-Duplicate scalar values use the last value. Flat output cannot preserve nested paths; choose dot notation, deep object, or explicitly enabled JSON for nested serialization.
+Duplicate scalar values use the last value. With `UseStrictBinding` enabled, a single property path cannot combine a direct value with nested keys. Strict parsing also supports combining dot notation and deep object with bracket arrays. For example, `filter.ids[0]=1` requires `DotNotation` and `IndexedBrackets`, while `filter[ids][]=1` requires `DeepObject` and `Brackets`.
+
+Choose dot notation, deep object, or explicitly enabled JSON to preserve nested paths.
 
 ## JSON query values
 
@@ -116,7 +117,7 @@ public sealed partial class SearchEndpoint : IEndpoint
 }
 ```
 
-Precedence is explicit attribute properties, then the last `.WithQueryParsingOptions(...)` call, then global `QueryParameters.Parsing`, then defaults. Omitted or `null` array properties inherit; `[]` accepts no formats in that category. `SupportedArrayFormats` and `SupportedObjectFormats` affect full-query binding only. `JsonValues` affects full-query binding when explicitly named and always controls generated direct complex `[FromQuery]` parsers.
+Precedence is explicit attribute properties, the last `.WithQueryParsingOptions(...)` call, conditional registration, global `QueryParameters.Parsing`, and defaults, in that order. Omitted or `null` array properties inherit. An empty array disables every format in that category. `SupportedArrayFormats` and `SupportedObjectFormats` affect full-query binding only. `JsonValues` affects full-query binding when explicitly named and always controls generated direct complex `[FromQuery]` parsers.
 
 For example, direct complex `[FromQuery]` parameters can disable their generated JSON parser with the same attribute:
 
@@ -130,7 +131,9 @@ public sealed class SearchEndpoint : IEndpoint
 }
 ```
 
-When the endpoint project is compiled with `options.QueryParameters.EnableBinding = false`, the whole attribute is ignored and no Valiant query parser is generated. A later runtime-only override cannot change an already-generated direct parser. When binding is enabled, no attribute and `[ValiantQueryParsing]` both leave JSON enabled for the generated direct parser. Explicit `Disabled` returns HTTP 400 without a Valiant direct-query filter. Array and object format properties do not affect direct parameters. User-authored `TryParse` methods remain user-controlled, and conflicting policies for the same generated parser type report `VLE011`.
+Generated direct parsers keep their compiled JSON policy regardless of the host's runtime setting. JSON is enabled when the policy attribute is absent or parameterless. Explicit `Disabled` returns HTTP 400 through ASP.NET Core. The array and object formats apply to full-query binding only. User-authored `TryParse` methods retain their own behavior. Conflicting policies for the same generated parser type report `VLE011`.
+
+On .NET 11 and later targets, generated direct `TryParse` methods return `false` for malformed or disabled JSON. Earlier targets retain the 1.2.1 `BadHttpRequestException` behavior for direct CLR callers. Set `UseStrictBinding` on the `ValiantGenerateQueryBinding` assembly attribute to override the default in the assembly that declares the binding. HTTP requests receive 400 in both modes.
 
 ```http
 ?filter=%7B%22brand%22%3A%22tesla%22%2C%22year%22%3A2025%7D
@@ -164,7 +167,11 @@ if (!result.IsSuccess)
 }
 ```
 
-Primitive arrays and `List<T>` support `string`, `int`, `long`, `Guid`, `bool`, `decimal`, and `DateTime`; nullable primitive scalars are supported. Nested object binding supports at least one level.
+Use an object with named properties as the root value. Arrays and `List<T>` properties support `string`, `int`, `long`, `Guid`, `bool`, `decimal`, `DateTime`, and enum values. Nullable primitive scalars are supported. Nested object binding reports an error when it reaches the 64-level depth limit.
+
+Valiant's field-by-field object binding uses properties with public setters, including public `init` accessors. Standalone parsing and 1.2.1-compatible whole-request binding use CLR property names. Strict whole-request binding uses root properties marked with `[FromQuery]` and honors any `Name` alias. Strict parsing reports missing `required` properties using their full paths unless a constructor marked with `[SetsRequiredMembers]` supplies defaults.
+
+Repeated and delimited values require a one-dimensional array or a type assignable from `List<T>`. An incompatible collection type returns `UnsupportedQueryType`. With JSON query values enabled, the parser can also bind collection types that System.Text.Json can deserialize. Unsupported JSON target types return `UnsupportedQueryType`.
 
 ## Direct serialization
 
@@ -184,7 +191,7 @@ var result = QueryStringSerializer.Serialize(
 // ?ids=1,2,3&filter.brand=tesla&filter.year=2025
 ```
 
-The serializer URL-encodes keys and values, preserves array order, and skips null values. It never negotiates an output format: one array and one object format are selected explicitly.
+The serializer reads public getters, URL-encodes keys and values, and preserves array order. Delimited formats skip null items and omit empty collections. When an optional key is absent, parsing keeps the target property's initialized or default value. To round-trip an omitted empty collection as empty, initialize that property to an empty collection. Complex collection shapes require JSON query values. Strict parsing with JSON disabled treats a scalar value for a collection of strings as literal text. Dot-notation and deep-object serialization return a structured error after 64 nested levels.
 
 ## Structured errors
 

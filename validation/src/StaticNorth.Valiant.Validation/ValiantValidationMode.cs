@@ -1,22 +1,23 @@
 namespace StaticNorth.Valiant.Validation;
 
 /// <summary>
-/// Selects which validation backend generated validators should use.
+/// Selects how eligible fluent validators execute.
 /// </summary>
+/// <remarks>Attribute validators always use generated checks. Other fluent validators always execute Configure.</remarks>
 public enum ValiantValidationMode
 {
     /// <summary>
-    /// Uses the debuggable runtime backend in Debug builds and the generated backend otherwise.
+    /// Uses generated checks for eligible fluent validators in Debug and Release builds.
     /// </summary>
     Auto,
 
     /// <summary>
-    /// Executes the user-authored Configure method at runtime so breakpoints work normally.
+    /// Executes the original Configure method for fluent validators so breakpoints can bind.
     /// </summary>
     Debuggable,
 
     /// <summary>
-    /// Uses the source-generated direct validation implementation.
+    /// Uses generated checks for eligible fluent validators.
     /// </summary>
     Fast
 }

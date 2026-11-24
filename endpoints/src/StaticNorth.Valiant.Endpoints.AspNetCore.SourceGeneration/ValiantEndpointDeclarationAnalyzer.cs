@@ -26,12 +26,12 @@ public sealed class ValiantEndpointDeclarationAnalyzer : DiagnosticAnalyzer
     {
         context.EnableConcurrentExecution();
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
-        context.RegisterSyntaxNodeAction(AnalyzeClassDeclaration, SyntaxKind.ClassDeclaration);
+        context.RegisterSyntaxNodeAction(AnalyzeClassDeclaration, SyntaxKind.ClassDeclaration, SyntaxKind.RecordDeclaration);
     }
 
     private static void AnalyzeClassDeclaration(SyntaxNodeAnalysisContext context)
     {
-        if (context.Node is not ClassDeclarationSyntax { BaseList: { } baseList } declaration)
+        if (context.Node is not TypeDeclarationSyntax { BaseList: { } baseList } declaration)
         {
             return;
         }

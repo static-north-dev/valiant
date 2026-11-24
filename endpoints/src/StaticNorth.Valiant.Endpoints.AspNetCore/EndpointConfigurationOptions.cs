@@ -50,13 +50,10 @@ internal static class QueryParsingOptionsSnapshot
 
         return new QueryParsingOptions
         {
-            SupportedArrayFormats = options.SupportedArrayFormats is null
-                ? null!
-                : [.. options.SupportedArrayFormats],
-            SupportedObjectFormats = options.SupportedObjectFormats is null
-                ? null!
-                : [.. options.SupportedObjectFormats],
-            EnableJsonQueryValues = options.EnableJsonQueryValues
+            SupportedArrayFormats = CloneFormats(options.SupportedArrayFormats),
+            SupportedObjectFormats = CloneFormats(options.SupportedObjectFormats),
+            EnableJsonQueryValues = options.EnableJsonQueryValues,
+            UseStrictBinding = options.UseStrictBinding
         };
     }
 
@@ -70,13 +67,12 @@ internal static class QueryParsingOptionsSnapshot
 
         return new QueryParsingOptions
         {
-            SupportedArrayFormats = supportedArrayFormats is null
-                ? Clone(options).SupportedArrayFormats
-                : [.. supportedArrayFormats],
-            SupportedObjectFormats = supportedObjectFormats is null
-                ? Clone(options).SupportedObjectFormats
-                : [.. supportedObjectFormats],
-            EnableJsonQueryValues = enableJsonQueryValues ?? options.EnableJsonQueryValues
+            SupportedArrayFormats = CloneFormats(supportedArrayFormats ?? options.SupportedArrayFormats),
+            SupportedObjectFormats = CloneFormats(supportedObjectFormats ?? options.SupportedObjectFormats),
+            EnableJsonQueryValues = enableJsonQueryValues ?? options.EnableJsonQueryValues,
+            UseStrictBinding = options.UseStrictBinding
         };
     }
+
+    private static T[] CloneFormats<T>(T[]? formats) => formats is null ? [] : [.. formats];
 }

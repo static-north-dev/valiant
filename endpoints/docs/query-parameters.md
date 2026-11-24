@@ -89,15 +89,25 @@ Valiant query binding is disabled by default. Without an explicit opt-in, no que
 Enable it in the same project as the endpoint declarations:
 
 ```csharp
+using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+[assembly: ValiantGenerateQueryBinding]
+```
+
+The following startup configuration remains available for compatibility:
+
+```csharp
 builder.Services.AddValiantEndpoints(options =>
 {
     options.QueryParameters.EnableBinding = true;
 });
 ```
 
-The generator recognizes a direct compile-time `true` assignment in the setup lambda. A helper method, runtime variable, or configuration in a different assembly is not a source-generation opt-in. If any recognized assignment is `true`, query binding source is generated for that compilation.
+The generator recognizes a direct literal `true` assignment in the setup lambda. Use the assembly attribute when the host registers endpoints through a helper, runtime variable, or a different assembly.
 
-This is a compile-time opt-in, not a fully dynamic runtime switch. Whole-request `BindAsync` and `[AsParameters]` processing can resolve runtime options, but a generated direct `TryParse(string, out T)` has no `HttpContext` and cannot observe a later runtime override. If one host configuration in the endpoint compilation contains a recognized `true`, running that compiled assembly from another host with `EnableBinding = false` does not remove or neutralize the generated direct parser. To ignore `[ValiantQueryParsing]`, compile the endpoint project with no recognized `true` assignment.
+Whole-request `BindAsync` and `[AsParameters]` processing resolve runtime parsing options. A generated direct `TryParse(string, out T)` uses the policy compiled into its endpoint assembly. To disable generation, remove the assembly attribute and any recognized literal `true` assignment, then rebuild the endpoint assembly.
+
+With query binding enabled, .NET 11 and later targets default to strict parsing. Earlier targets retain 1.2.1 behavior. Set `QueryParsingOptions.UseStrictBinding` to override runtime parsing, and set `UseStrictBinding` on the `ValiantGenerateQueryBinding` assembly attribute to override generated `TryParse` behavior.
 
 Default parsing accepts only:
 
@@ -161,7 +171,7 @@ Rejected disabled formats return `QueryErrorKind.Configuration`.
 
 ## Endpoint Binding
 
-When `EnableBinding` is `true`, Valiant supports full-query binding for endpoint request objects.
+When query binding is enabled at compile time, Valiant supports full-query binding for endpoint request objects.
 
 Without `[AsParameters]`, make the request type partial:
 
@@ -240,7 +250,7 @@ public sealed class CarsEndpoint : IEndpoint
 }
 ```
 
-The generator compiles this policy directly into `TryParse`; no endpoint filter is used for direct parameters. When the endpoint project is compiled with `options.QueryParameters.EnableBinding = false`, the attribute is ignored and no Valiant query parser is generated. A later runtime-only override cannot change an already-generated direct parser; see the compile-time opt-in note above. When binding is enabled, JSON remains enabled when the attribute is absent or parameterless. Explicit `Disabled` returns HTTP 400. User-authored `TryParse` methods are not overridden. Reusing one generated parser type with conflicting endpoint policies reports `VLE011`.
+The generator compiles this policy directly into `TryParse`. JSON is enabled when the attribute is absent or parameterless. A strict generated `TryParse` returns `false` for malformed or disabled JSON. In 1.2.1 compatibility mode, it throws `BadHttpRequestException`. ASP.NET Core returns HTTP 400 in both modes. User-authored `TryParse` methods keep their behavior. Reusing one generated parser type with conflicting endpoint policies reports `VLE011`.
 
 ### Endpoint-local policy
 

@@ -14,8 +14,11 @@
 
   <ItemGroup>
     <None Include="buildTransitive/StaticNorth.Valiant.Mapping.props" Pack="true" PackagePath="buildTransitive/StaticNorth.Valiant.Mapping.props" />
-    <PackageReference Include="Microsoft.Net.Compilers.Toolset" PrivateAssets="all" />
     <ProjectReference Include="../StaticNorth.Valiant.Mapping.SourceGeneration/StaticNorth.Valiant.Mapping.SourceGeneration.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" Condition="'$(BuildProjectReferences)' != 'false'" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="Microsoft.NET.ILLink.Tasks" PrivateAssets="all" />
   </ItemGroup>
 
   <Target Name="BuildValiantMappingSourceGeneratorForPack" Condition="'$(NoBuild)' != 'true'">

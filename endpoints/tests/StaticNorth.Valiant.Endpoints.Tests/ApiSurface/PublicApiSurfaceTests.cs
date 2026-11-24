@@ -51,6 +51,7 @@ public sealed class PublicApiSurfaceTests
             "StaticNorth.Valiant.Endpoints.AspNetCore.QueryStringSerializer",
             "StaticNorth.Valiant.Endpoints.AspNetCore.ValiantEndpointOptions",
             "StaticNorth.Valiant.Endpoints.AspNetCore.ValiantEndpointRouteBuilderExtensions",
+            "StaticNorth.Valiant.Endpoints.AspNetCore.ValiantGenerateQueryBindingAttribute",
             "StaticNorth.Valiant.Endpoints.AspNetCore.ValiantQueryParsingAttribute"
         ]);
     }

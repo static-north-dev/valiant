@@ -21,6 +21,8 @@ public sealed partial class UserMapper : MapperDefinition<User, UserDto>
 }
 ```
 
+Target selectors select a direct field or property, such as `target => target.Email`. Map a nested member with its own mapper and assign that result to the parent member.
+
 ## Conditional chains
 
 `When` applies to every declaration in the same fluent chain:
@@ -34,6 +36,8 @@ context
 
 Start a new statement when rules need different conditions.
 
+For an init-only member, use one mapping rule with `When` and a fallback so the object initializer has a value on both paths.
+
 ## Defaults and fallbacks
 
 `Default` and `Fallback` are aliases. The value is used when a rule is skipped by its condition or ignores a null source value:
@@ -43,6 +47,8 @@ context.Map(source => source.DisplayName, target => target.DisplayName)
     .When(source => source.IsVisible)
     .Fallback("Hidden user");
 ```
+
+If a target constructor parameter has a declared default, Valiant uses it when no mapping supplies a value for that parameter.
 
 ## Null handling
 

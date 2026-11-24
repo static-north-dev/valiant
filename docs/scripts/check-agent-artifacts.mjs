@@ -22,6 +22,7 @@ export function validateAgentArtifacts(outDir) {
   assert.match(headers, /Content-Security-Policy: [^\n]*frame-ancestors 'none'/);
   assert.match(headers, /X-Frame-Options: DENY/);
   const index = json('/agents/documents.json');
+  assert.deepEqual(json('/agents/documents-status.json'), {defaultVersion: index.defaultVersion, sourceRevision: index.sourceRevision});
   assert.ok(index.versions.some((version) => version.name === index.defaultVersion && version.isDefault));
   const paths = new Set();
   for (const document of index.documents) {

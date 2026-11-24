@@ -21,6 +21,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
     private const string EndpointGroupAttributeMetadataName = "StaticNorth.Valiant.Endpoints.ValiantEndpointGroupAttribute";
     private const string EndpointServiceCollectionExtensionsMetadataName = "StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection.ValiantEndpointServiceCollectionExtensions";
     private const string QueryParameterOptionsMetadataName = "StaticNorth.Valiant.Endpoints.AspNetCore.QueryParameterOptions";
+    private const string GenerateQueryBindingAttributeMetadataName = "StaticNorth.Valiant.Endpoints.AspNetCore.ValiantGenerateQueryBindingAttribute";
     private const string QueryParsingAttributeMetadataName = "StaticNorth.Valiant.Endpoints.AspNetCore.ValiantQueryParsingAttribute";
     private const string FromQueryAttributeMetadataName = "Microsoft.AspNetCore.Mvc.FromQueryAttribute";
     private const string AsParametersAttributeMetadataName = "Microsoft.AspNetCore.Http.AsParametersAttribute";
@@ -116,6 +117,14 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         DiagnosticSeverity.Error,
         true);
 
+    private static readonly DiagnosticDescriptor UnreferenceableRegistrationType = new(
+        "VLE012",
+        "Unreferenceable endpoint registration type",
+        "Endpoint registration for '{0}' cannot reference type '{1}' because it must be a closed type accessible from generated source",
+        "StaticNorth.Valiant.Endpoints",
+        DiagnosticSeverity.Error,
+        true);
+
     private static readonly SymbolDisplayFormat TypeDisplayFormat = ValiantGeneratorTypeDisplayFormats.TypeDisplayFormat;
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -124,27 +133,27 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             .CreateSyntaxProvider(
                 static (node, _) => IsPotentialQueryBindingOptIn(node),
                 static (context, cancellationToken) => IsQueryBindingOptIn(context, cancellationToken));
-        var queryBindingEnabled = context.ParseOptionsProvider
-            .Combine(queryBindingOptIns.Collect())
-            .Select(static (configuration, _) => configuration.Right.Any(static enabled => enabled))
+        var explicitQueryBinding = context.CompilationProvider
+            .Select(static (compilation, _) => HasAttribute(compilation.Assembly, GenerateQueryBindingAttributeMetadataName));
+        var strictQueryBinding = context.CompilationProvider.Select(static (compilation, _) => UseStrictQueryBinding(compilation));
+        var legacyQueryBinding = queryBindingOptIns.Collect()
+            .Combine(explicitQueryBinding)
+            .Select(static (input, _) => !input.Right && input.Left.Any(static enabled => enabled));
+        var queryBindingEnabled = explicitQueryBinding.Combine(legacyQueryBinding)
+            .Select(static (input, _) => input.Left || input.Right)
             .WithTrackingName("Endpoints.QueryBindingEnabled");
 
-        var endpoints = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                EndpointAttributeMetadataName,
-                static (node, _) => node is ClassDeclarationSyntax { AttributeLists.Count: > 0 },
-                static (context, cancellationToken) => CreateEndpointCandidate(context, cancellationToken));
-
-        var genericEndpoints = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                GenericEndpointAttributeMetadataName,
-                static (node, _) => node is ClassDeclarationSyntax { AttributeLists.Count: > 0 },
-                static (context, cancellationToken) => CreateEndpointCandidate(context, cancellationToken));
+        // Only the legacy setup syntax requires joining candidates to a compilation-wide option.
+        var legacyQueryBindingCompilation = legacyQueryBinding
+            .Combine(context.CompilationProvider)
+            .Select(static (input, _) => input.Left ? input.Right : null);
+        var endpoints = CreateEndpointProvider(context.SyntaxProvider, EndpointAttributeMetadataName, legacyQueryBindingCompilation);
+        var genericEndpoints = CreateEndpointProvider(context.SyntaxProvider, GenericEndpointAttributeMetadataName, legacyQueryBindingCompilation);
 
         var endpointGroups = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 EndpointGroupAttributeMetadataName,
-                static (node, _) => node is ClassDeclarationSyntax { AttributeLists.Count: > 0 },
+                static (node, _) => IsEndpointDeclaration(node),
                 static (context, _) => CreateEndpointGroupCandidate(context));
 
         var validEndpoints = endpoints
@@ -229,8 +238,92 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             static (context, registration) => Execute(context, registration));
 
         context.RegisterSourceOutput(
-            queryObjectBindingRegistrations,
-            static (context, registration) => ExecuteQueryObjectBindings(context, registration));
+            queryObjectBindingRegistrations.Combine(strictQueryBinding),
+            static (context, source) => ExecuteQueryObjectBindings(context, source.Left, source.Right));
+    }
+
+    private static bool UseStrictQueryBinding(Compilation compilation)
+    {
+        var bindingAttribute = compilation.GetTypeByMetadataName(GenerateQueryBindingAttributeMetadataName);
+        if (bindingAttribute is null)
+        {
+            return false;
+        }
+
+        foreach (var attribute in compilation.Assembly.GetAttributes())
+        {
+            if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, bindingAttribute))
+            {
+                foreach (var argument in attribute.NamedArguments)
+                {
+                    if (argument.Key == "UseStrictBinding" && argument.Value.Value is bool useStrictBinding)
+                    {
+                        return useStrictBinding;
+                    }
+                }
+            }
+        }
+
+        // Follow the same package asset that supplies the runtime option defaults.
+        const string dotNetTargetPrefix = ".NETCoreApp,Version=v";
+        return bindingAttribute.ContainingAssembly.GetAttributes().Any(static attribute =>
+            attribute.AttributeClass?.ToDisplayString() == "System.Runtime.Versioning.TargetFrameworkAttribute" &&
+            attribute.ConstructorArguments.Length == 1 &&
+            attribute.ConstructorArguments[0].Value is string targetFramework &&
+            targetFramework.StartsWith(dotNetTargetPrefix, StringComparison.Ordinal) &&
+            Version.TryParse(targetFramework.Substring(dotNetTargetPrefix.Length), out var version) && version.Major >= 11);
+    }
+
+    private static IncrementalValuesProvider<EndpointCandidateModel> CreateEndpointProvider(
+        SyntaxValueProvider syntaxProvider,
+        string attributeMetadataName,
+        IncrementalValueProvider<Compilation?> legacyQueryBindingCompilation)
+    {
+        return syntaxProvider
+            .ForAttributeWithMetadataName(
+                attributeMetadataName,
+                static (node, _) => IsEndpointDeclaration(node),
+                static (context, cancellationToken) => CreateEndpointQueryCandidate(context, cancellationToken))
+            .WithTrackingName("Endpoints.QueryCandidates")
+            .Combine(legacyQueryBindingCompilation)
+            .Select(static (input, cancellationToken) =>
+                input.Right is { } compilation && input.Left.LegacyMetadataName is { } metadataName &&
+                compilation.Assembly.GetTypeByMetadataName(metadataName) is { } type
+                    ? AnalyzeQueryBinding(input.Left.Candidate, type, compilation, cancellationToken)
+                    : input.Left.Candidate)
+            .WithTrackingName("Endpoints.AnalyzedQueryCandidates");
+    }
+
+    private static bool IsEndpointDeclaration(SyntaxNode node) =>
+        node is ClassDeclarationSyntax { AttributeLists.Count: > 0 } or
+            RecordDeclarationSyntax { AttributeLists.Count: > 0, RawKind: (int)SyntaxKind.RecordDeclaration };
+
+    private static (EndpointCandidateModel Candidate, string? LegacyMetadataName) CreateEndpointQueryCandidate(
+        GeneratorAttributeSyntaxContext context,
+        CancellationToken cancellationToken)
+    {
+        var candidate = CreateEndpointCandidate(context);
+        if (candidate.Endpoint is null || context.TargetSymbol is not INamedTypeSymbol type)
+        {
+            return (candidate, null);
+        }
+
+        var compilation = context.SemanticModel.Compilation;
+        return HasAttribute(compilation.Assembly, GenerateQueryBindingAttributeMetadataName)
+            ? (AnalyzeQueryBinding(candidate, type, compilation, cancellationToken), null)
+            : (candidate, GetTypeMetadataName(type));
+    }
+
+    private static string GetTypeMetadataName(INamedTypeSymbol type)
+    {
+        if (type.ContainingType is { } containingType)
+        {
+            return GetTypeMetadataName(containingType) + "+" + type.MetadataName;
+        }
+
+        return type.ContainingNamespace.IsGlobalNamespace
+            ? type.MetadataName
+            : type.ContainingNamespace.ToDisplayString() + "." + type.MetadataName;
     }
 
     private static bool IsPotentialQueryBindingOptIn(SyntaxNode node)
@@ -278,9 +371,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             method.ContainingType.ToDisplayString() == EndpointServiceCollectionExtensionsMetadataName;
     }
 
-    private static EndpointCandidateModel CreateEndpointCandidate(
-        GeneratorAttributeSyntaxContext context,
-        CancellationToken cancellationToken)
+    private static EndpointCandidateModel CreateEndpointCandidate(GeneratorAttributeSyntaxContext context)
     {
         if (context.TargetSymbol is not INamedTypeSymbol typeSymbol)
         {
@@ -322,6 +413,12 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
                 ImmutableArray.Create(new ValiantDiagnosticInfo(EndpointAttributeCannotMarkGroup, location, typeName)));
         }
 
+        var compilation = context.SemanticModel.Compilation;
+        if (!CanReferenceRegistrationType(typeSymbol, compilation))
+        {
+            return CreateUnreferenceableRegistrationDiagnostic(typeSymbol, typeSymbol, location);
+        }
+
         string? groupType = null;
         if (groupTypeSymbol is not null)
         {
@@ -336,22 +433,43 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
                         groupTypeSymbol.ToDisplayString(TypeDisplayFormat))));
             }
 
+            if (!CanReferenceRegistrationType(groupTypeSymbol, compilation))
+            {
+                return CreateUnreferenceableRegistrationDiagnostic(typeSymbol, groupTypeSymbol, location);
+            }
+
             groupType = groupTypeSymbol.ToDisplayString(TypeDisplayFormat);
+        }
+
+        return new EndpointCandidateModel(
+            new EndpointModel(typeName, EndpointKind.Endpoint, groupType, order),
+            ImmutableArray<ValiantDiagnosticInfo>.Empty);
+    }
+
+    private static EndpointCandidateModel AnalyzeQueryBinding(
+        EndpointCandidateModel candidate,
+        INamedTypeSymbol typeSymbol,
+        Compilation compilation,
+        CancellationToken cancellationToken)
+    {
+        if (candidate.Endpoint is not { } endpoint)
+        {
+            return candidate;
         }
 
         var queryParsingPolicy = GetEndpointQueryParsingPolicy(typeSymbol, cancellationToken);
         var queryObjectBindings = CreateQueryObjectBindings(
-            context.SemanticModel,
+            compilation,
             typeSymbol,
             queryParsingPolicy.EnableDirectJsonQueryValues,
             queryParsingPolicy.JsonPolicyLocation,
             cancellationToken);
         return new EndpointCandidateModel(
             new EndpointModel(
-                typeName,
-                isGroup ? EndpointKind.Group : EndpointKind.Endpoint,
-                groupType,
-                order,
+                endpoint.Type,
+                endpoint.Kind,
+                endpoint.GroupType,
+                endpoint.Order,
                 queryParsingPolicy.Overrides),
             queryObjectBindings.Bindings,
             queryObjectBindings.Diagnostics);
@@ -391,6 +509,11 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
                 ImmutableArray.Create(new ValiantDiagnosticInfo(UnsupportedEndpointGroupShape, location, typeName)));
         }
 
+        if (!CanReferenceRegistrationType(typeSymbol, context.SemanticModel.Compilation))
+        {
+            return CreateUnreferenceableRegistrationDiagnostic(typeSymbol, typeSymbol, location);
+        }
+
         return new EndpointCandidateModel(
             new EndpointModel(
                 typeName,
@@ -400,8 +523,37 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             ImmutableArray<ValiantDiagnosticInfo>.Empty);
     }
 
+    private static bool CanReferenceRegistrationType(INamedTypeSymbol type, Compilation compilation)
+    {
+        if (!compilation.IsSymbolAccessibleWithin(type, compilation.Assembly))
+        {
+            return false;
+        }
+
+        for (var current = type; current is not null; current = current.ContainingType)
+        {
+            if (current.IsFileLocal || current.IsUnboundGenericType ||
+                current.TypeArguments.Any(static argument => argument.TypeKind == TypeKind.TypeParameter))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static EndpointCandidateModel CreateUnreferenceableRegistrationDiagnostic(
+        INamedTypeSymbol endpoint,
+        INamedTypeSymbol type,
+        Location? location) =>
+        new(null, ImmutableArray.Create(new ValiantDiagnosticInfo(
+            UnreferenceableRegistrationType,
+            location,
+            endpoint.ToDisplayString(TypeDisplayFormat),
+            type.ToDisplayString(TypeDisplayFormat))));
+
     private static (ImmutableArray<QueryObjectBindingModel> Bindings, ImmutableArray<ValiantDiagnosticInfo> Diagnostics) CreateQueryObjectBindings(
-        SemanticModel semanticModel,
+        Compilation compilation,
         INamedTypeSymbol endpointType,
         bool enableDirectJsonQueryValues,
         ValiantDiagnosticLocation jsonPolicyLocation,
@@ -415,9 +567,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         foreach (var mapMethod in GetMapMethodDeclarations(endpointType, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var methodSemanticModel = mapMethod.SyntaxTree == semanticModel.SyntaxTree
-                ? semanticModel
-                : semanticModel.Compilation.GetSemanticModel(mapMethod.SyntaxTree);
+            var methodSemanticModel = compilation.GetSemanticModel(mapMethod.SyntaxTree);
 
             foreach (var invocation in mapMethod
                 .DescendantNodes(static node => node is not LambdaExpressionSyntax)
@@ -425,54 +575,45 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                foreach (var handlerExpression in GetAspNetCoreRouteHandlerExpressions(methodSemanticModel, invocation, cancellationToken))
+                foreach (var parameter in GetAspNetCoreRouteHandlerParameters(methodSemanticModel, invocation, cancellationToken))
                 {
-                    foreach (var parameter in GetHandlerParameters(handlerExpression))
+                    if (parameter.GetAttributes().IsEmpty)
                     {
-                        if (parameter.AttributeLists.Count == 0)
+                        if (UnwrapNullable(parameter.Type) is INamedTypeSymbol unannotatedRequestType &&
+                            HasFromQueryProperties(unannotatedRequestType))
                         {
-                            if (methodSemanticModel.GetDeclaredSymbol(parameter, cancellationToken) is IParameterSymbol parameterWithoutAttributes &&
-                                UnwrapNullable(parameterWithoutAttributes.Type) is INamedTypeSymbol unannotatedRequestType &&
-                                HasFromQueryProperties(unannotatedRequestType))
-                            {
-                                AddQueryRequestBindingForType(
-                                    unannotatedRequestType,
-                                    parameterWithoutAttributes,
-                                    bindings,
-                                    diagnostics,
-                                    bindingTypes,
-                                    diagnosticKeys,
-                                    cancellationToken);
-                            }
-
-                            continue;
-                        }
-
-                        if (methodSemanticModel.GetDeclaredSymbol(parameter, cancellationToken) is not IParameterSymbol parameterSymbol)
-                        {
-                            continue;
-                        }
-
-                        if (HasAttribute(parameterSymbol, FromQueryAttributeMetadataName))
-                        {
-                            AddQueryObjectBindingsForType(
-                                QueryObjectBindingKind.TryParse,
-                                parameterSymbol.Type,
-                                parameterSymbol,
+                            AddQueryRequestBindingForType(
+                                unannotatedRequestType,
+                                parameter,
                                 bindings,
                                 diagnostics,
                                 bindingTypes,
                                 diagnosticKeys,
-                                enableDirectJsonQueryValues,
-                                jsonPolicyLocation,
                                 cancellationToken);
                         }
 
-                        if (HasAttribute(parameterSymbol, AsParametersAttributeMetadataName) &&
-                            UnwrapNullable(parameterSymbol.Type) is INamedTypeSymbol requestType)
-                        {
-                            AddQueryObjectBindingsForRequestProperties(requestType, bindings, diagnostics, bindingTypes, diagnosticKeys, cancellationToken);
-                        }
+                        continue;
+                    }
+
+                    if (HasAttribute(parameter, FromQueryAttributeMetadataName))
+                    {
+                        AddQueryObjectBindingsForType(
+                            QueryObjectBindingKind.TryParse,
+                            parameter.Type,
+                            parameter,
+                            bindings,
+                            diagnostics,
+                            bindingTypes,
+                            diagnosticKeys,
+                            enableDirectJsonQueryValues,
+                            jsonPolicyLocation,
+                            cancellationToken);
+                    }
+
+                    if (HasAttribute(parameter, AsParametersAttributeMetadataName) &&
+                        UnwrapNullable(parameter.Type) is INamedTypeSymbol requestType)
+                    {
+                        AddQueryObjectBindingsForRequestProperties(requestType, bindings, diagnostics, bindingTypes, diagnosticKeys, cancellationToken);
                     }
                 }
             }
@@ -485,17 +626,21 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             diagnostics.ToImmutable());
     }
 
-    private static IEnumerable<ExpressionSyntax> GetAspNetCoreRouteHandlerExpressions(
+    private static IEnumerable<IParameterSymbol> GetAspNetCoreRouteHandlerParameters(
         SemanticModel semanticModel,
         InvocationExpressionSyntax invocation,
         CancellationToken cancellationToken)
     {
-        // Query metadata comes only from inline handler parameters. Avoid binding
-        // overloads for unrelated invocations and parameterless route handlers.
-        if (!invocation.ArgumentList.Arguments.Any(static argument => argument.Expression is
-            SimpleLambdaExpressionSyntax or
-            ParenthesizedLambdaExpressionSyntax { ParameterList.Parameters.Count: > 0 } or
-            AnonymousMethodExpressionSyntax { ParameterList.Parameters.Count: > 0 }))
+        var name = invocation.Expression switch
+        {
+            MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
+            MemberBindingExpressionSyntax binding => binding.Name.Identifier.ValueText,
+            SimpleNameSyntax simpleName => simpleName.Identifier.ValueText,
+            _ => string.Empty
+        };
+        if (!name.StartsWith("Map", StringComparison.Ordinal) ||
+            !invocation.ArgumentList.Arguments.Any(static argument => argument.Expression is not
+                (LiteralExpressionSyntax or ParenthesizedLambdaExpressionSyntax { ParameterList.Parameters.Count: 0 })))
         {
             yield break;
         }
@@ -508,13 +653,29 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
 
         foreach (var argument in invocation.ArgumentList.Arguments)
         {
-            if (semanticModel.GetOperation(argument, cancellationToken) is IArgumentOperation { Parameter: { } parameter } &&
+            if (semanticModel.GetOperation(argument, cancellationToken) is IArgumentOperation { Parameter: { } parameter } operation &&
                 IsRouteHandlerParameter(parameter))
             {
-                yield return argument.Expression;
+                var handler = GetRouteHandlerMethod(operation.Value);
+                if (handler is not null)
+                {
+                    foreach (var handlerParameter in handler.Parameters)
+                    {
+                        yield return handlerParameter;
+                    }
+                }
             }
         }
     }
+
+    private static IMethodSymbol? GetRouteHandlerMethod(IOperation operation) => operation switch
+    {
+        IDelegateCreationOperation creation => GetRouteHandlerMethod(creation.Target),
+        IConversionOperation conversion => GetRouteHandlerMethod(conversion.Operand),
+        IAnonymousFunctionOperation anonymous => anonymous.Symbol,
+        IMethodReferenceOperation reference => reference.Method,
+        _ => null
+    };
 
     private static bool IsAspNetCoreRouteMappingMethod(IMethodSymbol method)
     {
@@ -545,40 +706,21 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         INamedTypeSymbol endpointType,
         CancellationToken cancellationToken)
     {
-        foreach (var member in endpointType.GetMembers("Map"))
+        var endpointInterface = endpointType.AllInterfaces.FirstOrDefault(static type =>
+            type.MetadataName == EndpointMetadataName && type.ContainingNamespace.ToDisplayString() == AspNetCoreNamespace);
+        var interfaceMap = endpointInterface?.GetMembers("Map").OfType<IMethodSymbol>().FirstOrDefault();
+        if (interfaceMap is null ||
+            endpointType.FindImplementationForInterfaceMember(interfaceMap) is not IMethodSymbol map)
         {
-            if (member is not IMethodSymbol
-                {
-                    IsStatic: true,
-                    DeclaredAccessibility: Accessibility.Public,
-                    Parameters.Length: 1
-                } method)
-            {
-                continue;
-            }
-
-            foreach (var syntaxReference in method.DeclaringSyntaxReferences)
-            {
-                if (syntaxReference.GetSyntax(cancellationToken) is MethodDeclarationSyntax methodDeclaration)
-                {
-                    yield return methodDeclaration;
-                }
-            }
+            yield break;
         }
-    }
 
-    private static IEnumerable<ParameterSyntax> GetHandlerParameters(ExpressionSyntax expression)
-    {
-        switch (expression)
+        foreach (var syntaxReference in (map.PartialImplementationPart ?? map).DeclaringSyntaxReferences)
         {
-            case ParenthesizedLambdaExpressionSyntax lambda:
-                return lambda.ParameterList.Parameters;
-            case SimpleLambdaExpressionSyntax lambda:
-                return [lambda.Parameter];
-            case AnonymousMethodExpressionSyntax { ParameterList: not null } anonymousMethod:
-                return anonymousMethod.ParameterList.Parameters;
-            default:
-                return [];
+            if (syntaxReference.GetSyntax(cancellationToken) is MethodDeclarationSyntax methodDeclaration)
+            {
+                yield return methodDeclaration;
+            }
         }
     }
 
@@ -590,17 +732,11 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         HashSet<string> diagnosticKeys,
         CancellationToken cancellationToken)
     {
-        foreach (var member in requestType.GetMembers())
+        foreach (var property in GetVisibleProperties(requestType))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (member is not IPropertySymbol
-                {
-                    IsStatic: false,
-                    IsIndexer: false,
-                    DeclaredAccessibility: Accessibility.Public
-                } property ||
-                !HasAttribute(property, FromQueryAttributeMetadataName))
+            if (!HasAttribute(property, FromQueryAttributeMetadataName))
             {
                 continue;
             }
@@ -619,16 +755,31 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         }
     }
 
+    private static IEnumerable<IPropertySymbol> GetVisibleProperties(INamedTypeSymbol type)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var property in current.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (property is { DeclaredAccessibility: Accessibility.Public, IsStatic: false, IsIndexer: false } &&
+                    seen.Add(property.Name))
+                {
+                    yield return property;
+                }
+            }
+        }
+    }
+
     private static bool HasFromQueryProperties(INamedTypeSymbol requestType)
     {
-        foreach (var member in requestType.GetMembers())
+        foreach (var property in GetVisibleProperties(requestType))
         {
-            if (member is IPropertySymbol
+            if (property is
                 {
-                    IsStatic: false,
-                    IsIndexer: false,
-                    DeclaredAccessibility: Accessibility.Public
-                } property &&
+                    GetMethod: not null,
+                    SetMethod.DeclaredAccessibility: Accessibility.Public
+                } &&
                 HasAttribute(property, FromQueryAttributeMetadataName))
             {
                 return true;
@@ -744,48 +895,43 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
 
     private static IEnumerable<INamedTypeSymbol> GetQueryObjectBindingTargets(ITypeSymbol queryType)
     {
-        queryType = UnwrapNullable(queryType);
-        if (queryType is IArrayTypeSymbol arrayType)
+        var remaining = new Stack<(ITypeSymbol Type, int Depth)>();
+        var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+        remaining.Push((queryType, 0));
+        while (remaining.Count > 0 && visited.Count < 512)
         {
-            foreach (var target in GetQueryObjectBindingTargets(arrayType.ElementType))
+            var (type, depth) = remaining.Pop();
+            var current = UnwrapNullable(type);
+            if (depth >= 64 || !visited.Add(current))
             {
-                yield return target;
+                continue;
             }
 
-            yield break;
-        }
-
-        if (queryType is not INamedTypeSymbol namedType)
-        {
-            yield break;
-        }
-
-        if (TryGetDictionaryArguments(namedType, out var keyType, out var valueType))
-        {
-            foreach (var target in GetQueryObjectBindingTargets(keyType))
+            if (current is IArrayTypeSymbol arrayType)
             {
-                yield return target;
+                remaining.Push((arrayType.ElementType, depth + 1));
+                continue;
             }
 
-            foreach (var target in GetQueryObjectBindingTargets(valueType))
+            if (current is not INamedTypeSymbol namedType)
             {
-                yield return target;
+                continue;
             }
 
-            yield break;
-        }
-
-        if (TryGetCollectionElementType(namedType, out var elementType))
-        {
-            foreach (var target in GetQueryObjectBindingTargets(elementType))
+            if (TryGetDictionaryArguments(namedType, out var keyType, out var valueType))
             {
-                yield return target;
+                remaining.Push((valueType, depth + 1));
+                remaining.Push((keyType, depth + 1));
             }
-
-            yield break;
+            else if (TryGetCollectionElementType(namedType, out var elementType))
+            {
+                remaining.Push((elementType, depth + 1));
+            }
+            else
+            {
+                yield return namedType;
+            }
         }
-
-        yield return namedType;
     }
 
     private static bool TryGetCollectionElementType(INamedTypeSymbol type, out ITypeSymbol elementType)
@@ -904,9 +1050,15 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             return false;
         }
 
-        if (type.IsStatic)
+        if (type.IsFileLocal || HasFileLocalContainingType(type))
         {
-            diagnostic = CreateUnsupportedQueryObjectBindingDiagnostic(type, sourceSymbol, "static types cannot define query object parsers");
+            diagnostic = CreateUnsupportedQueryObjectBindingDiagnostic(type, sourceSymbol, "file-local types cannot be reopened in generated source");
+            return false;
+        }
+
+        if (type.IsStatic || type.IsRefLikeType)
+        {
+            diagnostic = CreateUnsupportedQueryObjectBindingDiagnostic(type, sourceSymbol, "static and ref-like query types are unsupported");
             return false;
         }
 
@@ -966,9 +1118,34 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             typeName,
             type.IsValueType,
             enableJsonQueryValues,
+            kind != QueryObjectBindingKind.BindAsync && enableJsonQueryValues ? GetJsonOptionsFieldName(type) : null,
             policyLocation,
             containingTypes.ToImmutable());
         return true;
+    }
+
+    private static string GetJsonOptionsFieldName(INamedTypeSymbol type)
+    {
+        var name = "__valiantQueryObjectJsonSerializerOptions";
+        while (type.Name == name || type.GetMembers(name).Length != 0)
+        {
+            name += "_";
+        }
+
+        return name;
+    }
+
+    private static bool HasFileLocalContainingType(INamedTypeSymbol type)
+    {
+        for (var current = type.ContainingType; current is not null; current = current.ContainingType)
+        {
+            if (current.IsFileLocal)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static ValiantDiagnosticInfo CreateUnsupportedQueryObjectBindingDiagnostic(
@@ -1035,8 +1212,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
 
             if (method.Parameters.Length == 3 &&
                 method.Parameters[0].Type.SpecialType == SpecialType.System_String &&
-                method.Parameters[1].Type.Name == "IFormatProvider" &&
-                method.Parameters[1].Type.ContainingNamespace.Name == "System" &&
+                method.Parameters[1].Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.IFormatProvider" &&
                 method.Parameters[2].RefKind == RefKind.Out &&
                 SymbolEqualityComparer.Default.Equals(UnwrapNullable(method.Parameters[2].Type), type))
             {
@@ -1049,37 +1225,44 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
 
     private static bool HasBindAsync(INamedTypeSymbol type)
     {
-        foreach (var member in type.GetMembers("BindAsync"))
+        if (ImplementsSelfInterface(type, "Microsoft.AspNetCore.Http.IBindableFromHttpContext`1"))
         {
-            if (member is IMethodSymbol
+            return true;
+        }
+
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var method in current.GetMembers("BindAsync").OfType<IMethodSymbol>())
+            {
+                if (method is
                 {
                     IsStatic: true,
-                    DeclaredAccessibility: Accessibility.Public
-                })
-            {
-                return true;
+                    DeclaredAccessibility: Accessibility.Public,
+                    Arity: 0,
+                    Parameters.Length: 1 or 2,
+                    ReturnType: INamedTypeSymbol returnType
+                } &&
+                    method.Parameters[0] is { RefKind: RefKind.None, Type: var contextType } &&
+                    contextType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::Microsoft.AspNetCore.Http.HttpContext" &&
+                    (method.Parameters.Length == 1 ||
+                        method.Parameters[1] is { RefKind: RefKind.None, Type: var parameterType } &&
+                        parameterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Reflection.ParameterInfo") &&
+                    IsGenericType(returnType, "System.Threading.Tasks.ValueTask`1") &&
+                    SymbolEqualityComparer.Default.Equals(UnwrapNullable(returnType.TypeArguments[0]), type))
+                {
+                    return true;
+                }
             }
         }
 
         return false;
     }
 
-    private static bool ImplementsIParsable(INamedTypeSymbol type)
-    {
-        foreach (var @interface in type.AllInterfaces)
-        {
-            var originalDefinition = @interface.OriginalDefinition;
-            var fullMetadataName = originalDefinition.ContainingNamespace.IsGlobalNamespace
-                ? originalDefinition.MetadataName
-                : originalDefinition.ContainingNamespace.ToDisplayString() + "." + originalDefinition.MetadataName;
-            if (string.Equals(fullMetadataName, "System.IParsable`1", StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
+    private static bool ImplementsIParsable(INamedTypeSymbol type) => ImplementsSelfInterface(type, "System.IParsable`1");
 
-        return false;
-    }
+    private static bool ImplementsSelfInterface(INamedTypeSymbol type, string metadataName) =>
+        type.AllInterfaces.Any(candidate => IsGenericType(candidate, metadataName) &&
+            SymbolEqualityComparer.Default.Equals(candidate.TypeArguments[0], type));
 
     private static INamedTypeSymbol? GetEndpointGroupTypeSymbol(ImmutableArray<AttributeData> attributes)
     {
@@ -1319,7 +1502,8 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
 
     private static void ExecuteQueryObjectBindings(
         SourceProductionContext context,
-        QueryObjectBindingRegistrationModel registration)
+        QueryObjectBindingRegistrationModel registration,
+        bool useStrictBinding)
     {
         if (registration.IsEmpty)
         {
@@ -1328,7 +1512,7 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
 
         foreach (var binding in registration.Bindings)
         {
-            context.AddSource(binding.HintName, SourceText.From(GenerateQueryBinding(binding), Encoding.UTF8));
+            context.AddSource(binding.HintName, SourceText.From(GenerateQueryBinding(binding, useStrictBinding), Encoding.UTF8));
         }
 
         foreach (var conflict in registration.Conflicts)
@@ -1369,7 +1553,6 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             .Distinct()
             .OrderBy(static endpoint => endpoint.Kind)
             .ThenBy(static endpoint => endpoint.Order)
-            .ThenBy(static endpoint => endpoint.GroupType, StringComparer.Ordinal)
             .ThenBy(static endpoint => endpoint.Type, StringComparer.Ordinal)
             .ToImmutableArray();
 
@@ -1576,88 +1759,43 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
             builder.AppendLine();
         }
 
-        var hasRootEndpoints = false;
-        for (var endpointIndex = 0; endpointIndex < endpoints.Length; endpointIndex++)
+        var orderedIndexes = Enumerable.Range(0, endpoints.Length)
+            .Where(index => endpoints[index].Kind == EndpointKind.Endpoint)
+            .ToArray();
+        var groupedFirstIndexes = orderedIndexes.OrderBy(index => endpoints[index].GroupType is null).ToArray();
+        if (orderedIndexes.SequenceEqual(groupedFirstIndexes))
         {
-            var endpoint = endpoints[endpointIndex];
-            if (endpoint.Kind != EndpointKind.Endpoint)
+            foreach (var index in orderedIndexes)
             {
-                continue;
+                AppendEndpointMapping(builder, endpoints[index], index, groupIndexes, queryBindingGenerated, "            ");
             }
-
-            if (endpoint.GroupType is null)
-            {
-                hasRootEndpoints = true;
-                continue;
-            }
-
-            var groupIndex = groupIndexes[endpoint.GroupType];
-            builder.Append("            if (group")
-                .Append(groupIndex.ToString(System.Globalization.CultureInfo.InvariantCulture))
-                .AppendLine(" is not null)");
-            builder.AppendLine("            {");
-            AppendCreateEndpointRegistration(
-                builder,
-                "                ",
-                endpoint,
-                endpointIndex,
-                "group" + groupIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                "groupRegistration" + groupIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                queryBindingGenerated);
-            builder.Append("                if (global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpoint<")
-                .Append(endpoint.Type)
-                .Append(">(group")
-                .Append(groupIndex.ToString(System.Globalization.CultureInfo.InvariantCulture))
-                .Append(", endpointRegistration")
-                .Append(endpointIndex.ToString(System.Globalization.CultureInfo.InvariantCulture))
-                .AppendLine("))");
-            builder.AppendLine("                {");
-            AppendMapEndpoint(
-                builder,
-                "                    ",
-                endpoint,
-                "group" + groupIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                "endpointRegistration" + endpointIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                queryBindingGenerated);
-            builder.AppendLine("                }");
-            builder.AppendLine("            }");
         }
-
-        if (groups.Length > 0 && hasRootEndpoints)
+        else
         {
-            builder.AppendLine();
-        }
-
-        for (var endpointIndex = 0; endpointIndex < endpoints.Length; endpointIndex++)
-        {
-            var endpoint = endpoints[endpointIndex];
-            if (endpoint is not { Kind: EndpointKind.Endpoint, GroupType: null })
+            builder.AppendLine("            if (global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.OrderEndpointsAcrossGroups(builder))");
+            builder.AppendLine("            {");
+            foreach (var index in orderedIndexes)
             {
-                continue;
+                builder.Append("                MapEndpoint").Append(index.ToString(System.Globalization.CultureInfo.InvariantCulture)).AppendLine("();");
             }
 
-            AppendCreateEndpointRegistration(
-                builder,
-                "            ",
-                endpoint,
-                endpointIndex,
-                "builder",
-                "null",
-                queryBindingGenerated);
-            builder.Append("            if (global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpoint<")
-                .Append(endpoint.Type)
-                .Append(">(builder, endpointRegistration")
-                .Append(endpointIndex.ToString(System.Globalization.CultureInfo.InvariantCulture))
-                .AppendLine("))");
-            builder.AppendLine("            {");
-            AppendMapEndpoint(
-                builder,
-                "                ",
-                endpoint,
-                "builder",
-                "endpointRegistration" + endpointIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                queryBindingGenerated);
             builder.AppendLine("            }");
+            builder.AppendLine("            else");
+            builder.AppendLine("            {");
+            foreach (var index in groupedFirstIndexes)
+            {
+                builder.Append("                MapEndpoint").Append(index.ToString(System.Globalization.CultureInfo.InvariantCulture)).AppendLine("();");
+            }
+
+            builder.AppendLine("            }");
+            foreach (var index in orderedIndexes)
+            {
+                builder.AppendLine();
+                builder.Append("            void MapEndpoint").Append(index.ToString(System.Globalization.CultureInfo.InvariantCulture)).AppendLine("()");
+                builder.AppendLine("            {");
+                AppendEndpointMapping(builder, endpoints[index], index, groupIndexes, queryBindingGenerated, "                ");
+                builder.AppendLine("            }");
+            }
         }
 
         builder.AppendLine("        }");
@@ -1665,6 +1803,41 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         builder.AppendLine("}");
 
         return builder.ToString();
+    }
+
+    private static void AppendEndpointMapping(
+        StringBuilder builder,
+        EndpointModel endpoint,
+        int index,
+        Dictionary<string, int> groupIndexes,
+        bool queryBindingGenerated,
+        string indent)
+    {
+        var routeBuilder = "builder";
+        var groupRegistration = "null";
+        var groupIndent = indent;
+        if (endpoint.GroupType is { } groupType)
+        {
+            var groupIndex = groupIndexes[groupType].ToString(System.Globalization.CultureInfo.InvariantCulture);
+            routeBuilder = "group" + groupIndex;
+            groupRegistration = "groupRegistration" + groupIndex;
+            builder.Append(indent).Append("if (").Append(routeBuilder).AppendLine(" is not null)");
+            builder.Append(indent).AppendLine("{");
+            indent += "    ";
+        }
+
+        var registration = "endpointRegistration" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        AppendCreateEndpointRegistration(builder, indent, endpoint, index, routeBuilder, groupRegistration, queryBindingGenerated);
+        builder.Append(indent)
+            .Append("if (global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ShouldMapEndpoint<")
+            .Append(endpoint.Type).Append(">(").Append(routeBuilder).Append(", ").Append(registration).AppendLine("))");
+        builder.Append(indent).AppendLine("{");
+        AppendMapEndpoint(builder, indent + "    ", endpoint, routeBuilder, registration, queryBindingGenerated);
+        builder.Append(indent).AppendLine("}");
+        if (endpoint.GroupType is not null)
+        {
+            builder.Append(groupIndent).AppendLine("}");
+        }
     }
 
     private static void AppendMapEndpoint(
@@ -1787,18 +1960,14 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         builder.Append(" }");
     }
 
-    private static string GenerateQueryBinding(QueryObjectBindingModel binding)
-    {
-        return binding.Kind switch
-        {
-            QueryObjectBindingKind.BindAsync => GenerateQueryRequestBinding(binding),
-            QueryObjectBindingKind.AsParametersTryParse => GenerateAsParametersQueryObjectBinding(binding),
-            _ => GenerateQueryObjectBinding(binding)
-        };
-    }
+    private static string GenerateQueryBinding(QueryObjectBindingModel binding, bool useStrictBinding) =>
+        binding.Kind == QueryObjectBindingKind.BindAsync
+            ? GenerateQueryRequestBinding(binding)
+            : GenerateQueryObjectBinding(binding, useStrictBinding);
 
-    private static string GenerateAsParametersQueryObjectBinding(QueryObjectBindingModel binding)
+    private static string GenerateQueryObjectBinding(QueryObjectBindingModel binding, bool useStrictBinding)
     {
+        var asParameters = binding.Kind == QueryObjectBindingKind.AsParametersTryParse;
         var builder = new StringBuilder();
         ValiantSourceBuilder.AppendGeneratedFileHeader(builder);
         builder.AppendLine();
@@ -1827,142 +1996,62 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount, binding.NamespaceName);
         builder.AppendLine("{");
 
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 1, binding.NamespaceName);
-        builder.Append("public static bool TryParse(string value, out ")
-            .Append(binding.Type);
-        if (!binding.IsValueType)
-        {
-            builder.Append('?');
-        }
-
-        builder.AppendLine(" result)");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 1, binding.NamespaceName);
-        builder.AppendLine("{");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("// Compatibility shim for ASP.NET Core [AsParameters] property binding.");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("// Valiant reparses the full query string in an endpoint filter before the handler runs.");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("result = default;");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("return true;");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 1, binding.NamespaceName);
-        builder.AppendLine("}");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount, binding.NamespaceName);
-        builder.AppendLine("}");
-
-        ValiantSourceBuilder.AppendContainingTypeClosures(builder, binding.NamespaceName, containingTypeCount);
-
-        if (binding.NamespaceName is not null)
-        {
-            builder.AppendLine("}");
-        }
-
-        return builder.ToString();
-    }
-
-    private static string GenerateQueryObjectBinding(QueryObjectBindingModel binding)
-    {
-        var builder = new StringBuilder();
-        ValiantSourceBuilder.AppendGeneratedFileHeader(builder);
-        builder.AppendLine();
-
-        if (binding.NamespaceName is not null)
-        {
-            builder.Append("namespace ").Append(binding.NamespaceName).AppendLine();
-            builder.AppendLine("{");
-        }
-
-        var containingTypeCount = ValiantSourceBuilder.AppendContainingTypeDeclarations(
-            builder,
-            binding.NamespaceName,
-            binding.ContainingTypes,
-            static containingType => containingType.Modifier,
-            static containingType => containingType.Keyword,
-            static containingType => containingType.Name);
-
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount, binding.NamespaceName);
-        builder.Append(binding.Modifier)
-            .Append("partial ")
-            .Append(binding.Keyword)
-            .Append(' ')
-            .Append(binding.Name)
-            .AppendLine();
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount, binding.NamespaceName);
-        builder.AppendLine("{");
-
-        if (binding.EnableJsonQueryValues)
+        if (binding.EnableJsonQueryValues && (useStrictBinding || !asParameters))
         {
             ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 1, binding.NamespaceName);
-            builder.Append("private static readonly global::System.Text.Json.JsonSerializerOptions __valiantQueryObjectJsonSerializerOptions = new global::System.Text.Json.JsonSerializerOptions(global::System.Text.Json.JsonSerializerDefaults.Web);")
-                .AppendLine();
+            builder.Append("private static readonly global::System.Text.Json.JsonSerializerOptions ")
+                .Append(binding.JsonOptionsField)
+                .AppendLine(" = new global::System.Text.Json.JsonSerializerOptions(global::System.Text.Json.JsonSerializerDefaults.Web);");
             builder.AppendLine();
         }
 
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 1, binding.NamespaceName);
+        builder.AppendLine("[global::System.CodeDom.Compiler.GeneratedCode(\"StaticNorth.Valiant.Endpoints.AspNetCore.SourceGeneration\", \"1\")]");
+        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 1, binding.NamespaceName);
         builder.Append("public static bool TryParse(string value, out ")
             .Append(binding.Type)
-            .AppendLine(" result)");
+            .AppendLine(asParameters && !binding.IsValueType ? "? result)" : " result)");
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 1, binding.NamespaceName);
         builder.AppendLine("{");
 
-        if (!binding.EnableJsonQueryValues)
+        if (asParameters && !useStrictBinding)
         {
-            ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-            builder.AppendLine("result = default!;");
-            ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-            builder.AppendLine("throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"JSON query values are disabled for this endpoint.\", global::Microsoft.AspNetCore.Http.StatusCodes.Status400BadRequest);");
-            ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 1, binding.NamespaceName);
-            builder.AppendLine("}");
-            ValiantSourceBuilder.AppendIndent(builder, containingTypeCount, binding.NamespaceName);
-            builder.AppendLine("}");
-
-            ValiantSourceBuilder.AppendContainingTypeClosures(builder, binding.NamespaceName, containingTypeCount);
-
-            if (binding.NamespaceName is not null)
-            {
-                builder.AppendLine("}");
-            }
-
-            return builder.ToString();
+            AppendQueryParserLine("result = default;");
+            AppendQueryParserLine("return true;");
         }
-
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("try");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("{");
-
-        if (binding.IsValueType)
+        else if (!binding.EnableJsonQueryValues)
         {
-            ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 3, binding.NamespaceName);
-            builder.Append("result = global::System.Text.Json.JsonSerializer.Deserialize<")
-                .Append(binding.Type)
-                .AppendLine(">(value, __valiantQueryObjectJsonSerializerOptions)!;");
-            ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 3, binding.NamespaceName);
-            builder.AppendLine("return true;");
+            AppendQueryParserLine("result = default!;");
+            AppendQueryParserLine(useStrictBinding ? "return false;" :
+                "throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"JSON query values are disabled for this endpoint.\", global::Microsoft.AspNetCore.Http.StatusCodes.Status400BadRequest);");
         }
         else
         {
-            ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 3, binding.NamespaceName);
-            builder.Append("result = global::System.Text.Json.JsonSerializer.Deserialize<")
-                .Append(binding.Type)
-                .AppendLine(">(value, __valiantQueryObjectJsonSerializerOptions)!;");
-            ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 3, binding.NamespaceName);
-            builder.AppendLine("return result is not null;");
+            if (useStrictBinding)
+            {
+                AppendQueryParserLine("if (string.IsNullOrEmpty(value))");
+                AppendQueryParserLine("{");
+                AppendQueryParserLine("    result = default!;");
+                AppendQueryParserLine("    return false;");
+                AppendQueryParserLine("}");
+                builder.AppendLine();
+            }
+
+            AppendQueryParserLine("try");
+            AppendQueryParserLine("{");
+            AppendQueryParserLine($"    result = global::System.Text.Json.JsonSerializer.Deserialize<{binding.Type}>(value, {binding.JsonOptionsField})!;");
+            AppendQueryParserLine(binding.IsValueType ? "    return true;" : "    return result is not null;");
+            AppendQueryParserLine("}");
+            AppendQueryParserLine(useStrictBinding
+                ? "catch (global::System.Exception exception) when (exception is global::System.Text.Json.JsonException or global::System.NotSupportedException)"
+                : "catch (global::System.Exception)");
+            AppendQueryParserLine("{");
+            AppendQueryParserLine("    result = default!;");
+            AppendQueryParserLine(useStrictBinding ? "    return false;" :
+                "    throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"The query value is not valid JSON for this parameter.\", global::Microsoft.AspNetCore.Http.StatusCodes.Status400BadRequest);");
+            AppendQueryParserLine("}");
         }
 
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("}");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("catch (global::System.Exception)");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("{");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 3, binding.NamespaceName);
-        builder.AppendLine("result = default!;");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 3, binding.NamespaceName);
-        builder.AppendLine("throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"The query value is not valid JSON for this parameter.\", global::Microsoft.AspNetCore.Http.StatusCodes.Status400BadRequest);");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("}");
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 1, binding.NamespaceName);
         builder.AppendLine("}");
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount, binding.NamespaceName);
@@ -1976,6 +2065,12 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         }
 
         return builder.ToString();
+
+        void AppendQueryParserLine(string line)
+        {
+            ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
+            builder.AppendLine(line);
+        }
     }
 
     private static string GenerateQueryRequestBinding(QueryObjectBindingModel binding)
@@ -2016,27 +2111,9 @@ public sealed class ValiantEndpointGenerator : IIncrementalGenerator
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 1, binding.NamespaceName);
         builder.AppendLine("{");
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("global::System.ArgumentNullException.ThrowIfNull(context);");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("var parsingOptions = global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ResolveQueryParsingOptions(context);");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.Append("var result = global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryStringParser.Parse<")
+        builder.Append("return global::System.Threading.Tasks.ValueTask.FromResult(global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.BindQueryRequest<")
             .Append(binding.Type)
-            .AppendLine(">(context.Request.QueryString.Value, parsingOptions);");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("if (!result.IsSuccess)");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("{");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 3, binding.NamespaceName);
-        builder.AppendLine("var message = result.Errors.Count > 0 ? result.Errors[0].Message : \"The query string could not be bound to this request.\";");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 3, binding.NamespaceName);
-        builder.AppendLine("throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(message, global::Microsoft.AspNetCore.Http.StatusCodes.Status400BadRequest);");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.AppendLine("}");
-        ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 2, binding.NamespaceName);
-        builder.Append("return global::System.Threading.Tasks.ValueTask.FromResult<")
-            .Append(binding.Type)
-            .AppendLine(">(result.Value!);");
+            .AppendLine(">(context));");
         ValiantSourceBuilder.AppendIndent(builder, containingTypeCount + 1, binding.NamespaceName);
         builder.AppendLine("}");
 

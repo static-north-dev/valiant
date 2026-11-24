@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../SensitiveSettingsNames.cs" Link="SensitiveSettingsNames.cs" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
     <Compile Include="../../../shared/src/StaticNorth.Valiant.SourceGeneration/*.cs" LinkBase="Shared" />
   </ItemGroup>

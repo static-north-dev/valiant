@@ -1,7 +1,7 @@
 namespace StaticNorth.Valiant.Mapping;
 
 /// <summary>
-/// Configures behavior captured when a generated Valiant mapper is constructed.
+/// Configures Valiant mapper registration and behavior.
 /// </summary>
 /// <remarks>
 /// Configure these options during application startup. Existing mapper instances retain the values
@@ -18,4 +18,14 @@ public sealed class ValiantMappingOptions
     /// Gets or sets how generated mappers handle null source values.
     /// </summary>
     public ValiantNullHandling NullHandling { get; set; } = ValiantNullHandling.MapNulls;
+
+    /// <summary>
+    /// Gets or sets whether generated registration uses scoped lifetimes for
+    /// <see cref="IMapper"/> and <see cref="IMapperFactory"/>. The default is singleton.
+    /// </summary>
+    /// <remarks>
+    /// Set this on the first generated registration call when the lookup must resolve
+    /// mappers with scoped dependencies.
+    /// </remarks>
+    public bool UseScopedMapperLookup { get; set; }
 }

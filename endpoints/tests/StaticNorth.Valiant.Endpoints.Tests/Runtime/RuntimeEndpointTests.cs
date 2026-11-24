@@ -369,7 +369,7 @@ public sealed partial class RuntimeEndpointTests
         await Assert.That(observed.Order).IsEqualTo(0);
         await Assert.That(observed.Group.Order).IsEqualTo(0);
         await Assert.That(observed.QueryParameters.IsBindingGenerated).IsTrue();
-        await Assert.That(observed.QueryParameters.IsRuntimeBindingEnabled).IsFalse();
+        await Assert.That(observed.QueryParameters.IsRuntimeBindingEnabled).IsTrue();
 
         var firstSnapshot = observed.QueryParameters.PreMappingParsingOptions;
         firstSnapshot.SupportedArrayFormats[0] = QueryArrayFormat.CommaSeparated;
@@ -867,12 +867,17 @@ public sealed partial class RuntimeEndpointTests
     {
         var builder = new TestEndpointRouteBuilder(new ServiceCollection().BuildServiceProvider());
         var first = new QueryParsingOptions { EnableJsonQueryValues = true };
-        var last = new QueryParsingOptions { EnableJsonQueryValues = false };
+        var last = new QueryParsingOptions
+        {
+            SupportedArrayFormats = [QueryArrayFormat.CommaSeparated],
+            EnableJsonQueryValues = false
+        };
         var convention = builder.MapGet("/query-options", () => Results.Ok());
 
         var result = convention
             .WithQueryParsingOptions(first)
             .WithQueryParsingOptions(last);
+        last.SupportedArrayFormats[0] = QueryArrayFormat.Brackets;
         var endpoint = builder.DataSources
             .SelectMany(static dataSource => dataSource.Endpoints)
             .Single();
@@ -884,8 +889,9 @@ public sealed partial class RuntimeEndpointTests
         context.SetEndpoint(endpoint);
 
         await Assert.That(result).IsSameReferenceAs(convention);
-        await Assert.That(ValiantEndpointGeneratedCode.ResolveQueryParsingOptions(context))
-            .IsSameReferenceAs(last);
+        var resolved = ValiantEndpointGeneratedCode.ResolveQueryParsingOptions(context);
+        await Assert.That(resolved.EnableJsonQueryValues).IsFalse();
+        await Assert.That(resolved.SupportedArrayFormats.Single()).IsEqualTo(QueryArrayFormat.CommaSeparated);
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
             Task.FromResult(ValiantEndpointRouteBuilderExtensions.WithQueryParsingOptions(null!, first)));
         await Assert.ThrowsAsync<ArgumentNullException>(() =>

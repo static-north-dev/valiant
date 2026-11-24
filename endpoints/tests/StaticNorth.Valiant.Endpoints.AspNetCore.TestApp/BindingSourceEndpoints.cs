@@ -29,7 +29,7 @@ public sealed record AsParametersBindingSourceRequest
     [FromQuery(Name = "id")]
     public int Id { get; init; }
 
-    [FromQuery(Name = "name")]
+    [FromQuery(Name = "display-name")]
     public string? Name { get; init; }
 }
 

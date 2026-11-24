@@ -29,7 +29,6 @@ builder.Services.AddValiantEndpoints(options =>
     options.ConfigureEndpointGroup = (group, registration) =>
     {
         group.AddEndpointFilter<ExceptionHandlingFilter>();
-        group.WithOpenApi();
     };
 
     options.ConfigureEndpoint = (endpoint, registration) =>
@@ -53,15 +52,6 @@ See the
 [runnable configuration sample](../samples.md#configuration-hooks)
 for two grouped routes where a group hook adds a shared response header and an endpoint hook adds a second header only to the selected endpoint.
 
-## Migrating the earlier preview hooks
-
-The earlier preview exposed three callbacks. Consolidate them as follows:
-
-- Move both `ConfigureAllEndpointGroupsBeforeMapping` and `ConfigureAllEndpointGroupsAfterMapping` conventions into `ConfigureEndpointGroup`.
-- Replace `ConfigureAllEndpointsAfterMapping` with `ConfigureEndpoint`.
-- Replace callback `Type` parameters with `registration.GroupType` or `registration.EndpointType`.
-- Move any callback that returned `group.MapGroup(...)` into `IEndpointGroup.CreateGroup(...)`.
-
 ## Ordering
 
 Set `Order` on endpoint and group marker attributes when one generated mapping must precede another:
@@ -71,8 +61,12 @@ Set `Order` on endpoint and group marker attributes when one generated mapping m
 internal sealed class SearchOrdersEndpoint : IEndpoint { /* ... */ }
 ```
 
-Types with the same order are sorted by type name, keeping generated output deterministic.
+Within each registered assembly, Valiant creates the groups first. On .NET 11 and later targets, it then sorts grouped and standalone endpoints together by `Order` and type name. On earlier targets, it keeps the 1.2.1 order and maps the grouped endpoints before the standalone endpoints.
+
+Set `options.OrderEndpointsAcrossGroups` in `AddValiantEndpoints` to override the target's default. This setting controls the order of startup callbacks. Use ASP.NET Core's `.WithOrder()` to set route matching priority.
 
 ## Standalone endpoints
 
 `[ValiantEndpoint]` without a group maps directly on the supplied root route builder. The same `ConfigureEndpoint` hook and `MapEndpointWhen` registration policy apply; its registration has `Group == null`.
+
+See [Upgrading Endpoints from preview](./upgrading-from-preview.md) for the earlier convention hooks.

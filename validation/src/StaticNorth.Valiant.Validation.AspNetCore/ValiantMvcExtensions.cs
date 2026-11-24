@@ -61,11 +61,6 @@ internal sealed class ValiantModelValidatorProvider : IModelValidatorProvider
         _ = context ?? throw new ArgumentNullException(nameof(context));
 
         var modelType = context.ModelMetadata.ModelType;
-        if (modelType == typeof(string) || modelType.IsValueType)
-        {
-            return;
-        }
-
         context.Results.Add(new ValidatorItem
         {
             IsReusable = true,

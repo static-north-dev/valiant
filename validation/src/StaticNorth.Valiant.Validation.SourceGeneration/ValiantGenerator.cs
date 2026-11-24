@@ -175,11 +175,13 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
                     .Collect())
             .Select(static (tuple, _) => tuple.Left.AddRange(tuple.Right));
 
-        var hasDependencyInjection = context.CompilationProvider
-            .Select(static (compilation, _) => ValiantDependencyInjectionSymbols.HasDependencyInjection(compilation));
+        var dependencyInjectionAssembly = context.CompilationProvider
+            .Select(static (compilation, _) => ValiantDependencyInjectionSymbols.HasDependencyInjection(compilation)
+                ? compilation.AssemblyName ?? string.Empty
+                : null);
 
         context.RegisterSourceOutput(
-            hasDependencyInjection
+            dependencyInjectionAssembly
                 .Combine(dependencyInjectionValidators.Combine(dependencyInjectionPropertyValidators))
                 .WithTrackingName("Validation.DependencyInjection"),
             static (context, tuple) => ExecuteDependencyInjection(context, tuple.Left, tuple.Right.Left, tuple.Right.Right));
@@ -466,7 +468,7 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
         }
 
         var configureMethodName = GetConfigureMethodName(attribute);
-        var methodSyntax = FindConfigureMethod(validatorSymbol, configureMethodName, cancellationToken);
+        var methodSyntax = FindConfigureMethod(validatorSymbol, modelType, configureMethodName, cancellationToken);
         if (methodSyntax is null)
         {
             var usings = CollectUsings(classSyntax);
@@ -539,14 +541,29 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
         }
 
         var nodes = ImmutableArray.CreateBuilder<ValidationNode>();
+        var generateSimpleFluent = false;
         if (methodSyntax.ParameterList.Parameters.Count == 1)
         {
             var semanticModel = context.SemanticModel.Compilation.GetSemanticModel(methodSyntax.SyntaxTree);
             var parameterName = methodSyntax.ParameterList.Parameters[0].Identifier.ValueText;
 
-            if (methodSyntax.Body is not null)
+            if (semanticModel.GetDeclaredSymbol(methodSyntax, cancellationToken) is IMethodSymbol method &&
+                !HasConfigureParameter(method, modelType))
+            {
+                diagnostics.Add(new DiagnosticInfo(
+                    UnsupportedValidationDeclaration,
+                    methodSyntax.Identifier.GetLocation(),
+                    $"Configure method '{configureMethodName}' must accept a ValidationContext for the validator's model type."));
+            }
+            else if (methodSyntax.Body is not null)
             {
                 ParseStatements(methodSyntax.Body.Statements, ParseScope.Root(parameterName), semanticModel, cancellationToken, nodes, diagnostics);
+                AnalyzeValidationSuggestions(nodes, diagnostics);
+                generateSimpleFluent = CanGenerateSimpleFluentValidator(validatorSymbol, modelType, methodSyntax, semanticModel, nodes, cancellationToken);
+            }
+            else if (methodSyntax.ExpressionBody?.Expression is InvocationExpressionSyntax invocation)
+            {
+                ParseInvocation(invocation, ParseScope.Root(parameterName), semanticModel, cancellationToken, nodes, diagnostics);
                 AnalyzeValidationSuggestions(nodes, diagnostics);
             }
             else if (methodSyntax.ExpressionBody?.Expression is IdentifierNameSyntax identifier &&
@@ -581,7 +598,8 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
             finalUsings,
             finalNodes,
             finalDiagnostics,
-            CreateValidatorFingerprint(declaration, finalModelTypeName, finalMetadataModelTypeName, modelType.IsValueType, inheritsValidatorBase, implementsValidatorDefinition, true, registerAsDefault, configureMethodName, finalUsings, finalNodes, finalDiagnostics));
+            CreateValidatorFingerprint(declaration, finalModelTypeName, finalMetadataModelTypeName, modelType.IsValueType, inheritsValidatorBase, implementsValidatorDefinition, true, registerAsDefault, configureMethodName, finalUsings, finalNodes, finalDiagnostics, generateSimpleFluent),
+            generateSimpleFluent);
     }
 
     private static ValidatorDeclarationModel CreateValidatorDeclarationModel(INamedTypeSymbol validatorSymbol, Location? location)
@@ -611,7 +629,8 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
             {
                 parameters.Add(new ConstructorParameterModel(
                     parameter.Type.ToDisplayString(TypeDisplayFormat),
-                    parameter.Name));
+                    parameter.Name,
+                    parameter.RefKind));
             }
 
             constructorModel = new ConstructorModel(parameters.ToImmutable());
@@ -635,6 +654,7 @@ public sealed partial class ValiantGenerator : IIncrementalGenerator
             metadataProviderType,
             containingTypes.ToImmutable(),
             location,
-            constructorModel);
+            constructorModel,
+            validatorSymbol.InstanceConstructors.Any(CanActivateConstructor));
     }
 }

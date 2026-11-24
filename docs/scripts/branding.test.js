@@ -15,6 +15,7 @@ test('the Valiant mark brands the navbar and favicon', () => {
   assert.equal(config.favicon, logo.src);
   assert.deepEqual(config.themeConfig.navbar.logo, logo);
   assert.equal(config.themeConfig.navbar.title, 'Valiant');
-  assert.equal(config.themeConfig.navbar.items.length, 5);
+  assert.ok(config.themeConfig.navbar.items.some((item) => item.to === '/search'));
+  assert.ok(config.themeConfig.navbar.items.some((item) => item.href === 'https://github.com/static-north-dev/valiant'));
   assert.ok(fs.statSync(path.join(docsRoot, 'static', logo.src)).size > 0);
 });
