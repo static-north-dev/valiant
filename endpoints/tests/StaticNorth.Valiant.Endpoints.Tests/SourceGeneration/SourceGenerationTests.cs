@@ -15,6 +15,164 @@ namespace StaticNorth.Valiant.Endpoints.Tests.SourceGeneration;
 public sealed class SourceGenerationTests
 {
     [Test]
+    public async Task Endpoint_And_Group_Record_Classes_Are_Registered()
+    {
+        var result = RunGenerator(
+            """
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+            [ValiantEndpointGroup]
+            public sealed record Group : IEndpointGroup
+            {
+                public static RouteGroupBuilder CreateGroup(IEndpointRouteBuilder builder) => builder.MapGroup("/group");
+            }
+
+            [ValiantEndpoint<Group>]
+            public sealed record SearchEndpoint : IEndpoint
+            {
+                public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) =>
+                    builder.MapGet("/search", () => "ok");
+            }
+            """);
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var generated = GetGeneratedSource(result);
+        await Assert.That(generated).Contains("MapEndpointGroup<global::Group>");
+        await Assert.That(generated).Contains("MapEndpoint<global::SearchEndpoint>");
+    }
+
+    [Test]
+    [Arguments("file sealed class SearchEndpoint")]
+    [Arguments("public sealed class SearchEndpoint<T>")]
+    public async Task Registration_Reports_An_Unreferenceable_Endpoint_Type(string declaration)
+    {
+        var result = RunGenerator(
+            $$"""
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+            [ValiantEndpoint]
+            {{declaration}} : IEndpoint
+            {
+                public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) => throw null!;
+            }
+            """);
+
+        await Assert.That(result.Diagnostics.Single().Id).IsEqualTo("VLE012");
+        await Assert.That(result.GeneratedSources).IsEmpty();
+    }
+
+    [Test]
+    public async Task Endpoint_Explicit_Map_Implementation_Is_Analyzed()
+    {
+        var result = RunGenerator(
+            """
+            using Microsoft.AspNetCore.Mvc;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+            [ValiantEndpoint]
+            public sealed class SearchEndpoint : IEndpoint
+            {
+                static IEndpointConventionBuilder IEndpoint.Map(IEndpointRouteBuilder builder) =>
+                    builder.MapGet("/search", (SearchRequest request) => request.Term);
+            }
+
+            public sealed partial class SearchRequest
+            {
+                [FromQuery]
+                public string? Term { get; init; }
+            }
+            """);
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(GetGeneratedSource(result, "SearchRequest.QueryRequest.g.cs")).Contains("BindAsync(");
+    }
+
+    [Test]
+    public async Task Unrelated_BindAsync_Overload_Does_Not_Suppress_Query_Binding()
+    {
+        var result = RunGenerator(
+            """
+            using Microsoft.AspNetCore.Mvc;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+            [ValiantEndpoint]
+            public sealed class SearchEndpoint : IEndpoint
+            {
+                public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) =>
+                    builder.MapGet("/search", (SearchRequest request) => request.Term);
+            }
+
+            public sealed partial class SearchRequest
+            {
+                [FromQuery]
+                public string? Term { get; init; }
+
+                public static void BindAsync(int value) { }
+            }
+            """);
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(GetGeneratedSource(result, "SearchRequest.QueryRequest.g.cs")).Contains("BindAsync(");
+    }
+
+    [Test]
+    public async Task File_Local_Query_Model_Receives_A_Source_Diagnostic()
+    {
+        var result = RunGenerator(
+            """
+            using Microsoft.AspNetCore.Mvc;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+            [ValiantEndpoint]
+            public sealed class SearchEndpoint : IEndpoint
+            {
+                public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) =>
+                    builder.MapGet("/search", ([FromQuery] SearchRequest request) => request.Term);
+            }
+
+            file sealed partial class SearchRequest
+            {
+                public string? Term { get; init; }
+            }
+            """);
+
+        await Assert.That(result.Diagnostics.Single().Id).IsEqualTo("VLE010");
+        await Assert.That(result.Diagnostics.Single().GetMessage()).Contains("file-local");
+    }
+
+    [Test]
+    public async Task Generated_Query_Parser_Options_Field_Does_Not_Clash_With_Authored_Members()
+    {
+        var result = RunGenerator(
+            """
+            using Microsoft.AspNetCore.Mvc;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
+
+            [ValiantEndpoint]
+            public sealed class SearchEndpoint : IEndpoint
+            {
+                public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder) =>
+                    builder.MapGet("/search", ([FromQuery] SearchRequest request) => request);
+            }
+
+            public sealed partial class SearchRequest
+            {
+                public int __valiantQueryObjectJsonSerializerOptions { get; init; }
+            }
+            """);
+
+        var generated = GetGeneratedSource(result, "SearchRequest.QueryObject.g.cs");
+        await Assert.That(generated).Contains("__valiantQueryObjectJsonSerializerOptions_ = new");
+        await Assert.That(generated).Contains("(value, __valiantQueryObjectJsonSerializerOptions_)");
+    }
+
+    [Test]
     public async Task Standalone_Endpoint_Maps_At_Root()
     {
         var result = RunGenerator(
@@ -243,7 +401,9 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
-    public async Task Valiant_Endpoint_Generates_Query_Object_TryParse_Shim_For_AsParameters_Request_Property()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Valiant_Endpoint_Generates_Query_Object_TryParse_Shim_For_AsParameters_Request_Property(bool useStrictBinding)
     {
         var result = RunGenerator(
             """
@@ -273,16 +433,24 @@ public sealed class SourceGenerationTests
                 public string? Category { get; init; }
                 public int? Limit { get; init; }
             }
-            """);
+            """, useStrictBinding: useStrictBinding);
 
         var generated = GetGeneratedSource(result, "FacetRequest.QueryObject.g.cs");
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated).Contains("public static bool TryParse(string value, out global::FacetRequest? result)");
-        await Assert.That(generated).Contains("Compatibility shim for ASP.NET Core [AsParameters] property binding.");
-        await Assert.That(generated).Contains("result = default;");
-        await Assert.That(generated).Contains("return true;");
-        await Assert.That(generated).DoesNotContain("JsonSerializer.Deserialize");
+        if (useStrictBinding)
+        {
+            await Assert.That(generated).Contains("JsonSerializer.Deserialize");
+            await Assert.That(generated).Contains("return result is not null;");
+            await Assert.That(generated).Contains("return false;");
+        }
+        else
+        {
+            await Assert.That(generated).Contains("result = default;");
+            await Assert.That(generated).Contains("return true;");
+            await Assert.That(generated).DoesNotContain("JsonSerializer.Deserialize");
+        }
     }
 
     [Test]
@@ -380,7 +548,7 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated).Contains("result = default!;");
-        await Assert.That(generated).Contains("throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException");
+        await Assert.That(generated).Contains("return false;");
         await Assert.That(generated).DoesNotContain("JsonSerializer");
     }
 
@@ -652,8 +820,8 @@ public sealed class SourceGenerationTests
         var generated = GetGeneratedSource(result, "SharedRequest.QueryObject.g.cs");
 
         await Assert.That(result.Diagnostics.Select(static diagnostic => diagnostic.Id)).DoesNotContain("VLE011");
-        await Assert.That(generated).Contains("throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException");
-        await Assert.That(generated).DoesNotContain("Compatibility shim");
+        await Assert.That(generated).Contains("return false;");
+        await Assert.That(generated).DoesNotContain("return true;");
     }
 
     [Test]
@@ -691,8 +859,7 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated).Contains("public static global::System.Threading.Tasks.ValueTask<global::SearchEndpoint.SearchRequest> BindAsync(global::Microsoft.AspNetCore.Http.HttpContext context, global::System.Reflection.ParameterInfo parameter)");
-        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.ResolveQueryParsingOptions(context)");
-        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryStringParser.Parse<global::SearchEndpoint.SearchRequest>");
+        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.BindQueryRequest<global::SearchEndpoint.SearchRequest>");
     }
 
     [Test]
@@ -1008,7 +1175,7 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated).Contains("public static global::System.Threading.Tasks.ValueTask<global::ListCarsEndpoint.Request> BindAsync(global::Microsoft.AspNetCore.Http.HttpContext context, global::System.Reflection.ParameterInfo parameter)");
-        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.QueryStringParser.Parse<global::ListCarsEndpoint.Request>");
+        await Assert.That(generated).Contains("global::StaticNorth.Valiant.Endpoints.AspNetCore.Infrastructure.ValiantEndpointGeneratedCode.BindQueryRequest<global::ListCarsEndpoint.Request>");
     }
 
     [Test]
@@ -1371,6 +1538,10 @@ public sealed class SourceGenerationTests
         await Assert.That(generated.IndexOf("MapEndpointGroup<global::GroupB>", StringComparison.Ordinal)).IsLessThan(generated.IndexOf("MapEndpointGroup<global::GroupA>", StringComparison.Ordinal));
         await Assert.That(generated.IndexOf("MapEndpoint<global::EndpointB>(group0,", StringComparison.Ordinal)).IsLessThan(generated.IndexOf("MapEndpoint<global::EndpointA>(group1,", StringComparison.Ordinal));
         await Assert.That(generated.IndexOf("MapEndpoint<global::RootB>(builder,", StringComparison.Ordinal)).IsLessThan(generated.IndexOf("MapEndpoint<global::RootA>(builder,", StringComparison.Ordinal));
+        await Assert.That(generated.IndexOf("MapEndpoint<global::RootB>(builder,", StringComparison.Ordinal)).IsLessThan(generated.IndexOf("MapEndpoint<global::EndpointA>(group1,", StringComparison.Ordinal));
+        await Assert.That(generated).Contains("ValiantEndpointGeneratedCode.OrderEndpointsAcrossGroups(builder)");
+        await Assert.That(generated).Contains("MapEndpoint2();" + Environment.NewLine + "                MapEndpoint3();");
+        await Assert.That(generated).Contains("MapEndpoint2();" + Environment.NewLine + "                MapEndpoint4();");
     }
 
     [Test]
@@ -1631,8 +1802,16 @@ public sealed class SourceGenerationTests
         const string source = """
             using Microsoft.AspNetCore.Builder;
             using Microsoft.AspNetCore.Routing;
+            using Microsoft.Extensions.DependencyInjection;
             using StaticNorth.Valiant.Endpoints;
             using StaticNorth.Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
+
+            public static class Configuration
+            {
+                public static void Configure(IServiceCollection services)
+                    => services.AddValiantEndpoints(options => options.QueryParameters.EnableBinding = true);
+            }
 
             [ValiantEndpoint]
             [ValiantQueryParsing(SupportedArrayFormats = [ARRAY_FORMAT])]
@@ -1648,6 +1827,110 @@ public sealed class SourceGenerationTests
             "Endpoints.Endpoint");
 
         await Assert.That(reasons).Contains(IncrementalStepRunReason.Modified);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Query_Binding_Toggle_Reanalyzes_Named_Handlers_Using_The_Same_Driver(bool useAssemblyAttribute)
+    {
+        const string source = """
+            using Microsoft.AspNetCore.Builder;
+            using Microsoft.AspNetCore.Mvc;
+            using Microsoft.AspNetCore.Routing;
+            using Microsoft.Extensions.DependencyInjection;
+            using StaticNorth.Valiant.Endpoints;
+            using StaticNorth.Valiant.Endpoints.AspNetCore;
+            using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
+
+            public static class EndpointConfiguration
+            {
+                public static void Configure(IServiceCollection services)
+                    => services.AddValiantEndpoints(options => options.QueryParameters.EnableBinding = false);
+            }
+
+            [ValiantEndpoint]
+            public sealed class Search : IEndpoint
+            {
+                public static IEndpointConventionBuilder Map(IEndpointRouteBuilder builder)
+                {
+                    builder.MapGet("/search/whole", NamedHandlers.HandleWhole);
+                    builder.MapGet("/search/parameters", NamedHandlers.HandleParameters);
+                    return builder.MapGet("/search", NamedHandlers.Handle);
+                }
+            }
+
+            public sealed partial class Filter
+            {
+                public int Id { get; set; }
+            }
+            """;
+        const string handler = """
+            using Microsoft.AspNetCore.Http;
+            using Microsoft.AspNetCore.Mvc;
+            public static class NamedHandlers
+            {
+                public static int Handle([FromQuery] Filter filter) => filter.Id;
+                public static int HandleWhole(WholeRequest request) => request.Id;
+                public static int HandleParameters([AsParameters] QueryParameters request) => request.Value?.Id ?? 0;
+            }
+            public sealed partial class WholeRequest { [FromQuery] public int Id { get; set; } }
+            public sealed class QueryParameters { [FromQuery] public ParameterFilter? Value { get; set; } }
+            public sealed partial class ParameterFilter { public int Id { get; set; } }
+            """;
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var references = GetTrustedPlatformReferences()
+            .Add(MetadataReference.CreateFromFile(typeof(ValiantEndpointAttribute).Assembly.Location))
+            .Add(MetadataReference.CreateFromFile(typeof(IEndpoint).Assembly.Location));
+        var disabled = CSharpSyntaxTree.ParseText(source, parseOptions, "Endpoints.cs");
+        var enabled = CSharpSyntaxTree.ParseText(
+            useAssemblyAttribute
+                ? source.Replace("public static class EndpointConfiguration", "[assembly: ValiantGenerateQueryBinding]\npublic static class EndpointConfiguration", StringComparison.Ordinal)
+                : source.Replace("EnableBinding = false", "EnableBinding = true", StringComparison.Ordinal),
+            parseOptions,
+            "Endpoints.cs");
+        var handlerTree = CSharpSyntaxTree.ParseText(handler, parseOptions, "NamedHandlers.cs");
+        var compilation = CSharpCompilation.Create("QueryBindingToggle", [disabled, handlerTree], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            [new ValiantEndpointGenerator().AsSourceGenerator()],
+            parseOptions: parseOptions,
+            driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
+
+        foreach (var enabledForBuild in new[] { false, true, false, true })
+        {
+            compilation = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.First(), enabledForBuild ? enabled : disabled);
+            driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+            await Assert.That(diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+            await Assert.That(output.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)).IsEmpty();
+            var generated = driver.GetRunResult().Results.Single().GeneratedSources;
+            await Assert.That(generated.Any(static file => file.HintName == "Filter.QueryObject.g.cs")).IsEqualTo(enabledForBuild);
+            await Assert.That(generated.Any(static file => file.HintName == "WholeRequest.QueryRequest.g.cs")).IsEqualTo(enabledForBuild);
+            await Assert.That(generated.Any(static file => file.HintName == "ParameterFilter.QueryObject.g.cs")).IsEqualTo(enabledForBuild);
+            await Assert.That(generated.Any(static file => file.HintName.StartsWith("StaticNorth.Valiant.Endpoints.AspNetCore.", StringComparison.Ordinal))).IsTrue();
+        }
+
+        if (useAssemblyAttribute)
+        {
+            var unrelated = CSharpSyntaxTree.ParseText("public class Unrelated { }", parseOptions, "Unrelated.cs");
+            compilation = compilation.AddSyntaxTrees(unrelated);
+            driver = driver.RunGenerators(compilation);
+            var reasons = driver.GetRunResult().Results.Single().TrackedSteps["Endpoints.AnalyzedQueryCandidates"]
+                .SelectMany(static step => step.Outputs)
+                .Select(static output => output.Reason)
+                .ToArray();
+            await Assert.That(reasons).IsNotEmpty();
+            await Assert.That(reasons.All(static reason => reason == IncrementalStepRunReason.Cached)).IsTrue();
+
+            var updatedHandler = CSharpSyntaxTree.ParseText(
+                handler.Replace("Handle([FromQuery] Filter filter) => filter.Id;", "Handle() => 1;", StringComparison.Ordinal),
+                parseOptions,
+                "NamedHandlers.cs");
+            driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(handlerTree, updatedHandler));
+            var generated = driver.GetRunResult().Results.Single().GeneratedSources;
+            await Assert.That(generated.Any(static file => file.HintName == "Filter.QueryObject.g.cs")).IsFalse();
+            await Assert.That(generated.Any(static file => file.HintName == "WholeRequest.QueryRequest.g.cs")).IsTrue();
+        }
     }
 
     [Test]
@@ -1720,7 +2003,7 @@ public sealed class SourceGenerationTests
         return result.GeneratedSources.Single(source => source.HintName == hintName).SourceText.ToString();
     }
 
-    private static SourceGenerationResult RunGenerator(string source, bool enableQueryBinding = true)
+    private static SourceGenerationResult RunGenerator(string source, bool enableQueryBinding = true, bool? useStrictBinding = null)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var sourceWithUsings =
@@ -1759,6 +2042,12 @@ public sealed class SourceGenerationTests
             parseOptions,
             references,
             "StaticNorth.Valiant.Endpoints.SourceGeneration.Tests");
+        if (useStrictBinding is { } strict)
+        {
+            compilation = compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(
+                $"[assembly: StaticNorth.Valiant.Endpoints.AspNetCore.ValiantGenerateQueryBinding(UseStrictBinding = {(strict ? "true" : "false")})]", parseOptions));
+        }
+
         var execution = GeneratorTestHarness.Run(new ValiantEndpointGenerator(), compilation, parseOptions);
         var analyzerDiagnostics = execution.OutputCompilation
             .WithAnalyzers([new ValiantEndpointDeclarationAnalyzer()])

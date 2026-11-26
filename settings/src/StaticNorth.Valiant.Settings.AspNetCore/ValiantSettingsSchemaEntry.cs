@@ -37,6 +37,12 @@ public sealed class ValiantSettingsSchemaEntry
     public string TypeName { get; }
 
     /// <summary>
+    /// Gets the assembly identity of the settings model.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AssemblyName { get; init; }
+
+    /// <summary>
     /// Gets the configuration section path, when one was declared.
     /// </summary>
     public string? SectionPath { get; }

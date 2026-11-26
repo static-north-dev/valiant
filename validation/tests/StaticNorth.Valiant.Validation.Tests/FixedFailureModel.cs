@@ -6,14 +6,19 @@ public sealed class FixedFailureModel
 
     public int ReadCount { get; private set; }
 
+    [GreaterThan(0)]
     public int A => Read(1);
 
+    [GreaterThan(0)]
     public int B => Read(2);
 
+    [GreaterThan(0)]
     public int C => Read(4);
 
+    [GreaterThan(0)]
     public int D => Read(8);
 
+    [GreaterThan(0)]
     public int E => Read(16);
 
     private int Read(int bit)

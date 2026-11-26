@@ -22,7 +22,8 @@ public sealed partial class ValiantGenerator
         string configureMethodName,
         ImmutableArray<string> usings,
         ImmutableArray<ValidationNode> nodes,
-        ImmutableArray<DiagnosticInfo> diagnostics)
+        ImmutableArray<DiagnosticInfo> diagnostics,
+        bool generateSimpleFluent = false)
     {
         var builder = new StringBuilder();
         AppendFingerprintValue(builder, declaration.HintName);
@@ -32,6 +33,7 @@ public sealed partial class ValiantGenerator
         AppendFingerprintValue(builder, declaration.Modifier);
         AppendFingerprintValue(builder, declaration.MetadataProviderType);
         AppendFingerprintValue(builder, declaration.Location.ToString());
+        AppendFingerprintValue(builder, declaration.CanActivate ? "public-constructor" : "non-public-constructor");
         foreach (var containingType in declaration.ContainingTypes)
         {
             AppendFingerprintValue(builder, containingType.Modifier);
@@ -45,6 +47,7 @@ public sealed partial class ValiantGenerator
             {
                 AppendFingerprintValue(builder, parameter.Type);
                 AppendFingerprintValue(builder, parameter.Name);
+                AppendFingerprintValue(builder, parameter.RefKind.ToString());
             }
         }
 
@@ -54,6 +57,7 @@ public sealed partial class ValiantGenerator
         AppendFingerprintValue(builder, inheritsValidatorBase ? "base" : "no-base");
         AppendFingerprintValue(builder, implementsValidatorDefinition ? "definition" : "no-definition");
         AppendFingerprintValue(builder, hasConfigureMethod ? "configure" : "no-configure");
+        AppendFingerprintValue(builder, generateSimpleFluent ? "simple-fluent" : null);
         AppendFingerprintValue(builder, registerAsDefault ? "default" : "non-default");
         AppendFingerprintValue(builder, configureMethodName);
         foreach (var usingDirective in usings)
@@ -101,6 +105,7 @@ public sealed partial class ValiantGenerator
                 case SwitchNode switchNode:
                     AppendFingerprintValue(builder, "switch");
                     AppendFingerprintValue(builder, switchNode.Expression);
+                    AppendFingerprintValue(builder, switchNode.Label);
                     foreach (var section in switchNode.Sections)
                     {
                         AppendFingerprintValues(builder, section.Labels);
@@ -113,11 +118,13 @@ public sealed partial class ValiantGenerator
                     AppendFingerprintValue(builder, loopNode.Kind);
                     AppendFingerprintValue(builder, loopNode.Header);
                     AppendFingerprintValue(builder, loopNode.Condition);
+                    AppendFingerprintValue(builder, loopNode.Label);
                     AppendValidationNodesFingerprint(builder, loopNode.Nodes);
                     break;
                 case FlowControlNode flowControlNode:
                     AppendFingerprintValue(builder, "flow");
                     AppendFingerprintValue(builder, flowControlNode.Kind);
+                    AppendFingerprintValue(builder, flowControlNode.Label);
                     break;
                 case FailureBehaviorNode failureBehaviorNode:
                     AppendFingerprintValue(builder, "failure");

@@ -131,7 +131,8 @@ public sealed partial class ValiantMappingGenerator
         bool usesServiceProviderMapper,
         ConstructorMappingModel constructor,
         ImmutableArray<MemberAssignmentModel> assignments,
-        ImmutableArray<CollectionMappingModel> collectionMappings)
+        ImmutableArray<CollectionMappingModel> collectionMappings,
+        ImmutableArray<string> configureLocals)
     {
         public string SourceType { get; } = sourceType;
 
@@ -150,15 +151,20 @@ public sealed partial class ValiantMappingGenerator
         public ImmutableArray<MemberAssignmentModel> Assignments { get; } = assignments;
 
         public ImmutableArray<CollectionMappingModel> CollectionMappings { get; } = collectionMappings;
+
+        public ImmutableArray<string> ConfigureLocals { get; } = configureLocals;
     }
 
     private sealed class ConstructorMappingModel(
         ImmutableArray<ConstructorArgumentModel> arguments,
-        ImmutableArray<CollectionMappingModel> collectionMappings)
+        ImmutableArray<CollectionMappingModel> collectionMappings,
+        bool setsRequiredMembers = false)
     {
         public ImmutableArray<ConstructorArgumentModel> Arguments { get; } = arguments;
 
         public ImmutableArray<CollectionMappingModel> CollectionMappings { get; } = collectionMappings;
+
+        public bool SetsRequiredMembers { get; } = setsRequiredMembers;
     }
 
     private enum NullHandlingPolicy
@@ -168,32 +174,55 @@ public sealed partial class ValiantMappingGenerator
         IgnoreSourceNulls
     }
 
-    private sealed class ConstructorArgumentModel(string parameterName, string sourceExpression)
+    private sealed class ConstructorArgumentModel(
+        string parameterName,
+        string parameterType,
+        string runtimeParameterType,
+        string sourceExpression,
+        bool isIn)
     {
         public string ParameterName { get; } = parameterName;
 
+        public string ParameterType { get; } = parameterType;
+
+        public string RuntimeParameterType { get; } = runtimeParameterType;
+
         public string SourceExpression { get; } = sourceExpression;
+
+        public bool IsIn { get; } = isIn;
     }
 
     private sealed class MemberAssignmentModel(
         string targetMemberName,
         string sourceExpression,
-        string? conditionExpression)
+        string? conditionExpression,
+        int declarationOrder = 0,
+        bool useInitializer = true,
+        string? initPropertyType = null)
     {
         public string TargetMemberName { get; } = targetMemberName;
 
         public string SourceExpression { get; } = sourceExpression;
 
         public string? ConditionExpression { get; } = conditionExpression;
+
+        public int DeclarationOrder { get; } = declarationOrder;
+
+        public bool UseInitializer { get; } = useInitializer;
+
+        public string? InitPropertyType { get; } = initPropertyType;
     }
 
     private sealed class MappedExpressionModel(
         string expression,
-        ImmutableArray<CollectionMappingModel> collectionMappings)
+        ImmutableArray<CollectionMappingModel> collectionMappings,
+        bool capturesConfigureLocals = false)
     {
         public string Expression { get; } = expression;
 
         public ImmutableArray<CollectionMappingModel> CollectionMappings { get; } = collectionMappings;
+
+        public bool CapturesConfigureLocals { get; } = capturesConfigureLocals;
     }
 
     private sealed class CollectionMappingModel(
@@ -203,8 +232,10 @@ public sealed partial class ValiantMappingGenerator
         string sourceType,
         string sourceElementType,
         string targetElementType,
+        string? arrayAllocationFormat,
         string mappedElementExpression,
-        string? capacityExpression)
+        string? capacityExpression,
+        bool requiresElementMapper)
     {
         public string MethodName { get; } = methodName;
 
@@ -218,7 +249,13 @@ public sealed partial class ValiantMappingGenerator
 
         public string TargetElementType { get; } = targetElementType;
 
+        public string? ArrayAllocationFormat { get; } = arrayAllocationFormat;
+
         public string MappedElementExpression { get; } = mappedElementExpression;
+
+        public bool RequiresElementMapper { get; } = requiresElementMapper;
+
+        public string ElementMapping => RequiresElementMapper ? "mapItem(item)" : MappedElementExpression;
 
         public string? CapacityExpression { get; } = capacityExpression;
     }
@@ -295,19 +332,22 @@ public sealed partial class ValiantMappingGenerator
         bool disablesConventionMapping,
         ImmutableArray<ExplicitMemberMappingModel> explicitMappings,
         ImmutableArray<IgnoredMemberMappingModel> ignoredMappings,
-        ImmutableArray<MapperReuseModel> mapperReuses)
+        ImmutableArray<MapperReuseModel> mapperReuses,
+        ImmutableArray<string> configureLocals)
     {
         public static ConfigureModel Empty { get; } = new(
             false,
             ImmutableArray<ExplicitMemberMappingModel>.Empty,
             ImmutableArray<IgnoredMemberMappingModel>.Empty,
-            ImmutableArray<MapperReuseModel>.Empty);
+            ImmutableArray<MapperReuseModel>.Empty,
+            []);
 
         public static ConfigureModel ConventionDisabled { get; } = new(
             true,
             ImmutableArray<ExplicitMemberMappingModel>.Empty,
             ImmutableArray<IgnoredMemberMappingModel>.Empty,
-            ImmutableArray<MapperReuseModel>.Empty);
+            ImmutableArray<MapperReuseModel>.Empty,
+            []);
 
         public bool DisablesConventionMapping { get; } = disablesConventionMapping;
 
@@ -316,6 +356,8 @@ public sealed partial class ValiantMappingGenerator
         public ImmutableArray<IgnoredMemberMappingModel> IgnoredMappings { get; } = ignoredMappings;
 
         public ImmutableArray<MapperReuseModel> MapperReuses { get; } = mapperReuses;
+
+        public ImmutableArray<string> ConfigureLocals { get; } = configureLocals;
     }
 
     private sealed class PendingExplicitMappingModel(
@@ -343,8 +385,10 @@ public sealed partial class ValiantMappingGenerator
         ITypeSymbol sourceType,
         string? fallbackExpression,
         NullHandlingPolicy nullHandling,
+        string? branchConditionExpression,
         string? conditionExpression,
-        Location? location)
+        Location? location,
+        int declarationOrder)
     {
         public string TargetMemberName { get; } = targetMemberName;
 
@@ -356,9 +400,13 @@ public sealed partial class ValiantMappingGenerator
 
         public NullHandlingPolicy NullHandling { get; } = nullHandling;
 
+        public string? BranchConditionExpression { get; } = branchConditionExpression;
+
         public string? ConditionExpression { get; } = conditionExpression;
 
         public Location? Location { get; } = location;
+
+        public int DeclarationOrder { get; } = declarationOrder;
     }
 
     private sealed class IgnoredMemberMappingModel(
@@ -376,13 +424,16 @@ public sealed partial class ValiantMappingGenerator
     private sealed class MapperReuseModel(
         string mapperExpression,
         ITypeSymbol sourceType,
-        ITypeSymbol targetType)
+        ITypeSymbol targetType,
+        string? branchCondition = null)
     {
         public string MapperExpression { get; } = mapperExpression;
 
         public ITypeSymbol SourceType { get; } = sourceType;
 
         public ITypeSymbol TargetType { get; } = targetType;
+
+        public string? BranchCondition { get; } = branchCondition;
     }
 
     private readonly struct DependencyInjectionMapperModel(
@@ -420,12 +471,13 @@ public sealed partial class ValiantMappingGenerator
         }
     }
 
-    private sealed class LambdaParameterRewriter(string parameterName, string replacementName) : CSharpSyntaxRewriter
+    private sealed class LambdaParameterRewriter(ISymbol? parameter, SemanticModel semanticModel) : CSharpSyntaxRewriter
     {
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
         {
-            return string.Equals(node.Identifier.ValueText, parameterName, StringComparison.Ordinal)
-                ? SyntaxFactory.IdentifierName(replacementName)
+            return parameter is not null && node.Identifier.ValueText == parameter.Name &&
+                SymbolEqualityComparer.Default.Equals(semanticModel.GetSymbolInfo(node).Symbol, parameter)
+                ? SyntaxFactory.IdentifierName("source").WithTriviaFrom(node)
                 : base.VisitIdentifierName(node);
         }
     }

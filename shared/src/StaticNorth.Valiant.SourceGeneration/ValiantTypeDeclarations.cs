@@ -1,10 +1,14 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace StaticNorth.Valiant.SourceGeneration;
 
 internal static class ValiantTypeDeclarations
 {
+    public static string EscapeIdentifier(string name) =>
+        SyntaxFacts.GetKeywordKind(name) == SyntaxKind.None ? name : "@" + name;
+
     public static string GetTypeModifier(INamedTypeSymbol symbol)
     {
         var builder = new StringBuilder();
@@ -68,7 +72,7 @@ internal static class ValiantTypeDeclarations
     public static string GetTypeDeclarationName(INamedTypeSymbol symbol)
     {
         return symbol.TypeParameters.Length == 0
-            ? symbol.Name
-            : symbol.Name + "<" + string.Join(", ", symbol.TypeParameters.Select(static parameter => parameter.Name)) + ">";
+            ? EscapeIdentifier(symbol.Name)
+            : EscapeIdentifier(symbol.Name) + "<" + string.Join(", ", symbol.TypeParameters.Select(static parameter => EscapeIdentifier(parameter.Name))) + ">";
     }
 }

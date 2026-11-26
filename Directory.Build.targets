@@ -41,9 +41,19 @@
 
   <PropertyGroup Condition="'$(IsPackable)' == 'true' and '$(OutputType)' != 'Exe'">
     <EnablePackageValidation>true</EnablePackageValidation>
+    <PackageValidationBaselineVersion>$(ValiantStableBaselineVersion)</PackageValidationBaselineVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' == 'true' and
+    ('$(MSBuildProjectName)' == 'StaticNorth.Valiant.Mapping' or
+     '$(MSBuildProjectName)' == 'StaticNorth.Valiant.Settings' or
+     '$(MSBuildProjectName)' == 'StaticNorth.Valiant.Validation' or
+     '$(MSBuildProjectName)' == 'StaticNorth.Valiant.Endpoints.AspNetCore')">
+    <None Include="$(MSBuildThisFileDirectory)shared/buildTransitive/ValiantGeneratedCode.targets"
+          Pack="true" PackagePath="buildTransitive/$(MSBuildProjectName).targets" />
+  </ItemGroup>
 
   <ItemGroup Condition="'$(IsPackable)' == 'true'">
     <None Include="$(MSBuildProjectDirectory)/../../README.md"

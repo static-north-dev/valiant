@@ -10,11 +10,11 @@ namespace StaticNorth.Valiant.Validation;
 public sealed class ValiantValidationOptions
 {
     /// <summary>
-    /// Gets or sets which validation backend generated validators use.
+    /// Gets or sets the execution mode for eligible fluent validators.
     /// </summary>
     /// <remarks>
-    /// The default value is <see cref="ValiantValidationMode.Auto" />, which uses the debuggable runtime
-    /// backend in Debug builds and the source-generated fast backend otherwise.
+    /// The default value is <see cref="ValiantValidationMode.Auto" /> in every build configuration.
+    /// Use <see cref="ValiantValidationMode.Debuggable" /> to step through fluent declarations.
     /// </remarks>
     public ValiantValidationMode Mode { get; set; } = ValiantValidationMode.Auto;
 

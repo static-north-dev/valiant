@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Globalization;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 
@@ -11,6 +10,8 @@ namespace StaticNorth.Valiant.Endpoints.AspNetCore;
 /// </summary>
 public static class QueryStringSerializer
 {
+    private const int MaxObjectDepth = 64;
+    private static readonly QuerySerializationOptions DefaultOptions = new();
     private static readonly JsonSerializerOptions JsonSerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
@@ -21,7 +22,7 @@ public static class QueryStringSerializer
     /// <returns>The serialized query string and any structured errors.</returns>
     public static QuerySerializationResult Serialize(object? value, QuerySerializationOptions? options = null)
     {
-        options ??= new QuerySerializationOptions();
+        options ??= DefaultOptions;
 
         var errors = new List<QueryError>();
         if (!TryResolveArrayFormat(options, errors, out var arrayFormat) ||
@@ -41,7 +42,8 @@ public static class QueryStringSerializer
                 objectFormat,
                 options,
                 pairs,
-                errors);
+                errors,
+                depth: 0);
         }
 
         return errors.Count == 0
@@ -90,14 +92,22 @@ public static class QueryStringSerializer
     private static void WriteValue(
         string key,
         object value,
-        Type valueType,
+        Type declaredType,
         QueryArrayFormat arrayFormat,
         QueryObjectFormat objectFormat,
         QuerySerializationOptions options,
         List<QueryPair> pairs,
-        List<QueryError> errors)
+        List<QueryError> errors,
+        int depth)
     {
-        if (IsSimpleType(valueType))
+        if (depth >= MaxObjectDepth)
+        {
+            errors.Add(ValidationError(key, "QuerySerializationDepthExceeded", $"Query path '{key}' exceeds the maximum serialization depth."));
+            return;
+        }
+
+        var valueType = value.GetType();
+        if (QueryStringParser.IsSimpleType(valueType))
         {
             if (key.Length == 0)
             {
@@ -112,19 +122,29 @@ public static class QueryStringSerializer
             return;
         }
 
-        if (value is not string && TryGetCollectionElementType(valueType, out _))
+        if (QueryStringParser.TryGetCollectionElementType(valueType, out var elementType))
         {
-            WriteCollection(key, (IEnumerable)value, arrayFormat, pairs, errors);
+            var collectionType = valueType;
+            if (declaredType != valueType && QueryStringParser.TryGetCollectionElementType(declaredType, out var declaredElementType))
+            {
+                collectionType = declaredType;
+                elementType = declaredElementType;
+            }
+
+            WriteCollection(key, (IEnumerable)value, collectionType, elementType, arrayFormat, options, pairs, errors);
             return;
         }
 
-        WriteObject(key, value, valueType, arrayFormat, objectFormat, options, pairs, errors);
+        WriteObject(key, value, valueType, arrayFormat, objectFormat, options, pairs, errors, depth);
     }
 
     private static void WriteCollection(
         string key,
         IEnumerable values,
+        Type collectionType,
+        Type elementType,
         QueryArrayFormat arrayFormat,
+        QuerySerializationOptions options,
         List<QueryPair> pairs,
         List<QueryError> errors)
     {
@@ -137,11 +157,40 @@ public static class QueryStringSerializer
             return;
         }
 
+        if (!QueryStringParser.CanBindDelimitedCollection(collectionType, elementType))
+        {
+            if (options.EnableJsonQueryValues)
+            {
+                WriteJsonValue(key, values, collectionType, pairs, errors);
+            }
+            else
+            {
+                errors.Add(ValidationError(
+                    key, "UnsupportedQueryType", $"Query path '{key}' requires JSON to represent collection type '{collectionType.Name}'."));
+            }
+
+            return;
+        }
+
         var items = values
             .Cast<object?>()
             .Where(static item => item is not null)
             .Select(static item => FormatSimpleValue(item!))
             .ToArray();
+
+        if (items.Length == 0)
+        {
+            return;
+        }
+
+        if (elementType == typeof(string) && options.EnableJsonQueryValues &&
+            (arrayFormat == QueryArrayFormat.CommaSeparated ||
+                (arrayFormat == QueryArrayFormat.RepeatedKeys && items.Length == 1)) &&
+            QueryStringParser.LooksLikeJsonValue(items[0]))
+        {
+            WriteJsonValue(key, items, typeof(string[]), pairs, errors);
+            return;
+        }
 
         switch (arrayFormat)
         {
@@ -189,7 +238,8 @@ public static class QueryStringSerializer
         QueryObjectFormat objectFormat,
         QuerySerializationOptions options,
         List<QueryPair> pairs,
-        List<QueryError> errors)
+        List<QueryError> errors,
+        int depth)
     {
         if (key.Length > 0 && objectFormat == QueryObjectFormat.Flat)
         {
@@ -202,12 +252,17 @@ public static class QueryStringSerializer
                 return;
             }
 
-            pairs.Add(new QueryPair(key, JsonSerializer.Serialize(value, valueType, JsonSerializerOptions), valueIsEncoded: false));
+            WriteJsonValue(key, value, valueType, pairs, errors);
             return;
         }
 
-        foreach (var property in GetSerializableProperties(valueType))
+        foreach (var property in QueryObjectProperties.Get(valueType))
         {
+            if (property.GetMethod is not { IsPublic: true })
+            {
+                continue;
+            }
+
             var propertyValue = property.GetValue(value);
             if (propertyValue is null)
             {
@@ -225,7 +280,20 @@ public static class QueryStringSerializer
                 objectFormat,
                 options,
                 pairs,
-                errors);
+                errors,
+                depth + 1);
+        }
+    }
+
+    private static void WriteJsonValue(string key, object value, Type type, List<QueryPair> pairs, List<QueryError> errors)
+    {
+        try
+        {
+            pairs.Add(new QueryPair(key, JsonSerializer.Serialize(value, type, JsonSerializerOptions), valueIsEncoded: false));
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            errors.Add(ValidationError(key, "InvalidJsonQueryValue", $"Query path '{key}' could not be serialized as JSON."));
         }
     }
 
@@ -237,54 +305,6 @@ public static class QueryStringSerializer
             QueryObjectFormat.DeepObject => prefix + "[" + propertyName + "]",
             _ => propertyName
         };
-    }
-
-    private static IEnumerable<PropertyInfo> GetSerializableProperties(Type type)
-    {
-        return type.GetProperties(BindingFlags.Instance | BindingFlags.Public)
-            .Where(static property => property.GetMethod is not null &&
-                property.GetIndexParameters().Length == 0);
-    }
-
-    private static bool TryGetCollectionElementType(Type type, out Type elementType)
-    {
-        elementType = typeof(object);
-
-        if (type == typeof(string))
-        {
-            return false;
-        }
-
-        if (type.IsArray)
-        {
-            elementType = type.GetElementType()!;
-            return true;
-        }
-
-        foreach (var @interface in type.GetInterfaces().Concat([type]))
-        {
-            if (@interface.IsGenericType &&
-                @interface.GetGenericTypeDefinition() == typeof(IEnumerable<>))
-            {
-                elementType = @interface.GetGenericArguments()[0];
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool IsSimpleType(Type type)
-    {
-        var nonNullableType = Nullable.GetUnderlyingType(type) ?? type;
-        return nonNullableType == typeof(string) ||
-            nonNullableType == typeof(int) ||
-            nonNullableType == typeof(long) ||
-            nonNullableType == typeof(Guid) ||
-            nonNullableType == typeof(bool) ||
-            nonNullableType == typeof(decimal) ||
-            nonNullableType == typeof(DateTime) ||
-            nonNullableType.IsEnum;
     }
 
     private static string FormatSimpleValue(object value)
@@ -342,7 +362,7 @@ public static class QueryStringSerializer
         return new QueryError(path, code, message, QueryErrorKind.Configuration);
     }
 
-    private sealed class QueryPair(string key, string value, bool valueIsEncoded)
+    private readonly struct QueryPair(string key, string value, bool valueIsEncoded)
     {
         public string Key { get; } = key;
 

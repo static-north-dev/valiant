@@ -9,8 +9,122 @@ using StaticNorth.Valiant.SourceGeneration.Testing;
 
 namespace StaticNorth.Valiant.Mapping.Tests;
 
-public sealed class SourceGenerationTests
+public sealed partial class SourceGenerationTests
 {
+    [Test]
+    [Arguments(ValiantMappingMode.Fast)]
+    [Arguments(ValiantMappingMode.Debuggable)]
+    public async Task Mapper_Uses_Optional_Constructor_Parameter_Defaults(ValiantMappingMode mode)
+    {
+        var assembly = CompileAndLoad(
+            """
+            using StaticNorth.Valiant.Mapping;
+
+            public sealed record Input(int Count);
+            public enum Units { Boxes, Items }
+            public sealed record Output(int Count, string Label = "preset", Units? Units = global::Units.Items, double Scale = double.PositiveInfinity);
+
+            [ValiantMapper]
+            public sealed partial class CounterMapper : MapperDefinition<Input, Output>
+            {
+                public override void Configure(MappingContext<Input, Output> context)
+                {
+                    context.Map(input => input.Count, output => output.Count);
+                }
+            }
+
+            public static class TestRunner
+            {
+                public static string Run(ValiantMappingMode mode)
+                {
+                    var result = new CounterMapper(new ValiantMappingOptions { Mode = mode }).Map(new Input(7));
+                    return $"{result.Count}/{result.Label}/{result.Units}/{double.IsPositiveInfinity(result.Scale)}";
+                }
+            }
+            """);
+
+        var actual = (string)assembly.GetType("TestRunner", throwOnError: true)!.GetMethod("Run")!.Invoke(null, [mode])!;
+        await Assert.That(actual).IsEqualTo("7/preset/Items/True");
+    }
+
+    [Test]
+    public async Task Mapper_Uses_Struct_Constructor_And_Escapes_Identifiers_In_Both_Modes()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using StaticNorth.Valiant.Mapping;
+
+            public sealed record Input(int @event);
+
+            public readonly struct Output(int @event)
+            {
+                public int @event { get; } = @event;
+            }
+
+            [ValiantMapper]
+            public sealed partial class ConventionMapper : MapperDefinition<Input, Output>;
+
+            [ValiantMapper]
+            public sealed partial class ExplicitMapper : MapperDefinition<ExplicitInput, Output>
+            {
+                public override void Configure(MappingContext<ExplicitInput, Output> context)
+                {
+                    context.Map(x => x.Value, x => x.@event);
+                }
+            }
+
+            public sealed record ExplicitInput(int Value);
+
+            public static class TestRunner
+            {
+                public static int[] Run() =>
+                [
+                    new ConventionMapper().Map(new Input(42)).@event,
+                    new ExplicitMapper(new ValiantMappingOptions { Mode = ValiantMappingMode.Fast }).Map(new ExplicitInput(41)).@event,
+                    new ExplicitMapper(new ValiantMappingOptions { Mode = ValiantMappingMode.Debuggable }).Map(new ExplicitInput(41)).@event
+                ];
+            }
+            """);
+
+        var actual = (int[])assembly.GetType("TestRunner", throwOnError: true)!.GetMethod("Run")!.Invoke(null, [])!;
+        await Assert.That(actual).IsEquivalentTo([42, 41, 41]);
+    }
+
+    [Test]
+    public async Task Mapper_Preserves_Required_Member_Initialized_By_Constructor()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using System.Diagnostics.CodeAnalysis;
+            using StaticNorth.Valiant.Mapping;
+
+            public sealed record Input(int Count);
+            public sealed class Output
+            {
+                public int Count { get; }
+                public required string Units { get; init; }
+
+                [SetsRequiredMembers]
+                public Output(int count)
+                {
+                    Count = count;
+                    Units = "items";
+                }
+            }
+
+            [ValiantMapper]
+            public sealed partial class CounterMapper : MapperDefinition<Input, Output>;
+
+            public static class TestRunner
+            {
+                public static string Run() => new CounterMapper().Map(new Input(42)).Units;
+            }
+            """);
+
+        var actual = (string)assembly.GetType("TestRunner", throwOnError: true)!.GetMethod("Run")!.Invoke(null, [])!;
+        await Assert.That(actual).IsEqualTo("items");
+    }
+
     [Test]
     public async Task Trusted_Platform_References_Exclude_Local_Generated_Assemblies()
     {
@@ -46,7 +160,8 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(generated.Contains("public global::PersonDto Map(global::Person source)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(generated.Contains("Name = source.Name", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generated).Contains("if ((source.Name) is var __valiantMemberSource0");
+        await Assert.That(generated).Contains("target.Name = __valiantMemberSource0;");
         await Assert.That(generated.Contains("        var target = new global::PersonDto", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("        return target;", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generated.Contains("BeforeMap", StringComparison.Ordinal)).IsFalse();
@@ -91,14 +206,14 @@ public sealed class SourceGenerationTests
         await Assert.That(generated).Contains(
             "if (GetEffectiveMappingMode() == global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Debuggable)");
         await Assert.That(generated).Contains("return MapRuntime(source);");
-        await Assert.That(generated).Contains("Name = source.Name");
+        await Assert.That(generated).Contains("if ((source.Name) is var __valiantMemberSource0");
+        await Assert.That(generated).Contains("target.Name = __valiantMemberSource0;");
         await Assert.That(generated).Contains(
             "private readonly global::StaticNorth.Valiant.Mapping.ValiantMappingMode _valiantMappingMode = ResolveMappingMode(global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Auto);");
         await Assert.That(generated).Contains("return _valiantMappingMode;");
-        await Assert.That(generated).Contains("#if DEBUG");
-        await Assert.That(generated).Contains(
+        await Assert.That(generated).DoesNotContain("#if DEBUG");
+        await Assert.That(generated).DoesNotContain(
             "return global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Debuggable;");
-        await Assert.That(generated).Contains("#else");
         await Assert.That(generated).Contains(
             "return global::StaticNorth.Valiant.Mapping.ValiantMappingMode.Fast;");
         await Assert.That(generated).Contains("Configure(context);");
@@ -279,7 +394,7 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Any(static x => x.Id == "VLM103")).IsFalse();
         await Assert.That(result.Diagnostics.Any(static x => x.Id == "VLM101" && x.Severity == DiagnosticSeverity.Warning)).IsTrue();
-        await Assert.That(generated.Contains("Name = source.Name", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(generated).DoesNotContain("source.Name");
     }
 
     [Test]
@@ -313,7 +428,7 @@ public sealed class SourceGenerationTests
 
         await Assert.That(result.Diagnostics.Any(static x => x.Id == "VLM103")).IsFalse();
         await Assert.That(result.Diagnostics.Any(static x => x.Id == "VLM101" && x.Severity == DiagnosticSeverity.Warning)).IsFalse();
-        await Assert.That(generated.Contains("Name = source.Name", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(generated).DoesNotContain("source.Name");
     }
 
     [Test]
@@ -1373,6 +1488,63 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
+    [Arguments(ValiantMappingMode.Auto)]
+    [Arguments(ValiantMappingMode.Fast)]
+    [Arguments(ValiantMappingMode.Debuggable)]
+    public async Task UseMapper_Evaluates_Its_Dependency_Once_Before_Mapping(ValiantMappingMode mode)
+    {
+        var assembly = CompileAndLoad(
+            """
+            using StaticNorth.Valiant.Mapping;
+
+            public sealed record Item(string Name);
+            public sealed record ItemDto(string Name);
+            public sealed record Parent(Item[] Items);
+            public sealed record ParentDto(ItemDto[] Items);
+
+            [ValiantMapper]
+            public sealed partial class ItemMapper : MapperDefinition<Item, ItemDto>;
+
+            [ValiantMapper]
+            public sealed partial class ParentMapper : MapperDefinition<Parent, ParentDto>
+            {
+                public int DependencyReads { get; private set; }
+
+                public override void Configure(MappingContext<Parent, ParentDto> context)
+                {
+                    context.UseMapper(GetItemMapper());
+                    context.Map(source => source.Items, target => target.Items);
+                }
+
+                private IMapper<Item, ItemDto> GetItemMapper()
+                {
+                    DependencyReads++;
+                    return new ItemMapper();
+                }
+
+                public (int Reads, string Names) Run()
+                {
+                    var populated = Map(new Parent([new Item("first"), new Item("second")]));
+                    return (DependencyReads, populated.Items[0].Name + "," + populated.Items[1].Name);
+                }
+
+                public int RunEmpty()
+                {
+                    _ = Map(new Parent([]));
+                    return DependencyReads;
+                }
+            }
+            """);
+
+        var mapperType = assembly.GetType("ParentMapper", throwOnError: true)!;
+        var mapper = Activator.CreateInstance(mapperType, [new ValiantMappingOptions { Mode = mode }]);
+        var populated = ((int Reads, string Names))mapperType.GetMethod("Run")!.Invoke(mapper, null)!;
+        await Assert.That(populated).IsEqualTo((1, "first,second"));
+        var emptyReads = (int)mapperType.GetMethod("RunEmpty")!.Invoke(mapper, null)!;
+        await Assert.That(emptyReads).IsEqualTo(2);
+    }
+
+    [Test]
     public async Task Configure_UseMapper_Maps_Collections_By_Element()
     {
         var assembly = CompileAndLoad(
@@ -1485,7 +1657,7 @@ public sealed class SourceGenerationTests
 
         await Assert.That(generated).Contains("new global::System.Collections.Generic.List<global::AddressDto>(source.Count)");
         await Assert.That(generated).Contains("foreach (var item in source)");
-        await Assert.That(generated).Contains("target.Add(addressMapper.Map(item));");
+        await Assert.That(generated).Contains("target.Add(mapItem(item));");
         await Assert.That(generated).DoesNotContain("global::System.Linq.Enumerable.ToList");
         await Assert.That(generated).DoesNotContain("global::System.Linq.Enumerable.Select");
     }
@@ -1536,9 +1708,9 @@ public sealed class SourceGenerationTests
 
         await Assert.That(generated).Contains("var target = new global::AddressDto[source.Length];");
         await Assert.That(generated).Contains("for (var sourceIndex = 0; sourceIndex < source.Length; sourceIndex++)");
-        await Assert.That(generated).Contains("target[sourceIndex] = addressMapper.Map(item);");
+        await Assert.That(generated).Contains("target[sourceIndex] = mapItem(item);");
         await Assert.That(generated).Contains("new global::System.Collections.Generic.HashSet<global::AddressDto>(source.Count)");
-        await Assert.That(generated).Contains("target.Add(addressMapper.Map(item));");
+        await Assert.That(generated).Contains("target.Add(mapItem(item));");
         await Assert.That(generated).DoesNotContain("global::System.Linq.Enumerable.Select");
         await Assert.That(generated).DoesNotContain("global::System.Linq.Enumerable.ToArray");
     }
@@ -1658,6 +1830,121 @@ public sealed class SourceGenerationTests
         var firstAddress = firstGroup.GetType().GetProperty("Item")!.GetValue(firstGroup, [0])!;
 
         await Assert.That(firstAddress.GetType().GetProperty("Line1")!.GetValue(firstAddress)).IsEqualTo("Main");
+    }
+
+    [Test]
+    [Arguments(ValiantMappingMode.Fast)]
+    [Arguments(ValiantMappingMode.Debuggable)]
+    public async Task Explicit_Nested_Mapping_Uses_Dependency_Injection_In_Both_Modes(ValiantMappingMode mode)
+    {
+        var assembly = CompileAndLoad(
+            """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using StaticNorth.Valiant.Mapping;
+
+            public sealed record Address(string City);
+            public sealed record AddressDto(string City);
+            public sealed record Person(Address? Address, Address[] Addresses);
+            public sealed record PersonDto(AddressDto? Address, AddressDto[] Addresses);
+
+            [ValiantMapper]
+            public sealed partial class AddressMapper : MapperDefinition<Address, AddressDto>;
+
+            [ValiantMapper]
+            public sealed partial class PersonMapper : MapperDefinition<Person, PersonDto>
+            {
+                public override void Configure(MappingContext<Person, PersonDto> context)
+                {
+                    context.Map(source => source.Address, target => target.Address);
+                    context.Map(source => source.Addresses, target => target.Addresses);
+                }
+            }
+
+            public static class TestRunner
+            {
+                public static string Run(ValiantMappingMode mode)
+                {
+                    var options = new ValiantMappingOptions { Mode = mode };
+                    var resolutions = 0;
+                    using var services = new ServiceCollection()
+                        .AddTransient<IMapper<Address, AddressDto>>(_ =>
+                        {
+                            resolutions++;
+                            return new AddressMapper(options);
+                        })
+                        .BuildServiceProvider();
+                    var mapper = new PersonMapper(options, services);
+                    var mapped = mapper.Map(new Person(new Address("Riga"), [new Address("Tallinn")]));
+                    var empty = mapper.Map(new Person(null, []));
+                    try
+                    {
+                        new PersonMapper(options).Map(new Person(new Address("Riga"), []));
+                        return "missing mapper did not throw";
+                    }
+                    catch (InvalidOperationException exception)
+                    {
+                        return $"{mapped.Address?.City}|{mapped.Addresses[0].City}|{empty.Address is null}|{empty.Addresses.Length}|{resolutions}|{exception.Message}";
+                    }
+                }
+            }
+            """);
+
+        var result = (string)assembly.GetType("TestRunner", throwOnError: true)!.GetMethod("Run")!.Invoke(null, [mode])!;
+        await Assert.That(result).IsEqualTo(
+            "Riga|Tallinn|True|0|1|No Valiant mapper is registered for source type 'Address' and target type 'AddressDto'. Register mappers with AddValiantMappers or configure this member with UseMapper.");
+    }
+
+    [Test]
+    [Arguments(ValiantMappingMode.Fast)]
+    [Arguments(ValiantMappingMode.Debuggable)]
+    public async Task Explicit_Nested_Mapping_Rejects_Cycles_And_Recovers_In_Both_Modes(ValiantMappingMode mode)
+    {
+        var assembly = CompileAndLoad(
+            """
+            using System;
+            using Microsoft.Extensions.DependencyInjection;
+            using StaticNorth.Valiant.Mapping;
+
+            public sealed class Node { public Node? Next { get; set; } }
+            public sealed class NodeDto(NodeDto? next) { public NodeDto? Next { get; } = next; }
+
+            [ValiantMapper]
+            public sealed partial class NodeMapper : MapperDefinition<Node, NodeDto>
+            {
+                public override void Configure(MappingContext<Node, NodeDto> context)
+                {
+                    context.Map(source => source.Next, target => target.Next);
+                }
+            }
+
+            public static class TestRunner
+            {
+                public static string Run(ValiantMappingMode mode)
+                {
+                    var options = new ValiantMappingOptions { Mode = mode };
+                    using var services = new ServiceCollection()
+                        .AddSingleton<IMapper<Node, NodeDto>>(provider => new NodeMapper(options, provider))
+                        .BuildServiceProvider();
+                    var mapper = services.GetRequiredService<IMapper<Node, NodeDto>>();
+                    var cyclic = new Node();
+                    cyclic.Next = cyclic;
+                    try
+                    {
+                        mapper.Map(cyclic);
+                        return "cycle was not rejected";
+                    }
+                    catch (InvalidOperationException exception)
+                    {
+                        return $"{mapper.Map(new Node()).Next is null}|{exception.Message}";
+                    }
+                }
+            }
+            """);
+
+        var result = (string)assembly.GetType("TestRunner", throwOnError: true)!.GetMethod("Run")!.Invoke(null, [mode])!;
+        await Assert.That(result).IsEqualTo(
+            "True|Valiant mapper recursion depth exceeded 64 while mapping source type 'Node' to target type 'NodeDto'. Check for cyclic object graphs or configure this member explicitly.");
     }
 
     [Test]
@@ -1904,6 +2191,91 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
+    public async Task Convention_Mapper_Assigns_Required_Init_Member_Without_Nullability_Errors()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using StaticNorth.Valiant.Mapping;
+
+            public sealed record Customer(string Name);
+            public sealed class CustomerView
+            {
+                public required string Name { get; init; }
+            }
+
+            [ValiantMapper]
+            public sealed partial class CustomerMapper : MapperDefinition<Customer, CustomerView>;
+
+            public static class TestRunner
+            {
+                public static string Run() => new CustomerMapper().Map(new Customer("Ada")).Name;
+            }
+            """,
+            rejectNullableDiagnostics: true);
+
+        var result = assembly.GetType("TestRunner", throwOnError: true)!.GetMethod("Run")!.Invoke(null, []);
+        await Assert.That(result).IsEqualTo("Ada");
+    }
+
+    [Test]
+    public async Task Generated_Facade_And_Factory_Use_The_Current_Scope()
+    {
+        var assembly = CompileAndLoad(
+            """
+            using Microsoft.Extensions.DependencyInjection;
+            using StaticNorth.Valiant.Mapping;
+
+            public sealed record Person(string Name);
+            public sealed record PersonDto(string Name);
+            public sealed class Marker
+            {
+                public string Value { get; set; } = "";
+            }
+
+            [ValiantMapper]
+            public sealed partial class PersonMapper(Marker marker) : MapperDefinition<Person, PersonDto>
+            {
+                public override void Configure(MappingContext<Person, PersonDto> context)
+                {
+                    context.Map(person => marker.Value + person.Name, dto => dto.Name);
+                }
+            }
+
+            public static class TestRunner
+            {
+                public static string[] Run()
+                {
+                    var services = new ServiceCollection();
+                    services.AddScoped<Marker>();
+                    services.AddValiantMappers(options => options.UseScopedMapperLookup = true);
+                    services.AddValiantMappers();
+                    using var provider = services.BuildServiceProvider(validateScopes: true);
+                    return [.. Resolve(provider, "first:"), .. Resolve(provider, "second:")];
+                }
+
+                private static string[] Resolve(ServiceProvider provider, string prefix)
+                {
+                    using var scope = provider.CreateScope();
+                    var services = scope.ServiceProvider;
+                    services.GetRequiredService<Marker>().Value = prefix;
+                    var person = new Person("Ada");
+                    return
+                    [
+                        services.GetRequiredService<IMapper>().Map<PersonDto>(person).Name,
+                        services.GetRequiredService<IMapperFactory>().CreateMapper<Person, PersonDto>().Map(person).Name
+                    ];
+                }
+            }
+            """,
+            rejectNullableDiagnostics: true);
+
+        var actual = (string[])assembly.GetType("TestRunner", throwOnError: true)!
+            .GetMethod("Run")!
+            .Invoke(null, [])!;
+        await Assert.That(actual).IsEquivalentTo(["first:Ada", "first:Ada", "second:Ada", "second:Ada"]);
+    }
+
+    [Test]
     public async Task Generated_Nested_Mapper_Lookup_Uses_Cache_And_Depth_Guard()
     {
         var result = RunGenerator(
@@ -1968,11 +2340,19 @@ public sealed class SourceGenerationTests
                 {
                 }
 
+                public enum ServiceLifetime
+                {
+                    Singleton,
+                    Scoped
+                }
+
                 public sealed class ServiceDescriptor
                 {
                     public static ServiceDescriptor Singleton(System.Type serviceType, object implementationInstance) => new();
 
                     public static ServiceDescriptor Singleton(System.Type serviceType, System.Type implementationType) => new();
+
+                    public static ServiceDescriptor Describe(System.Type serviceType, System.Type implementationType, ServiceLifetime lifetime) => new();
 
                     public static ServiceDescriptor Transient(System.Type serviceType, System.Type implementationType) => new();
                 }
@@ -1998,10 +2378,8 @@ public sealed class SourceGenerationTests
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(dependencyInjection.Contains("AddValiantMappers", StringComparison.Ordinal)).IsTrue();
         await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.ValiantMappingOptions)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("file sealed class ValiantGeneratedMapper", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("file sealed class ValiantGeneratedMapperFactory", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapper), typeof(global::StaticNorth.Valiant.Mapping.ValiantGeneratedMapper)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapperFactory), typeof(global::StaticNorth.Valiant.Mapping.ValiantGeneratedMapperFactory)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapper), typeof(global::StaticNorth.Valiant.Mapping.Infrastructure.ValiantMapperLookup)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapperFactory), typeof(global::StaticNorth.Valiant.Mapping.Infrastructure.ValiantMapperLookup)", StringComparison.Ordinal)).IsTrue();
         await Assert.That(dependencyInjection.Contains("MakeGenericType", StringComparison.Ordinal)).IsFalse();
         await Assert.That(dependencyInjection.Contains("typeof(global::PersonMapper), typeof(global::PersonMapper)", StringComparison.Ordinal)).IsTrue();
         await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapper<global::Person, global::PersonDto>), typeof(global::PersonMapper)", StringComparison.Ordinal)).IsTrue();
@@ -2349,11 +2727,19 @@ public sealed class SourceGenerationTests
                 {
                 }
 
+                public enum ServiceLifetime
+                {
+                    Singleton,
+                    Scoped
+                }
+
                 public sealed class ServiceDescriptor
                 {
                     public static ServiceDescriptor Singleton(System.Type serviceType, object implementationInstance) => new();
 
                     public static ServiceDescriptor Singleton(System.Type serviceType, System.Type implementationType) => new();
+
+                    public static ServiceDescriptor Describe(System.Type serviceType, System.Type implementationType, ServiceLifetime lifetime) => new();
 
                     public static ServiceDescriptor Transient(System.Type serviceType, System.Type implementationType) => new();
                 }
@@ -2379,10 +2765,8 @@ public sealed class SourceGenerationTests
         await Assert.That(result.Diagnostics.Where(static x => x.Severity == DiagnosticSeverity.Error)).IsEmpty();
         await Assert.That(dependencyInjection.Contains("AddValiantMappers", StringComparison.Ordinal)).IsTrue();
         await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.ValiantMappingOptions)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("file sealed class ValiantGeneratedMapper", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("file sealed class ValiantGeneratedMapperFactory", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapper), typeof(global::StaticNorth.Valiant.Mapping.ValiantGeneratedMapper)", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapperFactory), typeof(global::StaticNorth.Valiant.Mapping.ValiantGeneratedMapperFactory)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapper), typeof(global::StaticNorth.Valiant.Mapping.Infrastructure.ValiantMapperLookup)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapperFactory), typeof(global::StaticNorth.Valiant.Mapping.Infrastructure.ValiantMapperLookup)", StringComparison.Ordinal)).IsTrue();
         await Assert.That(dependencyInjection.Contains("MakeGenericType", StringComparison.Ordinal)).IsFalse();
         await Assert.That(dependencyInjection.Contains("typeof(global::StaticNorth.Valiant.Mapping.IMapper<", StringComparison.Ordinal)).IsFalse();
     }
@@ -2675,23 +3059,52 @@ public sealed class SourceGenerationTests
     }
 
     [Test]
-    public async Task Dynamic_Lookup_Uses_Chains_For_Small_Sets_And_Dictionary_For_Large_Sets()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Mapper_Lookup_Uses_Pairs_From_Both_Assemblies(bool registerLargeAssemblyFirst)
     {
-        var small = RunGenerator(CreateMapperSetSource(1)).GeneratedSources
-            .Single(static source => source.HintName == "StaticNorth.Valiant.Mapping.DependencyInjection.g.cs")
-            .SourceText
-            .ToString();
-        var largeSource = CreateMapperSetSource(9);
-        var large = RunGenerator(largeSource).GeneratedSources
-            .Single(static source => source.HintName == "StaticNorth.Valiant.Mapping.DependencyInjection.g.cs")
-            .SourceText
-            .ToString();
+        var smallAssembly = CompileAndLoad(CreateMapperSetSource(1));
+        var largeAssembly = CompileAndLoad(CreateMapperSetSource(9).Replace("Source", "OtherSource").Replace("Target", "OtherTarget"));
+        var services = new ServiceCollection();
 
-        await Assert.That(small).DoesNotContain("ValiantGeneratedMapperLookup");
-        await Assert.That(large).Contains("ValiantGeneratedMapperLookup");
-        await Assert.That(large).Contains("IReadOnlyDictionary<(global::System.Type Source, global::System.Type Target), Entry>");
+        RegisterMappers(registerLargeAssemblyFirst ? largeAssembly : smallAssembly, services);
+        RegisterMappers(registerLargeAssemblyFirst ? smallAssembly : largeAssembly, services);
+        RegisterMappers(smallAssembly, services);
 
-        _ = CompileAndLoad(largeSource);
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        var facade = provider.GetRequiredService<IMapper>();
+        var factory = provider.GetRequiredService<IMapperFactory>();
+        using var scope = provider.CreateScope();
+
+        await Assert.That(ReferenceEquals(facade, scope.ServiceProvider.GetRequiredService<IMapper>())).IsTrue();
+        await Assert.That(ReferenceEquals(factory, scope.ServiceProvider.GetRequiredService<IMapperFactory>())).IsTrue();
+
+        foreach (var (assembly, sourceName, targetName) in new[]
+        {
+            (smallAssembly, "Source0", "Target0"),
+            (largeAssembly, "OtherSource8", "OtherTarget8")
+        })
+        {
+            var sourceType = assembly.GetType(sourceName, throwOnError: true)!;
+            var targetType = assembly.GetType(targetName, throwOnError: true)!;
+            var source = Activator.CreateInstance(sourceType)!;
+            await Assert.That(facade.TryMap(source, targetType, out var result)).IsTrue();
+            await Assert.That(result!.GetType()).IsEqualTo(targetType);
+            await Assert.That(factory.TryCreateMapper(sourceType, targetType, out var mapper)).IsTrue();
+            await Assert.That(mapper!.GetType().Assembly).IsEqualTo(assembly);
+            var tryCreate = typeof(IMapperFactory).GetMethods()
+                .Single(static method => method.Name == nameof(IMapperFactory.TryCreateMapper) && method.IsGenericMethod);
+            await Assert.That((bool)tryCreate.MakeGenericMethod(sourceType, targetType).Invoke(factory, [null])!).IsTrue();
+            var tryMap = typeof(IMapper).GetMethods()
+                .Single(static method => method.Name == nameof(IMapper.TryMap) && method.IsGenericMethod);
+            await Assert.That((bool)tryMap.MakeGenericMethod(targetType).Invoke(facade, [source, null])!).IsTrue();
+        }
+    }
+
+    private static void RegisterMappers(System.Reflection.Assembly assembly, IServiceCollection services)
+    {
+        assembly.GetExportedTypes().Single(static type => type.Name == "Mappers")
+            .GetMethod("AddValiantMappers")!.Invoke(null, [services, null]);
     }
 
     [Test]
@@ -2845,7 +3258,7 @@ public sealed class SourceGenerationTests
             .ToImmutableArray();
     }
 
-    private static System.Reflection.Assembly CompileAndLoad(string source)
+    private static System.Reflection.Assembly CompileAndLoad(string source, bool rejectNullableDiagnostics = false)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var syntaxTree = CSharpSyntaxTree.ParseText(
@@ -2861,7 +3274,14 @@ public sealed class SourceGenerationTests
             "StaticNorth.Valiant.Mapping.GeneratedMapper.Tests",
             [syntaxTree],
             references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+            new CSharpCompilationOptions(
+                OutputKind.DynamicallyLinkedLibrary,
+                nullableContextOptions: NullableContextOptions.Enable,
+                specificDiagnosticOptions: rejectNullableDiagnostics
+                    ? ImmutableDictionary<string, ReportDiagnostic>.Empty
+                        .Add("CS8601", ReportDiagnostic.Error)
+                        .Add("CS8604", ReportDiagnostic.Error)
+                    : null));
 
         var driver = CSharpGeneratorDriver.Create(new ValiantMappingGenerator())
             .WithUpdatedParseOptions(parseOptions);

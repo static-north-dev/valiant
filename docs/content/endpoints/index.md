@@ -5,7 +5,7 @@ description: Endpoint-per-class Minimal APIs with generated registration, groups
 
 # Minimal APIs, organized by feature
 
-Valiant Endpoints gives every ASP.NET Core Minimal API endpoint a small class and generates deterministic route registration. Group vertical slices, apply conventions once, exclude features at startup, and bind query shapes that ASP.NET Core does not handle by default.
+Valiant Endpoints gives every ASP.NET Core Minimal API endpoint a small class or record and generates deterministic route registration. Group vertical slices, apply conventions once, exclude features at startup, and bind query shapes that ASP.NET Core does not handle by default.
 
 ```csharp
 using StaticNorth.Valiant.Endpoints;
@@ -34,12 +34,13 @@ app.MapValiantEndpoints();
 | Route organization | `IEndpoint`, `IEndpointGroup`, standalone and grouped routes |
 | Shared policy | Group and endpoint configuration hooks over the returned route builders |
 | Feature switches | Separate startup predicates for generated groups and endpoints |
-| Multiple assemblies | Explicit registration and mapping overloads |
+| Multiple assemblies | Explicit assembly registration with `AddValiantEndpoints` |
 | Query compatibility | Arrays, nested objects, JSON opt-in, parser, serializer, and structured errors |
 | Request binding | Opt-in generated `BindAsync`, `[AsParameters]` repair, and complex `[FromQuery]` shims; native ASP.NET Core binding by default |
 
 ## Documentation map
 
+- [A validated Minimal API](./guides/validated-api.md) — combine all four modules in one route.
 - [Quick start](./quick-start.md)
 - [Runnable samples](./samples.md)
 - [Groups and conventions](./guides/groups-conventions.md)

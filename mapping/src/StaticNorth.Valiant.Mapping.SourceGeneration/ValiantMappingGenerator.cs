@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -146,7 +147,9 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             .Collect()
             .WithTrackingName("Mapping.MapperPairs");
         var hasDependencyInjection = context.CompilationProvider
-            .Select(static (compilation, _) => ValiantDependencyInjectionSymbols.HasDependencyInjection(compilation));
+            .Select(static (compilation, _) => ValiantDependencyInjectionSymbols.HasDependencyInjection(compilation)
+                ? compilation.AssemblyName ?? string.Empty
+                : null);
 
         context.RegisterSourceOutput(mappers, static (context, mapper) => ExecuteMapperDiagnostics(context, mapper));
         context.RegisterSourceOutput(generatedMappers, static (context, mapper) => ExecuteMapperSource(context, mapper));
@@ -284,7 +287,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     "MapperDefinition<TSource, TTarget> and IMapperDefinition<TSource, TTarget> must declare the same source and target types"));
             }
 
-            var configureMethod = FindConfigureMethod(mapperSymbol, cancellationToken);
+            var configureMethod = FindConfigureMethod(mapperSymbol, mappingPair, cancellationToken);
             var configure = ConfigureModel.Empty;
             if (configureMethod is not null)
             {
@@ -382,6 +385,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         CancellationToken cancellationToken)
     {
         var explicitMappings = ImmutableArray.CreateBuilder<ExplicitMemberMappingModel>();
+        var configureLocals = ImmutableArray.CreateBuilder<string>();
         var ignoredMappings = ImmutableArray.CreateBuilder<IgnoredMemberMappingModel>();
         var mapperReuses = ImmutableArray.CreateBuilder<MapperReuseModel>();
 
@@ -425,28 +429,46 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                 "Configure method parameter must be MappingContext<TSource, TTarget>."));
         }
 
-        if (methodSyntax.Body is null)
-        {
-            return ConfigureModel.ConventionDisabled;
-        }
-
         var contextParameterName = methodSymbol.Parameters[0].Name;
-        ParseConfigureStatements(
-            methodSyntax.Body.Statements,
-            contextParameterName,
-            null,
-            semanticModel,
-            cancellationToken,
-            explicitMappings,
-            ignoredMappings,
-            mapperReuses,
-            diagnostics);
+        if (methodSyntax.Body is { } body)
+        {
+            ParseConfigureStatements(
+                body.Statements,
+                contextParameterName,
+                null,
+                semanticModel,
+                cancellationToken,
+                explicitMappings,
+                configureLocals,
+                ignoredMappings,
+                mapperReuses,
+                diagnostics);
+        }
+        else if (methodSyntax.ExpressionBody is { } expressionBody &&
+            (expressionBody.Expression is not InvocationExpressionSyntax invocation ||
+                !TryCreateConfigureDeclarationChain(
+                    invocation,
+                    contextParameterName,
+                    null,
+                    semanticModel,
+                    explicitMappings,
+                    configureLocals,
+                    ignoredMappings,
+                    mapperReuses,
+                    diagnostics)))
+        {
+            diagnostics.Add(new DiagnosticInfo(
+                UnsupportedMappingDeclaration,
+                expressionBody.GetLocation(),
+                "Expression-bodied Configure methods must declare Map, Ignore, or UseMapper rules."));
+        }
 
         return new ConfigureModel(
             true,
             explicitMappings.ToImmutable(),
             ignoredMappings.ToImmutable(),
-            mapperReuses.ToImmutable());
+            mapperReuses.ToImmutable(),
+            configureLocals.ToImmutable());
     }
 
     private static void ParseConfigureStatements(
@@ -456,6 +478,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         SemanticModel semanticModel,
         CancellationToken cancellationToken,
         ImmutableArray<ExplicitMemberMappingModel>.Builder explicitMappings,
+        ImmutableArray<string>.Builder configureLocals,
         ImmutableArray<IgnoredMemberMappingModel>.Builder ignoredMappings,
         ImmutableArray<MapperReuseModel>.Builder mapperReuses,
         ImmutableArray<DiagnosticInfo>.Builder diagnostics)
@@ -469,6 +492,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                 semanticModel,
                 cancellationToken,
                 explicitMappings,
+                configureLocals,
                 ignoredMappings,
                 mapperReuses,
                 diagnostics);
@@ -482,6 +506,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         SemanticModel semanticModel,
         CancellationToken cancellationToken,
         ImmutableArray<ExplicitMemberMappingModel>.Builder explicitMappings,
+        ImmutableArray<string>.Builder configureLocals,
         ImmutableArray<IgnoredMemberMappingModel>.Builder ignoredMappings,
         ImmutableArray<MapperReuseModel>.Builder mapperReuses,
         ImmutableArray<DiagnosticInfo>.Builder diagnostics)
@@ -497,6 +522,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     conditionExpression,
                     semanticModel,
                     explicitMappings,
+                    configureLocals,
                     ignoredMappings,
                     mapperReuses,
                     diagnostics))
@@ -511,18 +537,22 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                 return;
 
             case BlockSyntax block:
-                ParseConfigureStatements(block.Statements, contextParameterName, conditionExpression, semanticModel, cancellationToken, explicitMappings, ignoredMappings, mapperReuses, diagnostics);
+                ParseConfigureStatements(block.Statements, contextParameterName, conditionExpression, semanticModel, cancellationToken, explicitMappings, configureLocals, ignoredMappings, mapperReuses, diagnostics);
                 return;
 
             case IfStatementSyntax ifStatement:
-                var condition = RewriteMappingCondition(ifStatement.Condition, contextParameterName);
+                var branchExpression = RewriteMappingCondition(ifStatement.Condition, contextParameterName);
+                var condition = "__valiantBranch" + configureLocals.Count.ToString(CultureInfo.InvariantCulture);
+                var activeCondition = CombineConditions(conditionExpression, branchExpression);
+                configureLocals.Add("var " + condition + " = " + activeCondition + ";");
                 ParseConfigureStatement(
                     ifStatement.Statement,
                     contextParameterName,
-                    CombineConditions(conditionExpression, condition),
+                    condition,
                     semanticModel,
                     cancellationToken,
                     explicitMappings,
+                    configureLocals,
                     ignoredMappings,
                     mapperReuses,
                     diagnostics);
@@ -535,6 +565,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                         semanticModel,
                         cancellationToken,
                         explicitMappings,
+                        configureLocals,
                         ignoredMappings,
                         mapperReuses,
                         diagnostics);
@@ -557,6 +588,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         string? branchConditionExpression,
         SemanticModel semanticModel,
         ImmutableArray<ExplicitMemberMappingModel>.Builder explicitMappings,
+        ImmutableArray<string>.Builder configureLocals,
         ImmutableArray<IgnoredMemberMappingModel>.Builder ignoredMappings,
         ImmutableArray<MapperReuseModel>.Builder mapperReuses,
         ImmutableArray<DiagnosticInfo>.Builder diagnostics)
@@ -651,7 +683,20 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                         return true;
                     }
 
-                    pendingExplicitMappings[pendingExplicitMappings.Count - 1].FallbackExpression = currentInvocation.ArgumentList.Arguments[0].Expression.ToString();
+                    var fallbackArgument = currentInvocation.ArgumentList.Arguments[0].Expression;
+                    var fallbackType = semanticModel.GetTypeInfo(fallbackArgument).ConvertedType;
+                    if (fallbackType is null)
+                    {
+                        return true;
+                    }
+
+                    var fallbackLocal = "__valiantFallback" + configureLocals.Count.ToString(CultureInfo.InvariantCulture);
+                    var fallbackValue = RewriteMappingCondition(fallbackArgument, contextParameterName);
+                    var fallbackDeclaration = fallbackType.ToDisplayString(TypeDisplayFormat) + " " + fallbackLocal + " = ";
+                    configureLocals.Add(fallbackDeclaration + (branchConditionExpression is null
+                        ? fallbackValue
+                        : "(" + branchConditionExpression + ") ? (" + fallbackValue + ") : default!") + ";");
+                    pendingExplicitMappings[pendingExplicitMappings.Count - 1].FallbackExpression = fallbackLocal;
                     break;
 
                 case MappingApi.IgnoreNull:
@@ -688,7 +733,17 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                         return true;
                     }
 
-                    mapperReuses.Add(mapperReuse);
+                    var mapperLocal = "__valiantMapper" + configureLocals.Count.ToString(CultureInfo.InvariantCulture);
+                    var mapperExpression = RewriteMappingCondition(currentInvocation.ArgumentList.Arguments[0].Expression, contextParameterName);
+                    var mapperType = GetMapperInterfaceDisplayName(mapperReuse.SourceType, mapperReuse.TargetType);
+                    var capture = "(" + mapperType + "?)(" + mapperExpression + ") ?? throw new global::System.ArgumentNullException(\"mapper\")";
+                    if (branchConditionExpression is not null)
+                    {
+                        capture = "(" + branchConditionExpression + ") ? (" + capture + ") : null";
+                    }
+
+                    configureLocals.Add("var " + mapperLocal + " = " + capture + ";");
+                    mapperReuses.Add(new MapperReuseModel(mapperLocal, mapperReuse.SourceType, mapperReuse.TargetType, branchConditionExpression));
                     break;
 
                 default:
@@ -705,7 +760,6 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
 
         void AddPendingMappingDeclarations()
         {
-            var effectiveConditionExpression = CombineConditions(branchConditionExpression, chainConditionExpression);
             foreach (var pendingMapping in pendingExplicitMappings)
             {
                 explicitMappings.Add(new ExplicitMemberMappingModel(
@@ -714,15 +768,17 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     pendingMapping.SourceType,
                     pendingMapping.FallbackExpression,
                     pendingMapping.NullHandling,
-                    effectiveConditionExpression,
-                    pendingMapping.Location));
+                    branchConditionExpression,
+                    chainConditionExpression,
+                    pendingMapping.Location,
+                    explicitMappings.Count));
             }
 
             foreach (var pendingIgnoredMapping in pendingIgnoredMappings)
             {
                 ignoredMappings.Add(new IgnoredMemberMappingModel(
                     pendingIgnoredMapping.TargetMemberName,
-                    effectiveConditionExpression,
+                    CombineConditions(branchConditionExpression, chainConditionExpression),
                     pendingIgnoredMapping.Location));
             }
 
@@ -769,8 +825,10 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             return false;
         }
 
-        var sourceSelector = mapInvocation.ArgumentList.Arguments[0].Expression;
-        var targetSelector = mapInvocation.ArgumentList.Arguments[1].Expression;
+        var arguments = mapInvocation.ArgumentList.Arguments;
+        var targetIsFirst = arguments[0].NameColon?.Name.Identifier.ValueText == "target";
+        var sourceSelector = arguments[targetIsFirst ? 1 : 0].Expression;
+        var targetSelector = arguments[targetIsFirst ? 0 : 1].Expression;
         if (!TryCreateSourceSelectorExpression(sourceSelector, semanticModel, out sourceExpression, out sourceType))
         {
             diagnostics.Add(new DiagnosticInfo(
@@ -785,7 +843,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             diagnostics.Add(new DiagnosticInfo(
                 UnsupportedMappingDeclaration,
                 targetSelector.GetLocation(),
-                "Map target selector must select a target member."));
+                "Map target selector must select a direct target field or property."));
             return false;
         }
 
@@ -816,7 +874,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             diagnostics.Add(new DiagnosticInfo(
                 UnsupportedMappingDeclaration,
                 targetSelector.GetLocation(),
-                "Ignore target selector must select a target member."));
+                "Ignore target selector must select a direct target field or property."));
             return false;
         }
 
@@ -858,22 +916,27 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         return true;
     }
 
-    private static MethodDeclarationSyntax? FindConfigureMethod(INamedTypeSymbol mapperSymbol, CancellationToken cancellationToken)
+    private static MethodDeclarationSyntax? FindConfigureMethod(
+        INamedTypeSymbol mapperSymbol,
+        MappingPair mappingPair,
+        CancellationToken cancellationToken)
     {
-        foreach (var reference in mapperSymbol.DeclaringSyntaxReferences)
+        foreach (var method in mapperSymbol.GetMembers("Configure").OfType<IMethodSymbol>())
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            if (reference.GetSyntax(cancellationToken) is not TypeDeclarationSyntax typeDeclaration)
+            if (method.IsStatic || method.IsGenericMethod || method.Parameters.Length != 1 ||
+                method.Parameters[0].RefKind != RefKind.None ||
+                !IsMappingContextType(method.Parameters[0].Type, mappingPair))
             {
                 continue;
             }
 
-            foreach (var method in typeDeclaration.Members.OfType<MethodDeclarationSyntax>())
+            foreach (var reference in method.DeclaringSyntaxReferences)
             {
-                if (method.Identifier.ValueText == "Configure")
+                if (reference.GetSyntax(cancellationToken) is MethodDeclarationSyntax syntax &&
+                    (syntax.Body is not null || syntax.ExpressionBody is not null))
                 {
-                    return method;
+                    return syntax;
                 }
             }
         }
@@ -915,18 +978,23 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
     {
         expression = string.Empty;
         sourceType = null!;
-        if (!TryGetLambdaParts(selector, out var parameterName, out var body))
+        if (!TryGetLambdaParts(selector, out var parameter, out var body))
         {
             return false;
         }
 
-        var type = semanticModel.GetTypeInfo(body).Type;
+        var typeInfo = semanticModel.GetTypeInfo(body);
+        var type = typeInfo.ConvertedType ?? typeInfo.Type;
         if (type is null)
         {
             return false;
         }
 
-        expression = RewriteLambdaBody(body, parameterName, "source");
+        expression = RewriteLambdaBody(body, parameter, semanticModel);
+        if (!SymbolEqualityComparer.Default.Equals(type, typeInfo.Type))
+        {
+            expression = "(" + type.ToDisplayString(TypeDisplayFormat) + ")(" + expression + ")";
+        }
         sourceType = type;
         return true;
     }
@@ -937,7 +1005,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         out string expression)
     {
         expression = string.Empty;
-        if (!TryGetLambdaParts(selector, out var parameterName, out var body))
+        if (!TryGetLambdaParts(selector, out var parameter, out var body))
         {
             return false;
         }
@@ -948,7 +1016,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             return false;
         }
 
-        expression = RewriteLambdaBody(body, parameterName, "source");
+        expression = RewriteLambdaBody(body, parameter, semanticModel);
         return true;
     }
 
@@ -958,7 +1026,9 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         out string targetMemberName)
     {
         targetMemberName = string.Empty;
-        if (!TryGetLambdaParts(selector, out _, out var body))
+        if (!TryGetLambdaParts(selector, out var parameter, out var body) ||
+            body is not MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax receiver } ||
+            !SymbolEqualityComparer.Default.Equals(semanticModel.GetSymbolInfo(receiver).Symbol, semanticModel.GetDeclaredSymbol(parameter)))
         {
             return false;
         }
@@ -966,7 +1036,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         var symbol = semanticModel.GetSymbolInfo(body).Symbol;
         switch (symbol)
         {
-            case IPropertySymbol { IsStatic: false } property:
+            case IPropertySymbol { IsStatic: false, IsIndexer: false } property:
                 targetMemberName = property.Name;
                 return true;
             case IFieldSymbol { IsStatic: false } field:
@@ -977,18 +1047,23 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         }
     }
 
-    private static bool TryGetLambdaParts(ExpressionSyntax expression, out string parameterName, out ExpressionSyntax body)
+    private static bool TryGetLambdaParts(ExpressionSyntax expression, out ParameterSyntax parameter, out ExpressionSyntax body)
     {
-        parameterName = string.Empty;
+        parameter = null!;
         body = null!;
+        while (expression is ParenthesizedExpressionSyntax parenthesized)
+        {
+            expression = parenthesized.Expression;
+        }
+
         switch (expression)
         {
             case SimpleLambdaExpressionSyntax { Body: ExpressionSyntax simpleBody } simpleLambda:
-                parameterName = simpleLambda.Parameter.Identifier.ValueText;
+                parameter = simpleLambda.Parameter;
                 body = simpleBody;
                 return true;
             case ParenthesizedLambdaExpressionSyntax { ParameterList.Parameters.Count: 1, Body: ExpressionSyntax parenthesizedBody } parenthesizedLambda:
-                parameterName = parenthesizedLambda.ParameterList.Parameters[0].Identifier.ValueText;
+                parameter = parenthesizedLambda.ParameterList.Parameters[0];
                 body = parenthesizedBody;
                 return true;
             default:
@@ -996,9 +1071,9 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         }
     }
 
-    private static string RewriteLambdaBody(ExpressionSyntax expression, string parameterName, string replacementName)
+    private static string RewriteLambdaBody(ExpressionSyntax expression, ParameterSyntax parameter, SemanticModel semanticModel)
     {
-        return new LambdaParameterRewriter(parameterName, replacementName)
+        return new LambdaParameterRewriter(semanticModel.GetDeclaredSymbol(parameter), semanticModel)
             .Visit(expression)
             .ToString();
     }
@@ -1040,7 +1115,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             {
                 continue;
             }
-            
+
             sourceType = interfaceType.TypeArguments[0];
             targetType = interfaceType.TypeArguments[1];
             return true;
@@ -1095,10 +1170,13 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         var assignments = ImmutableArray.CreateBuilder<MemberAssignmentModel>();
         var collectionMappings = ImmutableArray.CreateBuilder<CollectionMappingModel>();
         collectionMappings.AddRange(constructor.CollectionMappings);
+        var memberSourceIndex = 0;
 
         foreach (var targetMember in targetMembers)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var initializedByConstructor = targetMember.IsRequired && constructor.SetsRequiredMembers;
+            var required = targetMember.IsRequired && !constructor.SetsRequiredMembers;
 
             if (constructorMemberNames.Contains(targetMember.Name))
             {
@@ -1116,17 +1194,24 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                 var successfulMappingConditions = ImmutableArray.CreateBuilder<string?>();
                 foreach (var explicitMapping in explicitMappings)
                 {
-                    if (explicitMapping.ConditionExpression is not null && !targetMember.CanAssignAfterConstruction)
+                    var userMappingCondition = CombineConditions(explicitMapping.BranchConditionExpression, explicitMapping.ConditionExpression);
+                    if (userMappingCondition is not null && !targetMember.CanAssignAfterConstruction &&
+                        (explicitMappings.Length != 1 || explicitMapping.BranchConditionExpression is not null ||
+                            explicitMapping.FallbackExpression is null))
                     {
                         diagnostics.Add(new DiagnosticInfo(
                             UnsupportedMappingDeclaration,
                             explicitMapping.Location ?? targetMember.Location ?? location,
-                            "Conditional Map declarations cannot target init-only members."));
+                            "A conditional Map to an init-only member must use a single rule with When and a fallback."));
                         continue;
                     }
 
+                    var explicitSource = explicitMapping.SourceExpression;
+                    var nullGuardCondition = CaptureNullGuardedSource(
+                        ref explicitSource, explicitMapping.SourceType, explicitMapping.NullHandling,
+                        "__valiantMemberSource" + memberSourceIndex++.ToString(CultureInfo.InvariantCulture));
                     if (!TryCreateMappedExpression(
-                        explicitMapping.SourceExpression,
+                        explicitSource,
                         explicitMapping.SourceType,
                         targetMember.Type,
                         configure.MapperReuses,
@@ -1143,33 +1228,45 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     }
 
                     var ignoreGuardCondition = CreateIgnoreGuardCondition(configure.IgnoredMappings, targetMember.Name);
-                    var userMappingCondition = explicitMapping.ConditionExpression;
-                    var assignmentCondition = CombineConditions(
-                        userMappingCondition,
-                        CreateNullHandlingGuardCondition(explicitMapping.SourceExpression, explicitMapping.SourceType, explicitMapping.NullHandling));
+                    var assignmentCondition = CombineConditions(explicitMapping.ConditionExpression, nullGuardCondition);
                     var fallbackExpression = explicitMapping.FallbackExpression;
                     var explicitSourceExpression = explicitMappedExpression.Expression;
                     var finalSourceExpression = explicitSourceExpression;
-                    var finalConditionExpression = CombineConditions(assignmentCondition, ignoreGuardCondition);
+                    var finalConditionExpression = CombineConditions(ignoreGuardCondition, CombineConditions(explicitMapping.BranchConditionExpression, assignmentCondition));
                     var coverageCondition = CombineConditions(userMappingCondition, ignoreGuardCondition);
                     if (fallbackExpression is not null)
                     {
                         finalSourceExpression = assignmentCondition is null
                             ? explicitSourceExpression
                             : "(" + assignmentCondition + ") ? " + explicitSourceExpression + " : " + fallbackExpression;
-                        finalConditionExpression = ignoreGuardCondition;
-                        coverageCondition = ignoreGuardCondition;
+                        finalConditionExpression = CombineConditions(ignoreGuardCondition, explicitMapping.BranchConditionExpression);
+                        coverageCondition = finalConditionExpression;
+                    }
+                    var useInitSetter = !targetMember.CanAssignAfterConstruction && ignoreGuardCondition is not null && !required;
+                    if (!targetMember.CanAssignAfterConstruction && !useInitSetter && finalConditionExpression is not null)
+                    {
+                        finalSourceExpression = "(" + finalConditionExpression + ") ? " + explicitSourceExpression + " : default!";
+                        finalConditionExpression = null;
                     }
 
                     assignments.Add(new MemberAssignmentModel(
                         targetMember.Name,
                         finalSourceExpression,
-                        finalConditionExpression));
+                        finalConditionExpression,
+                        explicitMapping.DeclarationOrder,
+                        useInitializer: (!targetMember.CanAssignAfterConstruction && !useInitSetter) || required,
+                        initPropertyType: useInitSetter ? targetMember.Type.ToDisplayString(TypeDisplayFormat) : null));
                     collectionMappings.AddRange(explicitMappedExpression.CollectionMappings);
                     successfulMappingConditions.Add(coverageCondition);
                 }
 
-                if (!ConditionsCoverAllPaths(successfulMappingConditions.ToImmutable()))
+                var fullyMappedWhenNotIgnored = !required &&
+                    HasConditionalIgnore(configure.IgnoredMappings, targetMember.Name) &&
+                    ConditionsCoverAllPaths([.. explicitMappings.Select(static mapping => mapping.FallbackExpression is not null
+                        ? mapping.BranchConditionExpression
+                        : CombineConditions(mapping.BranchConditionExpression, mapping.ConditionExpression))]);
+                if (!initializedByConstructor && !fullyMappedWhenNotIgnored &&
+                    !ConditionsCoverAllPaths(successfulMappingConditions.ToImmutable()))
                 {
                     AddUnmappedTargetMemberDiagnostic(mappingPair, targetMember, location, diagnostics);
                 }
@@ -1179,7 +1276,10 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
 
             if (configure.DisablesConventionMapping)
             {
-                AddUnmappedTargetMemberDiagnostic(mappingPair, targetMember, location, diagnostics);
+                if (!initializedByConstructor)
+                {
+                    AddUnmappedTargetMemberDiagnostic(mappingPair, targetMember, location, diagnostics);
+                }
                 continue;
             }
 
@@ -1201,12 +1301,19 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     continue;
                 }
 
-                AddUnmappedTargetMemberDiagnostic(mappingPair, targetMember, location, diagnostics);
+                if (!initializedByConstructor)
+                {
+                    AddUnmappedTargetMemberDiagnostic(mappingPair, targetMember, location, diagnostics);
+                }
                 continue;
             }
 
+            var memberSource = sourceMember.Expression;
+            var memberNullGuardCondition = CaptureNullGuardedSource(
+                ref memberSource, sourceMember.Type, NullHandlingPolicy.Default,
+                "__valiantMemberSource" + memberSourceIndex++.ToString(CultureInfo.InvariantCulture));
             if (!TryCreateMappedExpression(
-                sourceMember.Expression,
+                memberSource,
                 sourceMember.Type,
                 targetMember.Type,
                 configure.MapperReuses,
@@ -1224,13 +1331,13 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
 
             var sourceExpression = mappedSourceExpression.Expression;
             var guardCondition = CombineConditions(
-                CreateNullHandlingGuardCondition(sourceMember.Expression, sourceMember.Type, NullHandlingPolicy.Default),
-                CreateIgnoreGuardCondition(configure.IgnoredMappings, targetMember.Name));
+                CreateIgnoreGuardCondition(configure.IgnoredMappings, targetMember.Name),
+                memberNullGuardCondition);
             if (guardCondition is null || !targetMember.CanAssignAfterConstruction)
             {
                 assignments.Add(new MemberAssignmentModel(
                     targetMember.Name,
-                    guardCondition is null ? sourceExpression : "(" + guardCondition + ") ? " + sourceExpression + " : default",
+                    guardCondition is null ? sourceExpression : "(" + guardCondition + ") ? " + sourceExpression + " : default!",
                     null));
             }
             else
@@ -1250,8 +1357,9 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             hasConfigureMethod,
             UsesServiceProviderMapper(constructor, assignments, finalCollectionMappings),
             constructor,
-            assignments.ToImmutable(),
-            finalCollectionMappings);
+            [.. assignments.OrderBy(static assignment => assignment.DeclarationOrder)],
+            finalCollectionMappings,
+            configure.ConfigureLocals);
     }
 
     private static ConstructorMappingModel? CreateConstructorMapping(
@@ -1288,15 +1396,9 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             return null;
         }
 
-        if (targetNamedType.IsValueType)
-        {
-            return new ConstructorMappingModel(
-                ImmutableArray<ConstructorArgumentModel>.Empty,
-                ImmutableArray<CollectionMappingModel>.Empty);
-        }
-
         var constructors = targetNamedType.InstanceConstructors
-            .Where(static constructor => constructor.DeclaredAccessibility == Accessibility.Public)
+            .Where(static constructor => constructor.DeclaredAccessibility == Accessibility.Public &&
+                constructor.Parameters.All(static parameter => parameter.RefKind is RefKind.None or RefKind.In))
             .OrderByDescending(static constructor => constructor.Parameters.Length)
             .ThenBy(static constructor => constructor.Locations.FirstOrDefault()?.SourceSpan.Start ?? int.MaxValue);
 
@@ -1306,6 +1408,11 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             {
                 return constructorMapping;
             }
+        }
+
+        if (targetNamedType.IsValueType)
+        {
+            return EmptyConstructorMapping();
         }
 
         diagnostics.Add(new DiagnosticInfo(
@@ -1328,9 +1435,17 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
     {
         var arguments = ImmutableArray.CreateBuilder<ConstructorArgumentModel>();
         var collectionMappings = ImmutableArray.CreateBuilder<CollectionMappingModel>();
+        var constructorSourceIndex = 0;
 
         foreach (var parameter in constructor.Parameters)
         {
+            var parameterType = parameter.Type.ToDisplayString(TypeDisplayFormat);
+            var runtimeParameterType = parameter.Type.TypeKind == TypeKind.Dynamic
+                ? "object"
+                : parameter.Type.ToDisplayString(ValiantGeneratorTypeDisplayFormats.MetadataTypeDisplayFormat);
+            var skippedArgument = GetConstructorParameterDefault(parameter, parameterType);
+            ConstructorArgumentModel CreateArgument(string expression) =>
+                new(parameter.Name, parameterType, runtimeParameterType, expression, parameter.RefKind == RefKind.In);
             if (TryGetIgnore(configure.IgnoredMappings, parameter.Name, out var ignoredMapping))
             {
                 if (ignoredMapping.ConditionExpression is not null)
@@ -1343,19 +1458,23 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     return false;
                 }
 
-                arguments.Add(new ConstructorArgumentModel(parameter.Name, "default"));
+                arguments.Add(CreateArgument(skippedArgument));
                 continue;
             }
 
-            var explicitMappings = GetExplicitMappings(configure.ExplicitMappings, parameter.Name);
+            var explicitMappings = GetExplicitMappings(configure.ExplicitMappings, parameter.Name, StringComparison.OrdinalIgnoreCase);
             if (explicitMappings.Length > 0)
             {
-                var explicitSourceExpression = "default";
+                var explicitSourceExpression = skippedArgument;
                 for (var index = explicitMappings.Length - 1; index >= 0; index--)
                 {
                     var explicitMapping = explicitMappings[index];
+                    var explicitSource = explicitMapping.SourceExpression;
+                    var nullGuardCondition = CaptureNullGuardedSource(
+                        ref explicitSource, explicitMapping.SourceType, explicitMapping.NullHandling,
+                        "__valiantConstructorSource" + constructorSourceIndex++.ToString(CultureInfo.InvariantCulture));
                     if (!TryCreateMappedExpression(
-                        explicitMapping.SourceExpression,
+                        explicitSource,
                         explicitMapping.SourceType,
                         parameter.Type,
                         configure.MapperReuses,
@@ -1366,23 +1485,30 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                         return false;
                     }
 
-                    var mappingCondition = CombineConditions(
-                        explicitMapping.ConditionExpression,
-                        CreateNullHandlingGuardCondition(explicitMapping.SourceExpression, explicitMapping.SourceType, explicitMapping.NullHandling));
+                    var mappingCondition = CombineConditions(explicitMapping.ConditionExpression, nullGuardCondition);
                     var fallbackExpression = explicitMapping.FallbackExpression ?? explicitSourceExpression;
 
-                    explicitSourceExpression = mappingCondition is null
+                    var ruleExpression = mappingCondition is null
                         ? mappedExpression.Expression
                         : "(" + mappingCondition + ") ? " + mappedExpression.Expression + " : " + fallbackExpression;
+                    explicitSourceExpression = explicitMapping.BranchConditionExpression is null
+                        ? ruleExpression
+                        : "(" + explicitMapping.BranchConditionExpression + ") ? (" + ruleExpression + ") : " + explicitSourceExpression;
                     collectionMappings.AddRange(mappedExpression.CollectionMappings);
                 }
 
-                arguments.Add(new ConstructorArgumentModel(parameter.Name, explicitSourceExpression));
+                arguments.Add(CreateArgument(explicitSourceExpression));
                 continue;
             }
 
             if (configure.DisablesConventionMapping)
             {
+                if (parameter.HasExplicitDefaultValue)
+                {
+                    arguments.Add(CreateArgument(skippedArgument));
+                    continue;
+                }
+
                 constructorMapping = EmptyConstructorMapping();
                 return false;
             }
@@ -1390,25 +1516,33 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             if (TryGetSourceMember(sourceMembers, parameter.Name, out var sourceMember) ||
                 TryGetFlattenedSourceMember(sourceMembers, parameter.Name, out sourceMember))
             {
+                var constructorSource = sourceMember.Expression;
+                var nullGuardCondition = CaptureNullGuardedSource(
+                    ref constructorSource, sourceMember.Type, NullHandlingPolicy.Default,
+                    "__valiantConstructorSource" + constructorSourceIndex++.ToString(CultureInfo.InvariantCulture));
                 if (!TryCreateMappedExpression(
-                    sourceMember.Expression,
+                    constructorSource,
                     sourceMember.Type,
                     parameter.Type,
                     configure.MapperReuses,
                     compilation,
                     out var mappedSourceExpression))
                 {
+                    if (parameter.HasExplicitDefaultValue)
+                    {
+                        arguments.Add(CreateArgument(skippedArgument));
+                        continue;
+                    }
+
                     constructorMapping = EmptyConstructorMapping();
                     return false;
                 }
 
                 var sourceExpression = mappedSourceExpression.Expression;
-                var nullGuardCondition = CreateNullHandlingGuardCondition(sourceMember.Expression, sourceMember.Type, NullHandlingPolicy.Default);
-                arguments.Add(new ConstructorArgumentModel(
-                    parameter.Name,
+                arguments.Add(CreateArgument(
                     nullGuardCondition is null
                         ? sourceExpression
-                        : "(" + nullGuardCondition + ") ? " + sourceExpression + " : default"));
+                        : "(" + nullGuardCondition + ") ? " + sourceExpression + " : " + skippedArgument));
                 collectionMappings.AddRange(mappedSourceExpression.CollectionMappings);
                 continue;
             }
@@ -1422,8 +1556,14 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     compilation,
                     out var unflattenedMappedExpression))
             {
-                arguments.Add(new ConstructorArgumentModel(parameter.Name, unflattenedMappedExpression.Expression));
+                arguments.Add(CreateArgument(unflattenedMappedExpression.Expression));
                 collectionMappings.AddRange(unflattenedMappedExpression.CollectionMappings);
+                continue;
+            }
+
+            if (parameter.HasExplicitDefaultValue)
+            {
+                arguments.Add(CreateArgument(skippedArgument));
                 continue;
             }
 
@@ -1433,8 +1573,45 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
 
         constructorMapping = new ConstructorMappingModel(
             arguments.ToImmutable(),
-            DeduplicateCollectionMappings(collectionMappings.ToImmutable()));
+            DeduplicateCollectionMappings(collectionMappings.ToImmutable()),
+            SetsRequiredMembers(constructor));
         return true;
+    }
+
+    private static bool SetsRequiredMembers(IMethodSymbol constructor)
+    {
+        return constructor.GetAttributes().Any(static attribute =>
+            attribute.AttributeClass?.ToDisplayString() == "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute");
+    }
+
+    private static string GetConstructorParameterDefault(IParameterSymbol parameter, string parameterType)
+    {
+        if (!parameter.HasExplicitDefaultValue || parameter.ExplicitDefaultValue is null)
+        {
+            return parameter.Type.IsReferenceType && parameter.NullableAnnotation == NullableAnnotation.NotAnnotated
+                ? "default!"
+                : "default";
+        }
+
+        var expression = parameter.ExplicitDefaultValue switch
+        {
+            decimal number => number.ToString(CultureInfo.InvariantCulture) + "M",
+            uint number => number.ToString(CultureInfo.InvariantCulture) + "U",
+            long number => number.ToString(CultureInfo.InvariantCulture) + "L",
+            ulong number => number.ToString(CultureInfo.InvariantCulture) + "UL",
+            float number when float.IsNaN(number) => "global::System.Single.NaN",
+            float number when float.IsPositiveInfinity(number) => "global::System.Single.PositiveInfinity",
+            float number when float.IsNegativeInfinity(number) => "global::System.Single.NegativeInfinity",
+            float number => number.ToString("R", CultureInfo.InvariantCulture) + "F",
+            double number when double.IsNaN(number) => "global::System.Double.NaN",
+            double number when double.IsPositiveInfinity(number) => "global::System.Double.PositiveInfinity",
+            double number when double.IsNegativeInfinity(number) => "global::System.Double.NegativeInfinity",
+            double number => number.ToString("R", CultureInfo.InvariantCulture) + "D",
+            DateTime value => "new global::System.DateTime(" + value.Ticks.ToString(CultureInfo.InvariantCulture) + "L)",
+            var value => SymbolDisplay.FormatPrimitive(value, quoteStrings: true, useHexadecimalNumbers: false)
+        };
+
+        return "(" + parameterType + ")(" + expression + ")";
     }
 
     private static ConstructorMappingModel EmptyConstructorMapping()
@@ -1454,10 +1631,10 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             switch (member)
             {
                 case IPropertySymbol { IsStatic: false, IsIndexer: false, GetMethod.DeclaredAccessibility: Accessibility.Public } property:
-                    AddSourceMember(property.Name, property.Type, "source." + property.Name, members, seen);
+                    AddSourceMember(property.Name, property.Type, "source." + EscapeIdentifier(property.Name), members, seen);
                     break;
                 case IFieldSymbol { IsStatic: false, DeclaredAccessibility: Accessibility.Public } field:
-                    AddSourceMember(field.Name, field.Type, "source." + field.Name, members, seen);
+                    AddSourceMember(field.Name, field.Type, "source." + EscapeIdentifier(field.Name), members, seen);
                     break;
             }
         }
@@ -1541,11 +1718,21 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         }
     }
 
-    private static string CreateNestedSourceExpression(string receiverExpression, ITypeSymbol receiverType, string memberName)
+    private static string CreateNestedSourceExpression(
+        string receiverExpression,
+        ITypeSymbol receiverType,
+        string memberName,
+        ITypeSymbol memberType)
     {
-        return CanBeNull(receiverType)
-            ? "(" + receiverExpression + " is null ? default : " + receiverExpression + "." + memberName + ")"
-            : receiverExpression + "." + memberName;
+        if (!CanBeNull(receiverType))
+        {
+            return receiverExpression + "." + memberName;
+        }
+
+        var access = receiverExpression + "?." + memberName;
+        return memberType.IsValueType && !CanBeNull(memberType)
+            ? "(" + access + " ?? default(" + memberType.ToDisplayString(TypeDisplayFormat) + "))"
+            : "(" + access + ")";
     }
 
     private static bool CanFlattenSourceType(ITypeSymbol type)
@@ -1563,7 +1750,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             return false;
         }
 
-        return nonNullableType.TypeKind is TypeKind.Class or TypeKind.Struct;
+        return nonNullableType.TypeKind is TypeKind.Class or TypeKind.Struct or TypeKind.Interface;
     }
 
     private static void AddTargetMember(
@@ -1662,7 +1849,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             return false;
         }
 
-        foreach (var member in EnumerateVisibleMembers(currentType))
+        foreach (var member in EnumerateVisibleMembers(GetNonNullableType(currentType)))
         {
             if (!TryGetReadableSourceMember(member, out var memberName, out var memberType) ||
                 remainingName.Length < memberName.Length ||
@@ -1671,7 +1858,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var memberExpression = CreateNestedSourceExpression(receiverExpression, currentType, memberName);
+            var memberExpression = CreateNestedSourceExpression(receiverExpression, currentType, EscapeIdentifier(memberName), memberType);
             var nextRemainingName = remainingName.Substring(memberName.Length);
             if (nextRemainingName.Length == 0)
             {
@@ -1724,14 +1911,16 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         out MappedExpressionModel mappedExpression)
     {
         mappedExpression = EmptyMappedExpression();
-        if (!CanConstructUnflattenedTarget(targetType))
+        var nestedType = GetNonNullableType(targetType);
+        if (GetUnflattenedTargetConstructor(nestedType) is not { } constructor)
         {
             return false;
         }
 
+        var setsRequiredMembers = SetsRequiredMembers(constructor);
         var assignments = ImmutableArray.CreateBuilder<string>();
         var collectionMappings = ImmutableArray.CreateBuilder<CollectionMappingModel>();
-        foreach (var nestedTargetMember in GetTargetMembers(targetType, targetMemberCache))
+        foreach (var nestedTargetMember in GetTargetMembers(nestedType, targetMemberCache))
         {
             if (!TryGetSourceMember(sourceMembers, targetPrefix + nestedTargetMember.Name, out var sourceMember) ||
                 !TryCreateMappedExpression(
@@ -1742,10 +1931,15 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     compilation,
                     out var nestedMappedExpression))
             {
+                if (nestedTargetMember.IsRequired && !setsRequiredMembers)
+                {
+                    return false;
+                }
+
                 continue;
             }
 
-            assignments.Add(nestedTargetMember.Name + " = " + nestedMappedExpression.Expression);
+            assignments.Add(EscapeIdentifier(nestedTargetMember.Name) + " = " + nestedMappedExpression.Expression);
             collectionMappings.AddRange(nestedMappedExpression.CollectionMappings);
         }
 
@@ -1760,36 +1954,30 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         return true;
     }
 
-    private static bool CanConstructUnflattenedTarget(ITypeSymbol targetType)
+    private static IMethodSymbol? GetUnflattenedTargetConstructor(ITypeSymbol targetType)
     {
-        var nonNullableTargetType = GetNonNullableType(targetType);
-        if (nonNullableTargetType.TypeKind == TypeKind.Struct)
-        {
-            return true;
-        }
-
-        if (nonNullableTargetType is not INamedTypeSymbol namedType ||
-            namedType.TypeKind != TypeKind.Class ||
+        if (targetType is not INamedTypeSymbol namedType ||
+            namedType.TypeKind is not (TypeKind.Class or TypeKind.Struct) ||
             namedType.IsAbstract ||
-            IsSystemNamespace(namedType))
+            (namedType.TypeKind == TypeKind.Class && IsSystemNamespace(namedType)))
         {
-            return false;
+            return null;
         }
 
-        return namedType.InstanceConstructors.Any(static constructor =>
+        return namedType.InstanceConstructors.FirstOrDefault(static constructor =>
             constructor.Parameters.Length == 0 &&
             constructor.DeclaredAccessibility == Accessibility.Public);
     }
 
     private static ImmutableArray<ExplicitMemberMappingModel> GetExplicitMappings(
         ImmutableArray<ExplicitMemberMappingModel> explicitMappings,
-        string targetName)
+        string targetName,
+        StringComparison nameComparison = StringComparison.Ordinal)
     {
         var matches = ImmutableArray.CreateBuilder<ExplicitMemberMappingModel>();
         foreach (var mapping in explicitMappings)
         {
-            if (string.Equals(mapping.TargetMemberName, targetName, StringComparison.Ordinal) ||
-                string.Equals(mapping.TargetMemberName, targetName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(mapping.TargetMemberName, targetName, nameComparison))
             {
                 matches.Add(mapping);
             }
@@ -1805,8 +1993,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
     {
         foreach (var mapping in ignoredMappings)
         {
-            if (string.Equals(mapping.TargetMemberName, targetName, StringComparison.Ordinal) ||
-                string.Equals(mapping.TargetMemberName, targetName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(mapping.TargetMemberName, targetName, StringComparison.OrdinalIgnoreCase))
             {
                 ignoredMapping = mapping;
                 return true;
@@ -1823,8 +2010,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
     {
         foreach (var mapping in ignoredMappings)
         {
-            if ((string.Equals(mapping.TargetMemberName, targetName, StringComparison.Ordinal) ||
-                string.Equals(mapping.TargetMemberName, targetName, StringComparison.OrdinalIgnoreCase)) &&
+            if (string.Equals(mapping.TargetMemberName, targetName, StringComparison.Ordinal) &&
                 mapping.ConditionExpression is null)
             {
                 return true;
@@ -1840,8 +2026,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
     {
         foreach (var mapping in ignoredMappings)
         {
-            if ((string.Equals(mapping.TargetMemberName, targetName, StringComparison.Ordinal) ||
-                string.Equals(mapping.TargetMemberName, targetName, StringComparison.OrdinalIgnoreCase)) &&
+            if (string.Equals(mapping.TargetMemberName, targetName, StringComparison.Ordinal) &&
                 mapping.ConditionExpression is not null)
             {
                 return true;
@@ -1941,8 +2126,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         var conditions = ImmutableArray.CreateBuilder<string>();
         foreach (var mapping in ignoredMappings)
         {
-            if ((string.Equals(mapping.TargetMemberName, targetName, StringComparison.Ordinal) ||
-                string.Equals(mapping.TargetMemberName, targetName, StringComparison.OrdinalIgnoreCase)) &&
+            if (string.Equals(mapping.TargetMemberName, targetName, StringComparison.Ordinal) &&
                 mapping.ConditionExpression is not null)
             {
                 conditions.Add(NegateCondition(mapping.ConditionExpression));
@@ -1985,14 +2169,35 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             return true;
         }
 
-        foreach (var mapperReuse in mapperReuses)
+        var applicableMappers = mapperReuses
+            .Where(mapper => SymbolEqualityComparer.Default.Equals(mapper.SourceType, sourceType) &&
+                SymbolEqualityComparer.Default.Equals(mapper.TargetType, targetType))
+            .ToImmutableArray();
+        if (!applicableMappers.IsEmpty)
         {
-            if (SymbolEqualityComparer.Default.Equals(mapperReuse.SourceType, sourceType) &&
-                SymbolEqualityComparer.Default.Equals(mapperReuse.TargetType, targetType))
+            if (applicableMappers[0].BranchCondition is null)
             {
-                mappedExpression = CreateMappedExpression(mapperReuse.MapperExpression + ".Map(" + sourceExpression + ")");
+                mappedExpression = new MappedExpressionModel(
+                    applicableMappers[0].MapperExpression + ".Map(" + sourceExpression + ")", [], capturesConfigureLocals: true);
                 return true;
             }
+
+            const string nestedSource = "__valiantNestedSource";
+            var map = TryCreateMappedExpression(nestedSource, sourceType, targetType, [], compilation, depth, out var fallback)
+                ? fallback.Expression
+                : CreateServiceProviderMappingExpression(sourceType, targetType, nestedSource);
+            for (var index = applicableMappers.Length - 1; index >= 0; index--)
+            {
+                var mapper = applicableMappers[index];
+                var mapperCall = mapper.MapperExpression + "!.Map(__valiantNestedSource)";
+                map = mapper.BranchCondition is null ? mapperCall : "(" + mapper.BranchCondition + ") ? " + mapperCall + " : " + map;
+            }
+
+            mappedExpression = new MappedExpressionModel("MapWithConfiguredMapper<" + sourceType.ToDisplayString(TypeDisplayFormat) + ", " +
+                targetType.ToDisplayString(TypeDisplayFormat) + ">(" + sourceExpression + ", " + nestedSource + " => " + map + ")",
+                fallback.CollectionMappings,
+                capturesConfigureLocals: true);
+            return true;
         }
 
         if (GetNonNullableType(sourceType).TypeKind == TypeKind.Enum &&
@@ -2002,11 +2207,12 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             return true;
         }
 
+        var elementParameter = "__valiantElement" + depth.ToString(CultureInfo.InvariantCulture);
         if (depth < 3 &&
             TryGetEnumerableElementType(sourceType, out var sourceElementType) &&
             TryGetEnumerableElementType(targetType, out var targetElementType) &&
             TryCreateMappedExpression(
-                "item",
+                elementParameter,
                 sourceElementType,
                 targetElementType,
                 mapperReuses,
@@ -2014,9 +2220,9 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                 depth + 1,
                 out var mappedElementExpression))
         {
-            var sourceTypeName = sourceType.ToDisplayString(TypeDisplayFormat);
+            var collectionSourceType = GetCollectionSourceType(sourceType, sourceElementType, compilation);
+            var sourceTypeName = collectionSourceType.ToDisplayString(TypeDisplayFormat);
             var sourceElementTypeName = sourceElementType.ToDisplayString(TypeDisplayFormat);
-            var targetElementTypeName = targetElementType.ToDisplayString(TypeDisplayFormat);
             if (targetType is IArrayTypeSymbol)
             {
                 mappedExpression = CreateCollectionMappedExpression(
@@ -2025,9 +2231,10 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     sourceTypeName,
                     sourceElementTypeName,
                     GetCollectionSourceKind(sourceType),
-                    targetElementTypeName,
+                    targetElementType,
                     mappedElementExpression,
-                    GetReliableCollectionCountExpression(sourceType));
+                    elementParameter,
+                    GetReliableCollectionCountExpression(collectionSourceType));
                 return true;
             }
 
@@ -2039,9 +2246,10 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     sourceTypeName,
                     sourceElementTypeName,
                     GetCollectionSourceKind(sourceType),
-                    targetElementTypeName,
+                    targetElementType,
                     mappedElementExpression,
-                    GetCollectionCapacityExpression(sourceType));
+                    elementParameter,
+                    GetReliableCollectionCountExpression(collectionSourceType));
                 return true;
             }
 
@@ -2053,10 +2261,11 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
                     sourceTypeName,
                     sourceElementTypeName,
                     GetCollectionSourceKind(sourceType),
-                    targetElementTypeName,
+                    targetElementType,
                     mappedElementExpression,
+                    elementParameter,
                     HasHashSetCapacityConstructor(compilation)
-                        ? GetReliableCollectionCountExpression(sourceType)
+                        ? GetReliableCollectionCountExpression(collectionSourceType)
                         : null);
                 return true;
             }
@@ -2064,19 +2273,24 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
 
         if (CanUseServiceProviderMapper(sourceType, targetType))
         {
-            mappedExpression = CreateMappedExpression(
-                ServiceProviderMapperInvocationPrefix +
-                    GetNonNullableDisplayName(sourceType) +
-                    ", " +
-                    GetNonNullableDisplayName(targetType) +
-                    ">(" +
-                    sourceExpression +
-                    ")");
+            mappedExpression = CreateMappedExpression(CreateServiceProviderMappingExpression(sourceType, targetType, sourceExpression));
             return true;
         }
 
         mappedExpression = EmptyMappedExpression();
         return false;
+    }
+
+    private static string CreateServiceProviderMappingExpression(ITypeSymbol sourceType, ITypeSymbol targetType, string sourceExpression)
+    {
+        return ServiceProviderMapperInvocationPrefix + GetNonNullableDisplayName(sourceType) + ", " +
+            GetNonNullableDisplayName(targetType) + ">(" + sourceExpression + ")";
+    }
+
+    private static string GetMapperInterfaceDisplayName(ITypeSymbol sourceType, ITypeSymbol targetType)
+    {
+        return "global::StaticNorth.Valiant.Mapping.IMapper<" + sourceType.ToDisplayString(TypeDisplayFormat) +
+            ", " + targetType.ToDisplayString(TypeDisplayFormat) + ">";
     }
 
     private static MappedExpressionModel CreateMappedExpression(string expression)
@@ -2095,16 +2309,18 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         string sourceType,
         string sourceElementType,
         CollectionSourceKind sourceKind,
-        string targetElementType,
+        ITypeSymbol targetElementType,
         MappedExpressionModel mappedElementExpression,
+        string elementParameter,
         string? capacityExpression)
     {
+        var targetElementTypeName = targetElementType.ToDisplayString(TypeDisplayFormat);
         var methodName = CreateCollectionMappingMethodName(
             kind,
             sourceKind,
             sourceType,
             sourceElementType,
-            targetElementType,
+            targetElementTypeName,
             mappedElementExpression.Expression,
             capacityExpression);
         var collectionMapping = new CollectionMappingModel(
@@ -2113,15 +2329,36 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             sourceKind,
             sourceType,
             sourceElementType,
-            targetElementType,
-            mappedElementExpression.Expression,
-            capacityExpression);
+            targetElementTypeName,
+            kind == CollectionMappingKind.Array ? CreateArrayAllocationFormat(targetElementType) : null,
+            mappedElementExpression.CapturesConfigureLocals
+                ? mappedElementExpression.Expression
+                : mappedElementExpression.Expression.Replace(elementParameter, "item"),
+            capacityExpression,
+            mappedElementExpression.CapturesConfigureLocals);
         var collectionMappings = ImmutableArray.CreateBuilder<CollectionMappingModel>();
         collectionMappings.AddRange(mappedElementExpression.CollectionMappings);
         collectionMappings.Add(collectionMapping);
+        // Pass element conversions that use a captured mapper into the collection helper.
+        var elementMapperArgument = collectionMapping.RequiresElementMapper
+            ? ", " + elementParameter + " => " + mappedElementExpression.Expression
+            : string.Empty;
         return new MappedExpressionModel(
-            methodName + "(" + sourceExpression + ")",
-            DeduplicateCollectionMappings(collectionMappings.ToImmutable()));
+            methodName + "(" + sourceExpression + elementMapperArgument + ")",
+            DeduplicateCollectionMappings(collectionMappings.ToImmutable()),
+            collectionMapping.RequiresElementMapper);
+    }
+
+    private static string CreateArrayAllocationFormat(ITypeSymbol elementType)
+    {
+        var dimensions = new StringBuilder("[{0}]");
+        while (elementType is IArrayTypeSymbol nestedArray)
+        {
+            dimensions.Append('[').Append(',', nestedArray.Rank - 1).Append(']');
+            elementType = nestedArray.ElementType;
+        }
+
+        return elementType.ToDisplayString(TypeDisplayFormat) + dimensions;
     }
 
     private static CollectionSourceKind GetCollectionSourceKind(ITypeSymbol sourceType)
@@ -2131,30 +2368,25 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             : CollectionSourceKind.Other;
     }
 
-    private static string? GetCollectionCapacityExpression(ITypeSymbol sourceType)
+    private static ITypeSymbol GetCollectionSourceType(
+        ITypeSymbol sourceType,
+        ITypeSymbol sourceElementType,
+        Compilation compilation)
     {
-        var nonNullableSourceType = GetNonNullableType(sourceType);
-        if (nonNullableSourceType is IArrayTypeSymbol)
+        if (sourceType is IArrayTypeSymbol ||
+            sourceType is INamedTypeSymbol namedType &&
+            namedType.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" &&
+            namedType.OriginalDefinition.MetadataName is
+                "List`1" or "HashSet`1" or "IList`1" or "IReadOnlyList`1" or "ICollection`1" or "IReadOnlyCollection`1" or "IEnumerable`1")
         {
-            return "source.Length";
+            return sourceType;
         }
 
-        foreach (var member in EnumerateVisibleMembers(nonNullableSourceType))
-        {
-            if (member is IPropertySymbol
-                {
-                    Name: "Count",
-                    IsStatic: false,
-                    IsIndexer: false,
-                    Type.SpecialType: SpecialType.System_Int32,
-                    GetMethod.DeclaredAccessibility: Accessibility.Public
-                })
-            {
-                return "source.Count";
-            }
-        }
-
-        return null;
+        // Unknown concrete enumeration patterns can differ from IEnumerable<T>.
+        // Normalize them to the interface whose element type was used to select the mapping.
+        return compilation.GetSpecialType(SpecialType.System_Collections_Generic_IEnumerable_T)
+            .Construct(sourceElementType)
+            .WithNullableAnnotation(CanBeNull(sourceType) ? NullableAnnotation.Annotated : NullableAnnotation.NotAnnotated);
     }
 
     private static string? GetReliableCollectionCountExpression(ITypeSymbol sourceType)
@@ -2309,22 +2541,23 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
         return expression.Contains(ServiceProviderMapperInvocationPrefix, StringComparison.Ordinal);
     }
 
-    private static string? CreateNullHandlingGuardCondition(
-        string sourceExpression,
+    private static string? CaptureNullGuardedSource(
+        ref string sourceExpression,
         ITypeSymbol sourceType,
-        NullHandlingPolicy nullHandling)
+        NullHandlingPolicy nullHandling,
+        string localName)
     {
-        if (!CanBeNull(sourceType))
+        if (!CanBeNull(sourceType) || nullHandling == NullHandlingPolicy.MapNulls)
         {
             return null;
         }
 
-        return nullHandling switch
-        {
-            NullHandlingPolicy.MapNulls => null,
-            NullHandlingPolicy.IgnoreSourceNulls => "(" + sourceExpression + ") is not null",
-            _ => "GetEffectiveNullHandling() != global::StaticNorth.Valiant.Mapping.ValiantNullHandling.IgnoreSourceNulls || (" + sourceExpression + ") is not null"
-        };
+        var capture = "(" + sourceExpression + ") is var " + localName;
+        sourceExpression = localName;
+        var nonNull = "(object?)" + localName + " is not null";
+        return nullHandling == NullHandlingPolicy.IgnoreSourceNulls
+            ? capture + " && " + nonNull
+            : capture + " && (GetEffectiveNullHandling() != global::StaticNorth.Valiant.Mapping.ValiantNullHandling.IgnoreSourceNulls || " + nonNull + ")";
     }
 
     private static bool TryGetEnumerableElementType(ITypeSymbol type, out ITypeSymbol elementType)
@@ -2336,7 +2569,7 @@ public sealed partial class ValiantMappingGenerator : IIncrementalGenerator
             return false;
         }
 
-        if (nonNullableType is IArrayTypeSymbol arrayType)
+        if (nonNullableType is IArrayTypeSymbol { Rank: 1 } arrayType)
         {
             elementType = arrayType.ElementType;
             return true;

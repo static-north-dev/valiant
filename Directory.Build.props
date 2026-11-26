@@ -16,7 +16,8 @@
     <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
     <IsPackable>false</IsPackable>
 
-    <VersionPrefix>0.1.0-preview.1</VersionPrefix>
+    <ValiantStableBaselineVersion>1.2.1</ValiantStableBaselineVersion>
+    <VersionPrefix>$(ValiantStableBaselineVersion)-ci.1</VersionPrefix>
     <PackageVersion Condition="'$(PackageVersion)' == ''">$(VersionPrefix)</PackageVersion>
     <Authors>Valiant contributors</Authors>
     <Company>Static North</Company>

@@ -73,13 +73,10 @@ details and precedence.
 
 ## Query binding
 
-The query-binding startup opts the compilation into generated binding:
+The query-binding sample uses `[assembly: ValiantGenerateQueryBinding]` to enable generated binding. Its startup registers the assembly's endpoints.
 
 ```csharp
-services.AddValiantEndpoints(options =>
-{
-    options.QueryParameters.EnableBinding = true;
-});
+services.AddValiantEndpoints();
 ```
 
 Its `/query/*` routes cover array and object formats, direct JSON query values,

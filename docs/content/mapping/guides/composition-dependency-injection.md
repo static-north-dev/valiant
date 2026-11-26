@@ -31,12 +31,26 @@ public sealed partial class UserMapper(AddressMapper addressMapper)
 ## Generated registration
 
 ```csharp
-using StaticNorth.Valiant.Mapping.DependencyInjection;
+using StaticNorth.Valiant.Mapping;
 
 builder.Services.AddValiantMappers();
 ```
 
-Valiant registers each mapper as its concrete type and as `IMapper<TSource, TTarget>`. It also registers `IMapper` and `IMapperFactory`. Mapper registrations are transient; the facade, factory, and options are singleton services.
+Valiant registers each mapper as a transient service under its concrete type and `IMapper<TSource, TTarget>`. The `IMapper` facade and `IMapperFactory` default to singleton. Options are registered as a singleton.
+
+If you use the facade or factory with mappers that have scoped dependencies, opt into scoped lookup during startup.
+
+```csharp
+builder.Services.AddValiantMappers(options => options.UseScopedMapperLookup = true);
+```
+
+With scoped lookup enabled, resolve the facade and factory from the current request or a service scope you create.
+
+Call the generated registration from each project that declares mappers. Supply shared options on the first call. The facade and factory can resolve mapper pairs from every registered assembly.
+
+From a separate host, call each assembly's public registration explicitly. For a library named `Orders`, call `StaticNorth.Valiant.Generated.Assembly_Orders.Mappers.AddValiantMappers(services)`.
+
+Mapping, Validation, and Settings use the same namespace convention. Each period in the assembly name starts a new `Assembly_` segment. Characters outside ASCII letters and digits are encoded as an underscore followed by the four-digit uppercase hexadecimal UTF-16 code unit. For example, `Acme.Orders-Api` becomes `Assembly_Acme.Assembly_Orders_002DApi`.
 
 ## Choose an API
 

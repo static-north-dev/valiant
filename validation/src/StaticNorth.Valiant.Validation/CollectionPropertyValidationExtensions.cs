@@ -142,14 +142,13 @@ public static class CollectionPropertyValidationExtensions
     /// <param name="message">Optional error message used when this check fails.</param>
     /// <param name="severity">The severity level of the validation failure.</param>
     public static PropertyValidation<T, TCollection> Count<T, TCollection>(this PropertyValidation<T, TCollection> property, int count, string? code = null, string? message = null, ValiantSeverity severity = ValiantSeverity.Error)
-        where TCollection : System.Collections.ICollection?
     {
         if (property.ShouldSkip)
         {
             return property;
         }
 
-        return property.Check("Count", () => !ValidationChecks.HasCount(property.Value, count), "'" + property.PropertyName + "' must contain exactly " + count + " item(s).", code, message, severity);
+        return property.Check("Count", count, static (actual, expectedCount) => !ValidationChecks.HasCount(actual, expectedCount), "'" + property.PropertyName + "' must contain exactly " + count + " item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -169,7 +168,7 @@ public static class CollectionPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("LengthBetween", () => !ValidationChecks.HasLengthBetween(property.Value, min, max), "'" + property.PropertyName + "' must contain between " + min + " and " + max + " item(s).", code, message, severity);
+        return property.Check("LengthBetween", (Min: min, Max: max), static (actual, bounds) => !ValidationChecks.HasLengthBetween(actual, bounds.Min, bounds.Max), "'" + property.PropertyName + "' must contain between " + min + " and " + max + " item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -188,7 +187,7 @@ public static class CollectionPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("MinLength", () => !ValidationChecks.HasMinLength(property.Value, min), "'" + property.PropertyName + "' must contain at least " + min + " item(s).", code, message, severity);
+        return property.Check("MinLength", min, static (actual, minimum) => !ValidationChecks.HasMinLength(actual, minimum), "'" + property.PropertyName + "' must contain at least " + min + " item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -207,7 +206,7 @@ public static class CollectionPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("MaxLength", () => !ValidationChecks.HasMaxLength(property.Value, max), "'" + property.PropertyName + "' must contain at most " + max + " item(s).", code, message, severity);
+        return property.Check("MaxLength", max, static (actual, maximum) => !ValidationChecks.HasMaxLength(actual, maximum), "'" + property.PropertyName + "' must contain at most " + max + " item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -228,7 +227,7 @@ public static class CollectionPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("All", () => !ValidationChecks.All(property.Value, predicate), "'" + property.PropertyName + "' must contain only matching item(s).", code, message, severity);
+        return property.Check("All", predicate, static (actual, predicate) => !ValidationChecks.All(actual, predicate), "'" + property.PropertyName + "' must contain only matching item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -249,7 +248,7 @@ public static class CollectionPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("Any", () => !ValidationChecks.Any(property.Value, predicate), "'" + property.PropertyName + "' must contain at least one matching item.", code, message, severity);
+        return property.Check("Any", predicate, static (actual, predicate) => !ValidationChecks.Any(actual, predicate), "'" + property.PropertyName + "' must contain at least one matching item.", code, message, severity);
     }
 
     /// <summary>
@@ -270,7 +269,7 @@ public static class CollectionPropertyValidationExtensions
             return property;
         }
 
-        return property.Check("None", () => !ValidationChecks.None(property.Value, predicate), "'" + property.PropertyName + "' must not contain matching item(s).", code, message, severity);
+        return property.Check("None", predicate, static (actual, predicate) => !ValidationChecks.None(actual, predicate), "'" + property.PropertyName + "' must not contain matching item(s).", code, message, severity);
     }
 
     /// <summary>
@@ -336,8 +335,8 @@ public static class CollectionPropertyValidationExtensions
                 {
                     var itemContext = new ValidationContext<TItem>(item, property.Context.CreateChildPropertyPathPrefix(property.PropertyName, index));
                     configure(itemContext, collection, state);
-                    property.Context.AddFailures(itemContext.ToResult().Failures);
-                    if (property.Context.ShouldStopValidation)
+                    property.AddNestedFailures(itemContext.ToResult());
+                    if (property.ShouldSkip)
                     {
                         break;
                     }
@@ -364,8 +363,8 @@ public static class CollectionPropertyValidationExtensions
                 {
                     var itemContext = new ValidationContext<TItem>(item, property.Context.CreateChildPropertyPathPrefix(property.PropertyName, index));
                     configure(itemContext, collection, state);
-                    property.Context.AddFailures((await itemContext.ToResultAsync(cancellationToken).ConfigureAwait(false)).Failures);
-                    if (property.Context.ShouldStopValidation)
+                    property.AddNestedFailures(await itemContext.ToResultAsync(cancellationToken).ConfigureAwait(false));
+                    if (property.ShouldSkip)
                     {
                         break;
                     }

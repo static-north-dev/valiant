@@ -1,5 +1,7 @@
 using StaticNorth.Valiant.Endpoints.AspNetCore.DependencyInjection;
 
+[assembly: StaticNorth.Valiant.Endpoints.AspNetCore.ValiantGenerateQueryBinding]
+
 namespace StaticNorth.Valiant.Endpoints.AspNetCore.Samples.QueryBinding;
 
 /// <summary>
@@ -9,10 +11,7 @@ public class Startup
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddValiantEndpoints(options =>
-        {
-            options.QueryParameters.EnableBinding = true;
-        });
+        services.AddValiantEndpoints();
     }
 
     public void Configure(IApplicationBuilder app)

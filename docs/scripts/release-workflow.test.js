@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const {spawnSync} = require('node:child_process');
 
 const repositoryRoot = path.resolve(__dirname, '..', '..');
 const workflowsRoot = path.resolve(
@@ -64,6 +65,30 @@ test('published releases only verify and publish NuGet packages', () => {
     releaseWorkflow,
     /docs_major|docs:snapshot|docs:import|DOCS_INCLUDE_CURRENT|CLOUDFLARE_|wrangler|setup-node/,
   );
+});
+
+test('release uploads and publishes manifest entries and rejects duplicate versions', () => {
+  const prepare = job(releaseWorkflow, 'prepare');
+  const publish = job(releaseWorkflow, 'publish-nuget');
+  assert.match(prepare, /mktemp -d .*valiant-/);
+  assert.match(prepare, /path: \$\{\{ steps\.verified\.outputs\.paths \}\}/);
+  assert.match(prepare, /< "\$output\/verified-packages\.sha256"/);
+  assert.match(publish, /sha256sum --strict --check verified-packages\.sha256/);
+  assert.match(publish, /done < verified-packages\.sha256/);
+  assert.match(publish, /"\$status" != 404/);
+  assert.doesNotMatch(publish, /--skip-duplicate/);
+});
+
+test('release version accepts SemVer prereleases with repeated or edge hyphens', {skip: process.platform === 'win32'}, () => {
+  const script = path.join(repositoryRoot, '.github', 'scripts', 'derive-release-version.sh');
+  for (const tag of ['v1.4.0-rc--hotfix', '1.4.0--alpha.beta-', '1.4.0-0']) {
+    const result = spawnSync('bash', [script, tag], {encoding: 'utf8'});
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(result.stdout.includes(`package_version=${tag.replace(/^v/, '')}\n`));
+  }
+  for (const tag of ['1.4.0-01', '1.4.0-rc..hotfix', '1.4.0+build']) {
+    assert.equal(spawnSync('bash', [script, tag]).status, 1, tag);
+  }
 });
 
 test('release verification excludes the documentation project', () => {

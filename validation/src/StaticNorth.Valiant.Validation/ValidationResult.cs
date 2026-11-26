@@ -42,17 +42,17 @@ public sealed class ValidationResult
         {
             var failure = errors[index];
             failures[index] = failure;
-            switch (failure.Severity)
+            if (IsError(failure.Severity))
             {
-                case ValiantSeverity.Warning:
-                    warningCount++;
-                    break;
-                case ValiantSeverity.Info:
-                    infoCount++;
-                    break;
-                default:
-                    errorCount++;
-                    break;
+                errorCount++;
+            }
+            else if (failure.Severity == ValiantSeverity.Warning)
+            {
+                warningCount++;
+            }
+            else
+            {
+                infoCount++;
             }
         }
 
@@ -112,6 +112,11 @@ public sealed class ValidationResult
         return this;
     }
 
+    internal static bool IsError(ValiantSeverity severity)
+    {
+        return severity is not (ValiantSeverity.Warning or ValiantSeverity.Info);
+    }
+
     internal static ValidationResult CreateOwned(
         ValidationFailure[] failures,
         int errorCount,
@@ -134,17 +139,17 @@ public sealed class ValidationResult
         Warnings = [];
         Infos = [];
 
-        switch (failure.Severity)
+        if (IsError(failure.Severity))
         {
-            case ValiantSeverity.Warning:
-                Warnings = failures;
-                break;
-            case ValiantSeverity.Info:
-                Infos = failures;
-                break;
-            default:
-                _errors = failures;
-                break;
+            _errors = failures;
+        }
+        else if (failure.Severity == ValiantSeverity.Warning)
+        {
+            Warnings = failures;
+        }
+        else
+        {
+            Infos = failures;
         }
     }
 

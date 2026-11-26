@@ -4,7 +4,7 @@ set -euo pipefail
 release_tag="${1:-}"
 output_file="${2:-}"
 package_version="${release_tag#v}"
-semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'
+semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
 
 if [[ ! "$package_version" =~ $semver ]]; then
   echo "Release tag '$release_tag' must be SemVer without build metadata and with an optional leading v." >&2

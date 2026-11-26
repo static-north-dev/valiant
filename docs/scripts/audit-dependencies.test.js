@@ -1,6 +1,20 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const {classifyHighAdvisories} = require('./audit-dependencies');
+const {classifyHighAdvisories, parseAuditReport} = require('./audit-dependencies');
+
+test('requires a completed advisory report', () => {
+  for (const output of [
+    '{}',
+    '{"error":{"summary":"Registry unavailable"}}',
+    '{"vulnerabilities":{}}',
+    '{"vulnerabilities":{},"metadata":{"vulnerabilities":{"total":1}}}',
+    '{"vulnerabilities":{"example":{}},"metadata":{"vulnerabilities":{"total":1}}}',
+  ]) {
+    assert.throws(() => parseAuditReport(output), /complete advisory report/);
+  }
+  const complete = {vulnerabilities: {}, metadata: {vulnerabilities: {total: 0}}};
+  assert.deepEqual(parseAuditReport(JSON.stringify(complete)), complete);
+});
 
 test('rejects the formerly exempt image-size advisories through the Docusaurus dependency chain', () => {
   const result = classifyHighAdvisories({

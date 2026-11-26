@@ -1,6 +1,14 @@
 {
   "version": 2,
   "dependencies": {
+    "net11.0": {
+      "staticnorth.valiant.settings": {
+        "type": "Project"
+      },
+      "staticnorth.valiant.validation": {
+        "type": "Project"
+      }
+    },
     "net8.0": {
       "staticnorth.valiant.settings": {
         "type": "Project"

@@ -17,7 +17,7 @@ public static class Sample
             options.NullHandling = ValiantNullHandling.MapNulls;
         });
 
-        using var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider(validateScopes: true);
         var source = new Person("Grace", 40);
         var typed = provider.GetRequiredService<IMapper<Person, PersonDto>>();
         var facade = provider.GetRequiredService<IMapper>();

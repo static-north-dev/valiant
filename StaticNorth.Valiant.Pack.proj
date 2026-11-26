@@ -1,9 +1,9 @@
 <Project>
+  <Import Project="Directory.Build.props" />
   <PropertyGroup>
     <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+    <PackageOutputPath>$(PackageOutputPath)/$(PackageVersion)</PackageOutputPath>
     <NoBuild Condition="'$(NoBuild)' == ''">false</NoBuild>
-    <PackageVersion Condition="'$(PackageVersion)' == ''">0.1.0-preview.1</PackageVersion>
-    <PackageOutputPath>$(MSBuildThisFileDirectory)artifacts/packages</PackageOutputPath>
     <AotRuntimeIdentifier Condition="'$(AotRuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">osx-arm64</AotRuntimeIdentifier>
     <AotExecutableExtension Condition="$([System.String]::Copy('$(AotRuntimeIdentifier)').StartsWith('win'))">.exe</AotExecutableExtension>
   </PropertyGroup>
@@ -47,14 +47,18 @@
   </Target>
 
   <Target Name="VerifyPackageConsumers" DependsOnTargets="PreparePackageSmokeCache">
+    <Exec EnvironmentVariables="VALIANT_PACKAGE_SOURCE=$(PackageOutputPath)"
+      Command="dotnet build smoke/StaticNorth.Valiant.NetStandard.PackageConsumer/StaticNorth.Valiant.NetStandard.PackageConsumer.csproj --configuration $(Configuration) -p:StaticNorthValiantPackageVersion=$(PackageVersion) -p:RestoreConfigFile=$(MSBuildThisFileDirectory)smoke/NuGet.Config -p:RestorePackagesPath=$(MSBuildThisFileDirectory)artifacts/nuget-packages" />
     <Exec
+      EnvironmentVariables="VALIANT_PACKAGE_SOURCE=$(PackageOutputPath)"
       Command="dotnet restore &quot;%(PackageConsumer.Identity)&quot; --configfile &quot;smoke/NuGet.Config&quot; --packages &quot;artifacts/nuget-packages&quot; --force-evaluate -p:StaticNorthValiantPackageVersion=$(PackageVersion)" />
     <Exec
       Command="dotnet run --project &quot;%(PackageConsumer.Identity)&quot; --configuration $(Configuration) --no-restore -p:StaticNorthValiantPackageVersion=$(PackageVersion)" />
   </Target>
 
   <Target Name="VerifyAotSmoke" DependsOnTargets="PreparePackageSmokeCache" Condition="'$(AotRuntimeIdentifier)' != ''">
-    <Exec Command="dotnet publish &quot;smoke/StaticNorth.Valiant.AotSmoke/StaticNorth.Valiant.AotSmoke.csproj&quot; --configuration $(Configuration) --runtime $(AotRuntimeIdentifier) --self-contained true -p:StaticNorthValiantPackageVersion=$(PackageVersion) -p:RestoreConfigFile=$(MSBuildThisFileDirectory)smoke/NuGet.Config -p:RestorePackagesPath=$(MSBuildThisFileDirectory)artifacts/nuget-packages -p:RestoreForce=true" />
-    <Exec Command="smoke/StaticNorth.Valiant.AotSmoke/bin/$(Configuration)/net10.0/$(AotRuntimeIdentifier)/publish/StaticNorth.Valiant.AotSmoke$(AotExecutableExtension)" />
+    <Exec EnvironmentVariables="VALIANT_PACKAGE_SOURCE=$(PackageOutputPath)"
+      Command="dotnet publish &quot;smoke/StaticNorth.Valiant.AotSmoke/StaticNorth.Valiant.AotSmoke.csproj&quot; --configuration $(Configuration) --runtime $(AotRuntimeIdentifier) --self-contained true -p:StaticNorthValiantPackageVersion=$(PackageVersion) -p:RestoreConfigFile=$(MSBuildThisFileDirectory)smoke/NuGet.Config -p:RestorePackagesPath=$(MSBuildThisFileDirectory)artifacts/nuget-packages -p:RestoreForce=true" />
+    <Exec Command="smoke/StaticNorth.Valiant.AotSmoke/bin/$(Configuration)/net11.0/$(AotRuntimeIdentifier)/publish/StaticNorth.Valiant.AotSmoke$(AotExecutableExtension)" />
   </Target>
 </Project>

@@ -1,4 +1,6 @@
 using System.Collections;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Options;
 
 namespace StaticNorth.Valiant.Settings.AspNetCore;
@@ -50,7 +52,8 @@ public static class ValiantSettingsSchemaDocumentFactory
         bool canRevealSecrets)
     {
         _ = providers ?? throw new ArgumentNullException(nameof(providers));
-        revealSecrets = includeRuntimeValues && canRevealSecrets && revealSecrets;
+        canRevealSecrets = includeRuntimeValues && serviceProvider is not null && canRevealSecrets;
+        revealSecrets = canRevealSecrets && revealSecrets;
 
         var schemas = providers
             .Select(provider => CreateSchema(provider.Schema, serviceProvider, includeRuntimeValues, revealSecrets))
@@ -58,7 +61,8 @@ public static class ValiantSettingsSchemaDocumentFactory
             .ThenBy(static schema => schema.Name, StringComparer.Ordinal)
             .ToArray();
 
-        return new ValiantSettingsSchemaDocument(schemas, canRevealSecrets, includeRuntimeValues && revealSecrets);
+        return new ValiantSettingsSchemaDocument(schemas, canRevealSecrets,
+            revealSecrets && schemas.Any(static schema => schema.RuntimeValues is not null));
     }
 
     private static ValiantSettingsSchemaEntry CreateSchema(
@@ -76,13 +80,17 @@ public static class ValiantSettingsSchemaDocumentFactory
             schema.Name,
             schema.SettingsType.FullName ?? schema.SettingsType.Name,
             schema.SectionPath,
-            [.. schema.Properties.Select(CreateProperty)],
+            [.. schema.Properties.Select(static property => CreateProperty(property, includeDefaults: true))],
             runtimeValues,
-            runtimeValuesError);
+            runtimeValuesError)
+        {
+            AssemblyName = schema.SettingsType.Assembly.FullName
+        };
     }
 
-    private static ValiantSettingsSchemaPropertyEntry CreateProperty(ValiantSettingsPropertySchema property)
+    private static ValiantSettingsSchemaPropertyEntry CreateProperty(ValiantSettingsPropertySchema property, bool includeDefaults)
     {
+        includeDefaults = includeDefaults && !ValiantSettingsRuntimeValueFactory.ShouldMask(property);
         return new ValiantSettingsSchemaPropertyEntry(
             property.Name,
             property.ConfigurationKey,
@@ -91,28 +99,16 @@ public static class ValiantSettingsSchemaDocumentFactory
             property.IsRequired,
             property.IsNullable,
             property.IsSecret,
-            property.DefaultValue,
-            property.Item is null ? null : CreateProperty(property.Item),
-            [.. property.Properties.Select(CreateProperty)]);
+            includeDefaults ? property.DefaultValue : null,
+            property.Item is null ? null : CreateProperty(property.Item, includeDefaults),
+            [.. property.Properties.Select(child => CreateProperty(child, includeDefaults))]);
     }
 }
 
 internal static class ValiantSettingsRuntimeValueFactory
 {
+    private static readonly ConditionalWeakTable<Type, Dictionary<string, PropertyInfo>> ReadableProperties = new();
     private const string Mask = "********";
-
-    private static readonly string[] SensitiveNameParts =
-    [
-        "password",
-        "secret",
-        "token",
-        "apikey",
-        "api_key",
-        "connectionstring",
-        "connection_string",
-        "clientsecret",
-        "client_secret"
-    ];
 
     public static object? TryCreate(
         ValiantSettingsSchema schema,
@@ -132,13 +128,24 @@ internal static class ValiantSettingsRuntimeValueFactory
                 return null;
             }
 
-            var value = optionsType.GetProperty(nameof(IOptions<object>.Value))?.GetValue(options);
-            if (value is null)
+            var settingsType = schema.SettingsType;
+            if (options.GetType().Assembly == typeof(IOptions<>).Assembly &&
+                !typeof(OptionsWrapper<>).MakeGenericType(settingsType).IsInstanceOfType(options) &&
+                !HasOptionsConfiguration(serviceProvider, typeof(IConfigureOptions<>), settingsType) &&
+                !HasOptionsConfiguration(serviceProvider, typeof(IPostConfigureOptions<>), settingsType))
             {
+                error = "The host has no Options configuration registered for this settings model.";
                 return null;
             }
 
-            return CreateObject(value, schema.Properties, revealSecrets);
+            var value = optionsType.GetProperty(nameof(IOptions<object>.Value))?.GetValue(options);
+            if (value is null)
+            {
+                error = "The options service returned no settings instance.";
+                return null;
+            }
+
+            return CreateObject(value, schema.SettingsType, schema.Properties, revealSecrets);
         }
         catch (Exception)
         {
@@ -148,34 +155,67 @@ internal static class ValiantSettingsRuntimeValueFactory
         }
     }
 
+    private static bool HasOptionsConfiguration(IServiceProvider services, Type registrationType, Type settingsType)
+    {
+        var enumerableType = typeof(IEnumerable<>).MakeGenericType(registrationType.MakeGenericType(settingsType));
+        return services.GetService(enumerableType) is IEnumerable registrations &&
+            registrations.Cast<object>().Any();
+    }
+
     private static IReadOnlyDictionary<string, object?> CreateObject(
         object instance,
+        Type type,
         IReadOnlyList<ValiantSettingsPropertySchema> properties,
         bool revealSecrets)
     {
-        var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var values = new Dictionary<string, object?>(properties.Count, StringComparer.Ordinal);
+        var readableProperties = ReadableProperties.GetValue(type, static type => GetReadableProperties(type));
+        var maskEntryValue = !revealSecrets &&
+            type.IsGenericType &&
+            type.GetGenericTypeDefinition() == typeof(KeyValuePair<,>) &&
+            readableProperties.TryGetValue(nameof(KeyValuePair<string, object>.Key), out var keyProperty) &&
+            keyProperty.GetValue(instance) is string key &&
+            SensitiveSettingsNames.IsSensitive(key, key);
+
         foreach (var property in properties)
         {
-            if (!revealSecrets && ShouldMask(property))
+            if (!revealSecrets && (ShouldMask(property) ||
+                (maskEntryValue && property.Name == nameof(KeyValuePair<string, object>.Value))))
             {
                 values[property.ConfigurationKey] = Mask;
                 continue;
             }
 
-            var propertyInfo = instance.GetType().GetProperty(property.Name);
-            if (propertyInfo is null)
+            if (!readableProperties.TryGetValue(property.Name, out var propertyInfo))
             {
                 continue;
             }
 
             var value = propertyInfo.GetValue(instance);
-            values[property.ConfigurationKey] = CreateValue(value, property, revealSecrets);
+            values[property.ConfigurationKey] = CreateValue(value, propertyInfo.PropertyType, property, revealSecrets);
         }
 
         return values;
     }
 
-    private static object? CreateValue(object? value, ValiantSettingsPropertySchema property, bool revealSecrets)
+    private static Dictionary<string, PropertyInfo> GetReadableProperties(Type type)
+    {
+        var properties = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var property in current.GetProperties(BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (property.GetMethod is { IsPublic: true } && property.GetIndexParameters().Length == 0)
+                {
+                    properties.TryAdd(property.Name, property);
+                }
+            }
+        }
+
+        return properties;
+    }
+
+    private static object? CreateValue(object? value, Type declaredType, ValiantSettingsPropertySchema property, bool revealSecrets)
     {
         if (!revealSecrets && ShouldMask(property))
         {
@@ -189,10 +229,14 @@ internal static class ValiantSettingsRuntimeValueFactory
 
         if (property.Item is not null && value is IEnumerable enumerable && value is not string)
         {
+            var itemType = declaredType.IsArray ? declaredType.GetElementType() : declaredType.GetInterfaces()
+                .Prepend(declaredType)
+                .FirstOrDefault(static candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                ?.GetGenericArguments()[0];
             var items = new List<object?>();
             foreach (var item in enumerable)
             {
-                items.Add(CreateValue(item, property.Item, revealSecrets));
+                items.Add(CreateValue(item, itemType ?? item?.GetType() ?? typeof(object), property.Item, revealSecrets));
             }
 
             return items;
@@ -200,11 +244,18 @@ internal static class ValiantSettingsRuntimeValueFactory
 
         if (property.Kind == ValiantSettingsPropertyKind.Object || property.Properties.Count > 0)
         {
-            return CreateObject(value, property.Properties, revealSecrets);
+            return CreateObject(value, Nullable.GetUnderlyingType(declaredType) ?? declaredType, property.Properties, revealSecrets);
         }
 
         // Never hand arbitrary objects to the JSON serializer: recursive or opaque
         // values have no complete schema with which to enforce secret masking.
+        if (value is double doubleValue && !double.IsFinite(doubleValue) ||
+            value is float singleValue && !float.IsFinite(singleValue) ||
+            value is IntPtr or UIntPtr)
+        {
+            return null;
+        }
+
         var type = value.GetType();
         return type.IsPrimitive || type.IsEnum || value is string or decimal or DateTime or
             DateTimeOffset or DateOnly or TimeOnly or TimeSpan or Guid or Uri
@@ -212,27 +263,6 @@ internal static class ValiantSettingsRuntimeValueFactory
             : null;
     }
 
-    private static bool ShouldMask(ValiantSettingsPropertySchema property)
-    {
-        if (property.IsSecret)
-        {
-            return true;
-        }
-
-        var name = property.Name.Replace("-", string.Empty, StringComparison.Ordinal)
-            .Replace(".", string.Empty, StringComparison.Ordinal);
-        var key = property.ConfigurationKey.Replace("-", string.Empty, StringComparison.Ordinal)
-            .Replace(".", string.Empty, StringComparison.Ordinal);
-
-        foreach (var part in SensitiveNameParts)
-        {
-            if (name.Contains(part, StringComparison.OrdinalIgnoreCase) ||
-                key.Contains(part, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    internal static bool ShouldMask(ValiantSettingsPropertySchema property) =>
+        property.IsSecret || SensitiveSettingsNames.IsSensitive(property.Name, property.ConfigurationKey);
 }

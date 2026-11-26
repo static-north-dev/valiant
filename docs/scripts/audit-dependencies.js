@@ -49,6 +49,18 @@ function classifyHighAdvisories(report) {
   };
 }
 
+function parseAuditReport(output) {
+  const report = JSON.parse(output);
+  const vulnerabilities = report?.vulnerabilities;
+  if (report?.error || !vulnerabilities || typeof vulnerabilities !== 'object' || Array.isArray(vulnerabilities) ||
+      Object.keys(vulnerabilities).length !== report.metadata?.vulnerabilities?.total ||
+      Object.values(vulnerabilities).some((entry) =>
+        !['info', 'low', 'moderate', 'high', 'critical'].includes(entry?.severity) || !Array.isArray(entry?.via))) {
+    throw new Error('npm audit did not return a complete advisory report.');
+  }
+  return report;
+}
+
 function main() {
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const result = spawnSync(npm, ['audit', '--omit=dev', '--json'], {
@@ -64,7 +76,7 @@ function main() {
     throw new Error(`npm audit exited with ${result.status ?? 'an unknown status'}.`);
   }
 
-  const report = JSON.parse(result.stdout);
+  const report = parseAuditReport(result.stdout);
   const {unapprovedAdvisories, unresolvedPackages} = classifyHighAdvisories(report);
   if (unapprovedAdvisories.length > 0 || unresolvedPackages.length > 0) {
     process.stderr.write(result.stdout);
@@ -85,4 +97,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = {classifyHighAdvisories};
+module.exports = {classifyHighAdvisories, parseAuditReport};

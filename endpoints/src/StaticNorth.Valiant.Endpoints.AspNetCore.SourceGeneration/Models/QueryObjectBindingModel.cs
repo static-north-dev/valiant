@@ -13,6 +13,7 @@ internal readonly struct QueryObjectBindingModel(
     string type,
     bool isValueType,
     bool enableJsonQueryValues,
+    string? jsonOptionsField,
     ValiantDiagnosticLocation policyLocation,
     ImmutableArray<QueryObjectContainingTypeModel> containingTypes) : IEquatable<QueryObjectBindingModel>
 {
@@ -34,6 +35,8 @@ internal readonly struct QueryObjectBindingModel(
 
     public bool EnableJsonQueryValues { get; } = enableJsonQueryValues;
 
+    public string? JsonOptionsField { get; } = jsonOptionsField;
+
     public ValiantDiagnosticLocation PolicyLocation { get; } = policyLocation;
 
     public ImmutableArray<QueryObjectContainingTypeModel> ContainingTypes { get; } = containingTypes;
@@ -49,6 +52,7 @@ internal readonly struct QueryObjectBindingModel(
             string.Equals(Type, other.Type, StringComparison.Ordinal) &&
             IsValueType == other.IsValueType &&
             EnableJsonQueryValues == other.EnableJsonQueryValues &&
+            string.Equals(JsonOptionsField, other.JsonOptionsField, StringComparison.Ordinal) &&
             PolicyLocation.Equals(other.PolicyLocation) &&
             ContainingTypes.SequenceEqual(other.ContainingTypes);
     }
@@ -71,6 +75,7 @@ internal readonly struct QueryObjectBindingModel(
             hashCode = (hashCode * 397) ^ StringComparer.Ordinal.GetHashCode(Type);
             hashCode = (hashCode * 397) ^ IsValueType.GetHashCode();
             hashCode = (hashCode * 397) ^ EnableJsonQueryValues.GetHashCode();
+            hashCode = (hashCode * 397) ^ (JsonOptionsField is null ? 0 : StringComparer.Ordinal.GetHashCode(JsonOptionsField));
             hashCode = (hashCode * 397) ^ PolicyLocation.GetHashCode();
             foreach (var containingType in ContainingTypes)
             {

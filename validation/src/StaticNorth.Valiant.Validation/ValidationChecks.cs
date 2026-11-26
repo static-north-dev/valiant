@@ -6,6 +6,35 @@ namespace StaticNorth.Valiant.Validation;
 public static class ValidationChecks
 {
     /// <summary>
+    /// Reads a nested property selector, treating a null reference during the read as an unavailable path.
+    /// </summary>
+    /// <param name="instance">The instance to read.</param>
+    /// <param name="selector">The nested property selector.</param>
+    /// <param name="value">The selected value when the path is available.</param>
+    /// <returns>Whether the property could be read.</returns>
+    public static bool TryReadNestedProperty<T, TProperty>(T instance, Func<T, TProperty> selector, out TProperty value)
+    {
+        try
+        {
+            value = selector(instance);
+            return true;
+        }
+        catch (NullReferenceException)
+        {
+            value = default!;
+            return false;
+        }
+    }
+
+    /// <summary>Checks whether a value is the default for its type or contains only whitespace.</summary>
+    public static bool IsRequiredValueMissing<T>(T value)
+    {
+        return value is string text
+            ? string.IsNullOrWhiteSpace(text)
+            : EqualityComparer<T>.Default.Equals(value, default!);
+    }
+
+    /// <summary>
     /// Determines whether an enum value is defined by its enum type. Null values are treated as valid.
     /// </summary>
     /// <param name="value">The enum value to inspect.</param>
@@ -129,12 +158,13 @@ public static class ValidationChecks
     }
 
     /// <summary>
-    /// Determines whether a value has a count. Strings and counted collections are supported.
+    /// Determines the count, stopping early if a sequence reaches the requested limit.
     /// </summary>
     /// <param name="value">The value to inspect.</param>
+    /// <param name="stopAfter">The maximum number of sequence items to inspect.</param>
     /// <param name="count">The discovered count when the method returns <c>true</c>.</param>
     /// <returns><c>true</c> when the value exposes a count or can be enumerated; otherwise, <c>false</c>.</returns>
-    internal static bool TryGetCount<TValue>(TValue value, out int count)
+    private static bool TryGetCount<TValue>(TValue value, long stopAfter, out long count)
     {
         switch (value)
         {
@@ -147,6 +177,9 @@ public static class ValidationChecks
             case global::System.Collections.ICollection collection:
                 count = collection.Count;
                 return true;
+            case global::System.Collections.IEnumerable sequence:
+                count = CountSequence(sequence, stopAfter);
+                return true;
             default:
                 count = 0;
                 return false;
@@ -154,7 +187,7 @@ public static class ValidationChecks
     }
 
     /// <summary>
-    /// Determines whether a value is empty. Strings and collections are empty when their count is zero; other values are empty when they are null or default.
+    /// Determines whether a value is empty. Strings and sequences are empty when they have no elements; other values are empty when they are null or default.
     /// </summary>
     /// <param name="value">The value to inspect.</param>
     /// <returns><c>true</c> when the value is empty; otherwise, <c>false</c>.</returns>
@@ -164,9 +197,28 @@ public static class ValidationChecks
         {
             null => true,
             string text => text.Length == 0,
-            _ when TryGetCount(value, out var count) => count == 0,
+            _ when TryGetCount(value, 1, out var count) => count == 0,
             _ => global::System.Collections.Generic.EqualityComparer<TValue>.Default.Equals(value, default!)
         };
+    }
+
+    private static long CountSequence(global::System.Collections.IEnumerable sequence, long stopAfter)
+    {
+        long count = 0;
+        var enumerator = sequence.GetEnumerator();
+        try
+        {
+            while (count < stopAfter && enumerator.MoveNext())
+            {
+                count++;
+            }
+
+            return count;
+        }
+        finally
+        {
+            (enumerator as IDisposable)?.Dispose();
+        }
     }
 
     /// <summary>
@@ -178,7 +230,7 @@ public static class ValidationChecks
     /// <returns><c>true</c> when the value is null or its length is within the range; otherwise, <c>false</c>.</returns>
     public static bool HasLengthBetween<TValue>(TValue value, int min, int max)
     {
-        return !TryGetCount(value, out var count) || (count >= min && count <= max);
+        return !TryGetCount(value, (long)max + 1, out var count) || (count >= min && count <= max);
     }
 
     /// <summary>
@@ -189,7 +241,7 @@ public static class ValidationChecks
     /// <returns><c>true</c> when the value is null or its length equals <paramref name="expected" />; otherwise, <c>false</c>.</returns>
     public static bool HasLength<TValue>(TValue value, int expected)
     {
-        return !TryGetCount(value, out var count) || count == expected;
+        return !TryGetCount(value, (long)expected + 1, out var count) || count == expected;
     }
 
     /// <summary>
@@ -200,7 +252,7 @@ public static class ValidationChecks
     /// <returns><c>true</c> when the value is null or its length is at least <paramref name="min" />; otherwise, <c>false</c>.</returns>
     public static bool HasMinLength<TValue>(TValue value, int min)
     {
-        return !TryGetCount(value, out var count) || count >= min;
+        return !TryGetCount(value, min, out var count) || count >= min;
     }
 
     /// <summary>
@@ -211,7 +263,7 @@ public static class ValidationChecks
     /// <returns><c>true</c> when the value is null or its length is at most <paramref name="max" />; otherwise, <c>false</c>.</returns>
     public static bool HasMaxLength<TValue>(TValue value, int max)
     {
-        return !TryGetCount(value, out var count) || count <= max;
+        return !TryGetCount(value, (long)max + 1, out var count) || count <= max;
     }
 
     /// <summary>
@@ -223,7 +275,7 @@ public static class ValidationChecks
     /// <returns><c>true</c> when the value is null or its count is within the range; otherwise, <c>false</c>.</returns>
     public static bool HasCountBetween<TValue>(TValue value, int min, int max)
     {
-        return HasLengthBetween(value, min, max);
+        return value is null || TryGetCount(value, (long)max + 1, out var count) && count >= min && count <= max;
     }
 
     /// <summary>
@@ -234,7 +286,7 @@ public static class ValidationChecks
     /// <returns><c>true</c> when the value is null or its count equals <paramref name="expected" />; otherwise, <c>false</c>.</returns>
     public static bool HasCount<TValue>(TValue value, int expected)
     {
-        return HasLength(value, expected);
+        return value is null || TryGetCount(value, (long)expected + 1, out var count) && count == expected;
     }
 
     /// <summary>
@@ -245,7 +297,7 @@ public static class ValidationChecks
     /// <returns><c>true</c> when the value is null or its count is at least <paramref name="min" />; otherwise, <c>false</c>.</returns>
     public static bool HasMinCount<TValue>(TValue value, int min)
     {
-        return HasMinLength(value, min);
+        return value is null || TryGetCount(value, min, out var count) && count >= min;
     }
 
     /// <summary>
@@ -256,7 +308,7 @@ public static class ValidationChecks
     /// <returns><c>true</c> when the value is null or its count is at most <paramref name="max" />; otherwise, <c>false</c>.</returns>
     public static bool HasMaxCount<TValue>(TValue value, int max)
     {
-        return HasMaxLength(value, max);
+        return value is null || TryGetCount(value, (long)max + 1, out var count) && count <= max;
     }
 
     /// <summary>
@@ -271,6 +323,18 @@ public static class ValidationChecks
         {
             return text.IndexOf(character) >= 0;
         }
+
+        if (value is ICollection<TItem> collection)
+        {
+            return collection.Contains(expected);
+        }
+
+#if NET8_0_OR_GREATER
+        if (value is IReadOnlySet<TItem> set)
+        {
+            return set.Contains(expected);
+        }
+#endif
 
         if (value is global::System.Collections.Generic.IEnumerable<TItem> typedEnumerable)
         {
@@ -374,7 +438,7 @@ public static class ValidationChecks
     /// <returns><c>true</c> when the dictionary contains the key; otherwise, <c>false</c>.</returns>
     public static bool HasKey<TValue, TKey>(TValue value, TKey key)
     {
-        return value is global::System.Collections.IDictionary dictionary && dictionary.Contains(key!);
+        return key is not null && value is global::System.Collections.IDictionary dictionary && dictionary.Contains(key);
     }
 
     /// <summary>

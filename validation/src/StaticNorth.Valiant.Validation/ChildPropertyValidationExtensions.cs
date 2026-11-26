@@ -61,7 +61,7 @@ public static class ChildPropertyValidationExtensions
 
                 var childContext = new ValidationContext<TChild>(child, property.Context.CreateChildPropertyPathPrefix(property.PropertyName));
                 configure(childContext, property.Context.Instance, state);
-                property.Context.AddFailures(childContext.ToResult().Failures);
+                property.AddNestedFailures(childContext.ToResult());
             },
             async cancellationToken =>
             {
@@ -75,7 +75,7 @@ public static class ChildPropertyValidationExtensions
 
                 var childContext = new ValidationContext<TChild>(child, property.Context.CreateChildPropertyPathPrefix(property.PropertyName));
                 configure(childContext, property.Context.Instance, state);
-                property.Context.AddFailures((await childContext.ToResultAsync(cancellationToken).ConfigureAwait(false)).Failures);
+                property.AddNestedFailures(await childContext.ToResultAsync(cancellationToken).ConfigureAwait(false));
             });
 
         return property;

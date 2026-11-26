@@ -32,6 +32,22 @@ foreach (var provider in services.GetServices<IValiantSettingsSchemaProvider>())
 }
 ```
 
+## Schema lookup without dependency injection
+
+`ValiantSettingsSchemas` exposes schemas generated in the current compilation. Use `Get<T>()` when the type is known to be marked, `TryGet<T>()` when it may be absent, or `All` to enumerate providers.
+
+```csharp
+using StaticNorth.Valiant.Settings;
+
+var schema = ValiantSettingsSchemas.Get<SearchSettings>().Schema;
+Console.WriteLine(schema.SectionPath); // Search
+
+[ValiantSettings("Search")]
+public sealed record SearchSettings(string? Endpoint);
+```
+
+The model contributes a schema. Options registration is opt-in through `configure: true`.
+
 ## Model schema
 
 `ValiantSettingsSchema` exposes `SettingsType`, `Name`, `SectionPath`, and `Properties`.

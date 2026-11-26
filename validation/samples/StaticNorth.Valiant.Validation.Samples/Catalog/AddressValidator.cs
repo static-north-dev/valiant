@@ -10,7 +10,7 @@ public sealed partial class AddressValidator : ValidatorDefinition<Address>
     {
         context.Property(address => address.Line1)
             .Required();
-                    
+
         context.Property(address => address.Line2)
             .Null(severity: ValiantSeverity.Info);
 

@@ -5,7 +5,7 @@ description: Author and integrate StaticNorth.Valiant validators in .NET, includ
 
 # Valiant Validation
 
-Determine the application's `StaticNorth.Valiant.*` package major before choosing examples. Use the matching version from [the documentation index](https://valiant.staticnorth.dev/agents/documents.json); the default is the latest published major, while `current` is development documentation.
+Determine the application's `StaticNorth.Valiant.*` package major before choosing examples. Use the matching version from [the documentation index](https://valiant.staticnorth.dev/agents/documents.json). The default is the latest published major. A preview may also list `current`.
 
 Read the matching quick start and authoring guide before editing. The latest published versions are [Quick start](https://valiant.staticnorth.dev/validation/quick-start) and [Authoring rules](https://valiant.staticnorth.dev/validation/guides/authoring-rules).
 

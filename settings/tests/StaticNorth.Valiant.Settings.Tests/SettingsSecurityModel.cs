@@ -10,6 +10,12 @@ public sealed class SettingsSecurityModel
 
     public object? Opaque { get; set; }
 
+    public Dictionary<string, string> Values { get; } = new()
+    {
+        ["ApiKey"] = "dictionary-sensitive-value",
+        ["Region"] = "visible-region"
+    };
+
     public bool FailGetter { get; set; }
 
     [ValiantSecret]

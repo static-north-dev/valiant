@@ -27,8 +27,8 @@ The model schema contains its CLR type, display name, section path, and ordered 
 
 - CLR name and configuration key;
 - type display name and normalized kind;
-- required and nullable flags;
-- secret flag and known default value;
+- C# required-member and nullability flags;
+- secret flag and declared compile-time constant initializer, when available for a non-sensitive property;
 - nested object properties or collection item schema.
 
 Public instance properties with public getters are included, including inherited properties. The most derived declaration wins when a property is overridden or hidden. Overrides retain an inherited `[ValiantSecret]` marker.
@@ -46,6 +46,8 @@ Public instance properties with public getters are included, including inherited
 | `Array` | Array or collection with an item schema |
 | `Unknown` | A type without a more specific schema classification |
 
+Arrays and generic collections, including properties declared as `IEnumerable<T>`, have item schemas. Nested collections retain each layer's item schema. Schema expansion stops at repeated types along the same path or after 32 nested levels.
+
 ## Schema-only or configured
 
 Schema generation always occurs. Binding is opt-in:
@@ -58,7 +60,7 @@ public sealed record FeatureCatalog; // schema only
 public sealed record BoundFeatureCatalog; // schema + Options binding
 ```
 
-This lets libraries publish metadata without changing the host's service graph.
+This lets libraries publish metadata without changing the host's service graph. See [schema lookup without dependency injection](../reference/schema-api.md#schema-lookup-without-dependency-injection). A required flag in the schema describes the model. Use the [Options validation integration](./binding-validation.md#validate-options-with-valiant) to enforce settings at runtime.
 
 ## Secret metadata
 
